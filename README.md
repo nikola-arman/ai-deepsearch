@@ -35,32 +35,45 @@ make
 # - For AMD ROCm: make LLAMA_HIPBLAS=1
 ```
 
-### 2. Download a Model
+### 2. Run the Server
 
-Download a compatible GGUF model from [Hugging Face](https://huggingface.co/models?search=gguf) or convert an existing model:
+You can run the server in two ways:
 
+#### Option A: Automatic Model Download (Recommended)
+
+`llama-server` can automatically download models from Hugging Face:
+
+```bash
+# Start server and download model in one command
+./llama-server --hf-repo unsloth/gemma-3-4b-it-GGUF --hf-file gemma-3-4b-it-Q8_0.gguf -c 65536
+
+# Additional useful options:
+# --no-mmap: Don't use memory mapping for model loading (can improve performance)
+# --mlock: Lock model in memory to prevent swapping
+# --pooling cls: Use CLS token pooling for embeddings
+# -p 8080: Set server port (default is 8080)
+# --host 0.0.0.0: Bind to all network interfaces
+```
+
+This will automatically download the specified model from Hugging Face and start the server.
+
+#### Option B: Manual Model Download
+
+If you prefer to download models manually:
+
+1. Download a compatible GGUF model:
 ```bash
 # Example: Download Mistral 7B Instruct
 wget https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf -O models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
 ```
 
-### 3. Run the Server
-
-Start the server with your downloaded model:
-
+2. Start the server with your downloaded model:
 ```bash
 # Basic server start
 ./server -m models/mistral-7b-instruct-v0.2.Q4_K_M.gguf -c 2048
-
-# Options:
-# -m: path to the model
-# -c: context size (bigger allows for longer conversations)
-# -p: port (default is 8080)
-# -ngl: number of GPU layers (if using GPU acceleration)
-# --host: bind address (use 0.0.0.0 to allow external connections)
 ```
 
-### 4. Configure DeepSearch to Use llama.cpp Server
+### 3. Configure DeepSearch to Use llama.cpp Server
 
 In your `.env` file, ensure you have:
 
