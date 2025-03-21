@@ -2,11 +2,25 @@
 
 A highly dynamic and adaptive deep search system that efficiently combines Tavily API for real-time web search, Llama reasoning for analysis and synthesis, FAISS for dense vector search, and BM25 for keyword-based retrieval.
 
+## Overview
+
+The DeepSearch system implements an iterative multi-query approach that goes beyond traditional search engines:
+
+1. **Understanding Intent**: Analyzes the user's query to identify the core information needs
+2. **Query Diversification**: Generates multiple diverse search queries to explore different aspects
+3. **Multi-Source Retrieval**: Combines web search, semantic indexing, and keyword search
+4. **Iterative Learning**: Identifies knowledge gaps and generates follow-up queries in multiple iterations
+5. **Structured Synthesis**: Creates structured answers through a two-stage content generation process
+
+This approach yields significantly more comprehensive and accurate results than single-query systems, especially for complex or technical questions.
+
 ## Features
 
 - No preloaded knowledge base: FAISS and BM25 index freshly fetched search results dynamically
 - Dynamic index creation: Generates embeddings and keyword indices on-the-fly
 - Multi-agent architecture: Each component is specialized for a specific search task
+- Iterative deep search: Generates multiple search queries and identifies knowledge gaps
+- Two-stage content generation: Creates structured outlines before expanding into detailed answers
 - Adaptive reasoning: Refines queries, combines insights, and handles ambiguous requests
 
 ## Requirements
@@ -105,15 +119,20 @@ python main.py "your search query here"
 ```
 
 Options:
-- `--verbose` or `-v`: Display source information
+- `--verbose` or `-v`: Display additional information including generated queries
 - `--show-confidence` or `-c`: Show confidence scores
 - `--disable-refinement` or `-d`: Disable query refinement
+- `--max-iterations` or `-i`: Set maximum number of search iterations (default: 3)
 
 ## Architecture
 
-The system uses the following agents:
+The system uses the following agents in its deep search pipeline:
+
 1. Query Refinement Agent - Improves the original query for better search results
-2. Tavily Search Agent - Fetches real-time web search results
-3. Dynamic FAISS Indexing Agent - Creates vector embeddings for semantic search
-4. Dynamic BM25 Search Agent - Performs keyword-based retrieval
-5. Reasoning Agent - Synthesizes information into a coherent answer
+2. Query Expansion Agent - Generates multiple diverse queries targeting different aspects
+3. Tavily Search Agent - Fetches real-time web search results
+4. Dynamic FAISS Indexing Agent - Creates vector embeddings for semantic search
+5. Dynamic BM25 Search Agent - Performs keyword-based retrieval
+6. Deep Reasoning Agent - Analyzes results, identifies knowledge gaps, and synthesizes information into structured answers using a two-stage approach:
+   - Outline Creation Stage: Generates a structured outline with key points
+   - Content Writing Stage: Expands the outline into comprehensive content
