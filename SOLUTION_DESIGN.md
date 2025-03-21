@@ -122,6 +122,9 @@ The system maintains a `SearchState` object that passes through each agent in th
 - Identifies knowledge gaps that require further searches
 - Decides if the search process should continue or if sufficient information has been gathered
 - Generates new search queries to fill knowledge gaps when needed
+- Implements a two-stage content generation process:
+  - **Outline Creation Stage**: Generates a structured outline with key points, direct answer description, and hierarchical notes outline
+  - **Content Writing Stage**: Expands the outline into comprehensive content with detailed paragraphs while maintaining the structure
 - Formats the final answer in a structured format with key points, direct answer, and detailed notes
 
 ## Implementation Details
@@ -147,6 +150,27 @@ The system implements an iterative search process:
 5. **Query Generation**: Generate new, targeted queries to fill knowledge gaps
 6. **Iterative Loop**: Continue the process until sufficient information is gathered or maximum iterations reached
 7. **Structured Answer**: Format final answer with key points, direct answer, and detailed notes
+
+### Two-Stage Content Generation
+
+The system uses a sophisticated two-stage approach for generating the final content:
+
+1. **Outline Creation Stage**:
+   - Generates a structured outline with three main sections
+   - Creates 5-7 bullet points for key findings
+   - Develops a description of what the direct answer should cover
+   - Establishes a hierarchical outline for detailed notes with main sections and sub-points
+   - Suggests specific technical details, examples, and comparisons to include
+
+2. **Content Writing Stage**:
+   - Uses a dedicated writer agent to expand the outline into comprehensive content
+   - Transforms each outline item into detailed paragraphs
+   - Maintains the hierarchical structure established in the outline
+   - Adds technical details and examples as specified
+   - Ensures smooth transitions between sections
+   - Uses an authoritative, clear writing style
+
+This approach separates logical structure creation from content generation, resulting in better-organized answers with more detailed content and improved readability.
 
 ### Answer Structure
 
