@@ -68,12 +68,19 @@ INSTRUCTIONS:
 Your task is to formulate a complete answer with three distinct sections:
 
 1. KEY POINTS: A bulleted list of the most important findings and facts (5-7 points max)
-2. DIRECT ANSWER: A concise paragraph directly answering the original query
-3. DETAILED NOTES: A comprehensive explanation with supporting evidence from the search results
+
+2. DIRECT ANSWER: A thorough, detailed response (2-3 paragraphs) that directly answers the original query. This should be comprehensive but focused, addressing all key aspects of the question while maintaining clarity. Do not be overly concise - provide meaningful detail and context.
+
+3. DETAILED NOTES: A well-structured, comprehensive explanation with supporting evidence from the search results. For this section:
+   a. First develop a logical outline based on the original query and search results
+   b. Present information under clear headings following your outline
+   c. Include detailed explanations for each section of your outline
+   d. Organize information in a logical flow (e.g., from general to specific, problem to solution, etc.)
+   e. Include relevant technical details, examples, comparisons, and context
+   f. Cite specific sources where relevant
+   g. Ensure content is valuable and directly relevant to the query
 
 Format your answer using proper markdown sections. Make sure each section is clearly defined and contains the appropriate level of detail.
-Analyze the key points carefully to ensure your direct answer is accurate and addresses the core question.
-In the detailed notes, be thorough but clear, organizing information logically and citing specific sources where relevant.
 
 DO NOT include phrases like "Based on the search results" or "According to the information provided."
 Just present the information directly and authoritatively.
