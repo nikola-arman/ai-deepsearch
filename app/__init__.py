@@ -1,9 +1,9 @@
 from . import eternalai_mcp_middleware # do not remove this
 
 import os
-os.environ['TAVILY_API_KEY'] = 'fake-key'
+os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
-os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'fake-key')
+os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 
 from typing import Dict, Any
 from deepsearch.models import SearchState
