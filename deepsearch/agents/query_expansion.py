@@ -20,40 +20,46 @@ openai_api_base = os.environ.get("OPENAI_API_BASE", "http://localhost:8080/v1")
 openai_api_key = os.environ.get("OPENAI_API_KEY", "not-needed")
 
 # Define the prompt template for query expansion
-QUERY_EXPANSION_TEMPLATE = """You are a query expansion expert. Your task is to generate
-multiple diverse and relevant search queries based on the user's original query.
+QUERY_EXPANSION_TEMPLATE = """You are a query expansion expert. Your task is to understand the user's information needs and generate diverse search queries that will help find comprehensive answers.
 
 Original query: {original_query}
 Refined query: {refined_query}
 
-INSTRUCTIONS:
-1. Generate 5 HIGHLY DIVERSE search queries that approach the user's question from completely different angles
-2. Each query MUST focus on a DISTINCT aspect, perspective, or dimension of the original question
-3. Ensure NO TWO QUERIES are semantically similar or cover the same information need
-4. Consider technical aspects, practical applications, comparisons, historical context, and future implications
+# ANALYSIS PROCESS
+First, analyze the user's query:
+1. What is the core information need behind this query?
+2. What specific knowledge or answers is the user looking for?
+3. What are the different aspects or dimensions of this topic that would be relevant?
+4. What background information would help provide a complete answer?
+5. What are potential follow-up questions the user might have?
+
+# QUERY GENERATION INSTRUCTIONS
+Based on your analysis, generate 5 HIGHLY DIVERSE search queries that:
+1. Target the DIFFERENT ASPECTS of what the user is trying to learn
+2. Address potential knowledge gaps the user may have about the topic
+3. Focus on distinct information needs related to the original question
+4. Include technical, practical, comparative, historical, and future-oriented perspectives
 5. Keep all named entities (companies, products, people, etc.) EXACTLY as written
-6. Make the queries specific, targeted, and optimized for search engines
-7. Format your response as a JSON array of strings containing ONLY the queries
 
-Here's an example of diverse queries for "how does blockchain work":
-["technical explanation of blockchain distributed ledger",
+# EXAMPLE
+For the query "How does blockchain work?", first identify the information needs:
+- Core need: Understanding blockchain technology's fundamental mechanisms
+- Aspects: Technical details, real-world applications, historical development, comparisons to other technologies
+- Knowledge gaps: How consensus works, scalability issues, security implications
+
+Then generate diverse queries addressing these needs:
+["technical explanation of blockchain distributed ledger mechanisms",
 "practical applications of blockchain technology beyond cryptocurrency",
-"blockchain consensus mechanisms comparison",
-"evolution of blockchain technology since Bitcoin",
-"blockchain scalability challenges and solutions"]
+"blockchain consensus protocols comparison proof-of-work vs proof-of-stake",
+"evolution and history of blockchain technology since 2008",
+"blockchain scalability challenges and layer 2 solutions"]
 
-CRITICAL: Your entire response MUST be valid parseable JSON, starting with '[' and ending with ']'.
+# RESPONSE FORMAT
+Your entire response MUST be valid parseable JSON, starting with '[' and ending with ']'.
 Do not include any text before or after the JSON array.
-Do not include any explanation, markdown formatting, or code blocks around the JSON.
 
 Example of CORRECT response format:
 ["query 1", "query 2", "query 3", "query 4", "query 5"]
-
-Example of INCORRECT response format:
-Here are the queries: ["query 1", "query 2", "query 3", "query 4", "query 5"]
-```
-["query 1", "query 2", "query 3", "query 4", "query 5"]
-```
 """
 
 def init_query_expansion_llm(temperature: float = 0.7):
