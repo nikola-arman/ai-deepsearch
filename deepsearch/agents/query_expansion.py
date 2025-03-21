@@ -2,6 +2,7 @@ from typing import List
 import os
 import json
 import logging
+import re
 from dotenv import load_dotenv
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
@@ -33,23 +34,27 @@ INSTRUCTIONS:
 5. Make the queries search-friendly and specific
 6. Format your response as a JSON array of strings containing ONLY the queries.
 
-IMPORTANT: Your entire response must be valid parseable JSON, starting with '[' and ending with ']'.
+CRITICAL: Your entire response MUST be valid parseable JSON, starting with '[' and ending with ']'.
 Do not include any text before or after the JSON array.
+Do not include any explanation, markdown formatting, or code blocks around the JSON.
 
 Example of CORRECT response format:
 ["query 1", "query 2", "query 3", "query 4", "query 5"]
 
 Example of INCORRECT response format:
 Here are the queries: ["query 1", "query 2", "query 3", "query 4", "query 5"]
+```
+["query 1", "query 2", "query 3", "query 4", "query 5"]
+```
 """
 
-def init_query_expansion_llm():
+def init_query_expansion_llm(temperature: float = 0.7):
     """Initialize the language model for query expansion using OpenAI-compatible API."""
     llm = ChatOpenAI(
         model=os.getenv("LLM_MODEL_ID", "no-need"),
         openai_api_key=openai_api_key,
         openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
-        temperature=0.7,  # Higher temperature for query diversity
+        temperature=temperature,  # Higher temperature for query diversity
         max_tokens=1024
     )
     return llm
@@ -65,7 +70,7 @@ def query_expansion_agent(state: SearchState) -> SearchState:
         Updated state with multiple generated queries
     """
     # Initialize the LLM
-    llm = init_query_expansion_llm()
+    llm = init_query_expansion_llm(temperature=0.5)
 
     # Create the prompt
     query_expansion_prompt = PromptTemplate(
@@ -91,6 +96,14 @@ def query_expansion_agent(state: SearchState) -> SearchState:
     else:
         expanded_queries_text = response
 
+    # Clean up the response text to improve JSON parsing chances
+    expanded_queries_text = expanded_queries_text.strip()
+    # Remove any markdown code block markers
+    expanded_queries_text = re.sub(r'^```json\s*', '', expanded_queries_text)
+    expanded_queries_text = re.sub(r'\s*```$', '', expanded_queries_text)
+    # Remove any stray markdown characters
+    expanded_queries_text = re.sub(r'^#+\s*', '', expanded_queries_text)
+
     # Parse the JSON response
     try:
         expanded_queries = json.loads(expanded_queries_text)
@@ -100,42 +113,57 @@ def query_expansion_agent(state: SearchState) -> SearchState:
             expanded_queries = [refined_query]
     except json.JSONDecodeError:
         # If parsing fails, extract queries using a simple heuristic
-        logger.warning("Failed to parse query expansion JSON output, using heuristic extraction")
+        logger.warning(f"Failed to parse query expansion JSON output: {expanded_queries_text[:100]}...")
         expanded_queries_text = expanded_queries_text.strip()
 
-        # Check if the text contains JSON-like content
+        # First attempt: Check if the text contains JSON-like content with brackets
         if expanded_queries_text.startswith("[") and expanded_queries_text.endswith("]"):
-            # Try to extract anything that looks like a list of queries
-            # Remove the outer brackets
-            expanded_queries_text = expanded_queries_text[1:-1]
+            try:
+                # Try to fix common issues like single quotes instead of double quotes
+                fixed_text = expanded_queries_text
+                # Replace single quotes with double quotes if they're being used for JSON
+                if "'" in fixed_text and '"' not in fixed_text:
+                    fixed_text = fixed_text.replace("'", '"')
 
-            # Split by commas that are followed by a quote character
-            # This helps handle cases where there might be commas inside the queries
-            import re
-            query_items = re.split(r',\s*"', expanded_queries_text)
+                # Try parsing the fixed text
+                expanded_queries = json.loads(fixed_text)
+                logger.info("Successfully parsed JSON after basic fixing")
 
-            # Clean up each query
-            expanded_queries = []
-            for i, item in enumerate(query_items):
-                # Add back the quote that was removed during splitting (except for the first item)
-                if i > 0:
-                    item = '"' + item
+                if not isinstance(expanded_queries, list):
+                    expanded_queries = [refined_query]
+            except json.JSONDecodeError:
+                # If still can't parse, try splitting manually
+                logger.info("Attempting to extract queries from bracket-enclosed text")
+                # Remove the outer brackets
+                expanded_queries_text = expanded_queries_text[1:-1]
 
-                # Remove surrounding quotes and any escaping
-                item = item.strip().strip('"\'').replace('\\"', '"')
+                # Split by commas that are followed by a quote character
+                # This helps handle cases where there might be commas inside the queries
+                query_items = re.split(r',\s*"', expanded_queries_text)
 
-                if item:
-                    expanded_queries.append(item)
+                # Clean up each query
+                expanded_queries = []
+                for i, item in enumerate(query_items):
+                    # Add back the quote that was removed during splitting (except for the first item)
+                    if i > 0:
+                        item = '"' + item
+
+                    # Remove surrounding quotes and any escaping
+                    item = item.strip().strip('"\'').replace('\\"', '"')
+
+                    if item:
+                        expanded_queries.append(item)
+
+                logger.info(f"Extracted {len(expanded_queries)} queries from bracket-enclosed text")
         else:
-            # Try to extract queries using different patterns
-            # Look for quoted strings
-            import re
+            # Second attempt: look for quoted strings that might be queries
             quoted_strings = re.findall(r'"([^"]*)"', expanded_queries_text)
 
             if quoted_strings:
                 expanded_queries = quoted_strings
+                logger.info(f"Extracted {len(expanded_queries)} queries from quoted strings")
             else:
-                # If we can't find any pattern, try splitting by newlines or numbers
+                # Third attempt: try splitting by newlines or numbers
                 lines = [line.strip() for line in expanded_queries_text.split('\n') if line.strip()]
                 potential_queries = []
 
@@ -147,27 +175,29 @@ def query_expansion_agent(state: SearchState) -> SearchState:
 
                 if potential_queries:
                     expanded_queries = potential_queries
+                    logger.info(f"Extracted {len(expanded_queries)} queries from line by line analysis")
                 else:
                     # Fall back to using just the refined query
                     expanded_queries = [refined_query]
+                    logger.warning("Could not extract any queries, using refined query as fallback")
+
+    # Always include the refined query if it's not already in the list
+    if refined_query not in expanded_queries:
+        expanded_queries.insert(0, refined_query)
+
+    # Filter out any empty queries
+    expanded_queries = [query for query in expanded_queries if query and query.strip()]
 
     # Ensure we have at least one query
     if not expanded_queries:
         expanded_queries = [refined_query]
 
-    # Filter out any non-string items or invalid items
-    expanded_queries = [q for q in expanded_queries if isinstance(q, str) and len(q.strip()) > 0]
+    # Update the state
+    state.generated_queries = expanded_queries
 
-    # Deduplicate and add the refined query if it's not already included
-    expanded_queries = list(set(expanded_queries))
-    if refined_query not in expanded_queries:
-        expanded_queries.insert(0, refined_query)
-
-    # Update the state with the generated queries
-    state.generated_queries = expanded_queries[:5]  # Limit to 5 queries
-
-    logger.info(f"Generated {len(state.generated_queries)} expanded queries")
-    for i, query in enumerate(state.generated_queries):
+    # Log the generated queries
+    logger.info(f"Generated {len(expanded_queries)} expanded queries")
+    for i, query in enumerate(expanded_queries):
         logger.info(f"  Query {i+1}: {query}")
 
     return state
