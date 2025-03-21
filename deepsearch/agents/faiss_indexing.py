@@ -23,7 +23,7 @@ def init_embedding_model():
     """Initialize the embedding model using OpenAI-compatible API."""
     # Use OpenAI-compatible embeddings from the server
     embeddings = OpenAIEmbeddings(
-        model="embedding",
+        model=os.getenv("EMBEDDING_MODEL_ID", "no-need"),
         openai_api_key=openai_api_key,
         openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
         dimensions=384  # Adjust based on your model
