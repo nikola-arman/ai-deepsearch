@@ -42,7 +42,7 @@ def init_query_refinement_llm():
     """Initialize the language model for query refinement using OpenAI-compatible API."""
     # Use OpenAI-compatible server for all operations
     llm = ChatOpenAI(
-        model="llama",
+        model=os.getenv("LLM_MODEL_ID"),
         openai_api_key=openai_api_key,
         openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
         temperature=0.2,
