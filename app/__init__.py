@@ -112,7 +112,7 @@ def run_simple_pipeline(query: str, disable_refinement: bool = False) -> Dict[st
             "has_error": True
         }
 
-async def prompt(messages: list[dict[str, str]], **kwargs) -> str:
+def prompt(messages: list[dict[str, str]], **kwargs) -> str:
     assert len(messages) > 0, "received empty messages"
     query = messages[-1]['content']
     
