@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from main import run_simple_pipeline
+from main import run_deep_search_pipeline
 
 # Set up logging
 logging.basicConfig(
@@ -38,7 +38,7 @@ if not os.environ.get("OPENAI_API_BASE") and not os.environ.get("OPENAI_API_KEY"
 app = FastAPI(
     title="DeepSearch API",
     description="A multi-agent deep search system using Tavily, Llama.cpp, FAISS, and BM25",
-    version="0.1.0"
+    version="0.2.0"
 )
 
 # Add CORS middleware
@@ -62,6 +62,12 @@ class SearchRequest(BaseModel):
     include_sources: bool = Field(True, description="Include sources in the response")
     include_confidence: bool = Field(False, description="Include confidence score in the response")
     disable_refinement: bool = Field(False, description="Disable query refinement")
+    max_iterations: int = Field(3, description="Maximum number of search iterations")
+
+
+class KeyPoint(BaseModel):
+    """Key point model for structured answers."""
+    text: str
 
 
 class SearchResponse(BaseModel):
@@ -69,6 +75,10 @@ class SearchResponse(BaseModel):
     original_query: str
     refined_query: Optional[str] = None
     answer: str
+    key_points: Optional[List[KeyPoint]] = None
+    detailed_notes: Optional[str] = None
+    generated_queries: Optional[List[str]] = None
+    iterations: Optional[int] = None
     confidence: Optional[float] = None
     sources: Optional[List[Source]] = None
 
@@ -97,14 +107,20 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
     try:
         logger.info(f"Processing search request for query: {request.query}")
 
-        # Run the workflow
-        result = run_simple_pipeline(request.query, request.disable_refinement)
+        # Run the deep search pipeline
+        result = run_deep_search_pipeline(
+            request.query,
+            request.disable_refinement,
+            request.max_iterations
+        )
 
         # Build the response
         response = {
             "original_query": result["original_query"],
             "refined_query": result["refined_query"],
             "answer": result["answer"],
+            "generated_queries": result["generated_queries"],
+            "iterations": result["iterations"]
         }
 
         # Include confidence if requested
@@ -114,6 +130,13 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
         # Include sources if requested
         if request.include_sources:
             response["sources"] = result["sources"]
+
+        # Include structured answer components if available
+        if "key_points" in result and result["key_points"]:
+            response["key_points"] = [{"text": point} for point in result["key_points"]]
+
+        if "detailed_notes" in result and result["detailed_notes"]:
+            response["detailed_notes"] = result["detailed_notes"]
 
         logger.info(f"Successfully processed query: {request.query}")
         return response
