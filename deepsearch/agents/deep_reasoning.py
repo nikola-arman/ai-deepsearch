@@ -54,7 +54,7 @@ IMPORTANT: If this is already iteration {max_iterations} or higher, set "search_
 """
 
 # Define the prompt template for final answer formulation
-ANSWER_TEMPLATE = """You are a comprehensive research analyst tasked with providing a thorough answer to a query based on search results.
+ANSWER_TEMPLATE = """You are an expert research analyst and outline creator. Your task is to create a well-structured outline for answering a query based on search results.
 
 ORIGINAL QUERY: {original_query}
 
@@ -65,25 +65,67 @@ SEARCH DETAILS:
 {search_details}
 
 INSTRUCTIONS:
-Your task is to formulate a complete answer with three distinct sections:
+Your task is to formulate an OUTLINE ONLY for a complete answer with three distinct sections:
 
-1. KEY POINTS: A bulleted list of the most important findings and facts (5-7 points max)
+1. KEY POINTS: List 5-7 bullet points that would be the most important findings and facts
+2. DIRECT ANSWER: Provide a brief description of what should be covered in the direct answer section (2-3 paragraphs)
+3. DETAILED NOTES: Create a comprehensive outline with:
+   a. Main section headings (3-5 sections)
+   b. For each section, provide 2-4 sub-points that should be covered
+   c. Note any specific technical details, examples, or comparisons that should be included
+   d. Suggest logical flow for presenting the information
 
-2. DIRECT ANSWER: A thorough, detailed response (2-3 paragraphs) that directly answers the original query. This should be comprehensive but focused, addressing all key aspects of the question while maintaining clarity. Do not be overly concise - provide meaningful detail and context.
+Format your outline using proper markdown sections. THIS IS ONLY AN OUTLINE - do not write the full content.
+Make the outline detailed enough that a content writer can easily expand it into a complete, informative answer.
 
-3. DETAILED NOTES: A well-structured, comprehensive explanation with supporting evidence from the search results. For this section:
-   a. First develop a logical outline based on the original query and search results
-   b. Present information under clear headings following your outline
-   c. Include detailed explanations for each section of your outline
-   d. Organize information in a logical flow (e.g., from general to specific, problem to solution, etc.)
-   e. Include relevant technical details, examples, comparisons, and context
-   f. Cite specific sources where relevant
-   g. Ensure content is valuable and directly relevant to the query
+The outline should follow this structure:
+```
+# OUTLINE: [Query Title]
 
-Format your answer using proper markdown sections. Make sure each section is clearly defined and contains the appropriate level of detail.
+## 1. KEY POINTS
+- [Key point 1]
+- [Key point 2]
+...
 
-DO NOT include phrases like "Based on the search results" or "According to the information provided."
-Just present the information directly and authoritatively.
+## 2. DIRECT ANSWER
+[Brief description of what the direct answer should cover]
+
+## 3. DETAILED NOTES
+### [Section Heading 1]
+- [Subpoint 1]
+- [Subpoint 2]
+...
+
+### [Section Heading 2]
+- [Subpoint 1]
+- [Subpoint 2]
+...
+```
+"""
+
+# Define the template for the writer agent that will expand the outline into full content
+WRITER_TEMPLATE = """You are an expert content writer. Your task is to expand an outline into a comprehensive, detailed answer.
+
+ORIGINAL QUERY: {original_query}
+
+OUTLINE:
+{outline}
+
+SEARCH DETAILS:
+{search_details}
+
+INSTRUCTIONS:
+Transform the provided outline into a comprehensive, detailed answer that follows the exact structure of the outline.
+For each section:
+1. Expand bullet points into detailed paragraphs with rich information
+2. Maintain the hierarchical structure from the outline
+3. Include technical details, examples, and comparisons suggested in the outline
+4. Ensure smooth transitions between sections
+5. Use an authoritative, clear writing style
+6. Avoid filler phrases like "based on the search results" or "according to the information provided"
+
+Your expanded answer should be thorough, informative, and directly address the original query,
+while carefully following the outline structure.
 """
 
 def init_reasoning_llm(temperature: float = 0.3):
@@ -361,7 +403,9 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 3) -> SearchS
 
 def generate_final_answer(state: SearchState) -> SearchState:
     """
-    Generates the final, structured answer when search is complete.
+    Generates the final, structured answer in a two-stage process:
+    1. Create an outline using the reasoning agent
+    2. Expand the outline into full content with the writer agent
 
     Args:
         state: The current search state with key points and other information
@@ -369,17 +413,18 @@ def generate_final_answer(state: SearchState) -> SearchState:
     Returns:
         Updated state with the final structured answer
     """
-    # Initialize the LLM with a more creative temperature
-    llm = init_reasoning_llm(temperature=0.4)
+    # Stage 1: Generate the outline using the reasoning agent
+    # Initialize the LLM with a lower temperature for structured outline
+    outline_llm = init_reasoning_llm(temperature=0.2)
 
-    # Create the answer generation prompt
-    answer_prompt = PromptTemplate(
+    # Create the outline generation prompt
+    outline_prompt = PromptTemplate(
         input_variables=["original_query", "key_points", "search_details"],
         template=ANSWER_TEMPLATE
     )
 
     # Use the newer approach to avoid deprecation warnings
-    chain = answer_prompt | llm
+    outline_chain = outline_prompt | outline_llm
 
     # Format the key points
     key_points_text = "\n".join([f"- {point}" for point in state.key_points])
@@ -387,18 +432,47 @@ def generate_final_answer(state: SearchState) -> SearchState:
     # Format the search details
     search_details = format_search_details(state)
 
-    # Generate the final answer
-    response = chain.invoke({
+    # Generate the outline
+    outline_response = outline_chain.invoke({
         "original_query": state.original_query,
         "key_points": key_points_text,
         "search_details": search_details
     })
 
     # Extract the content if it's a message object
-    if hasattr(response, 'content'):
-        answer = response.content
+    if hasattr(outline_response, 'content'):
+        outline = outline_response.content
     else:
-        answer = response
+        outline = outline_response
+
+    # Log the outline for debugging
+    logger.info("Generated outline for final answer")
+
+    # Stage 2: Expand the outline into full content with the writer agent
+    # Initialize the LLM with a more creative temperature for content writing
+    writer_llm = init_reasoning_llm(temperature=0.5)
+
+    # Create the writer prompt
+    writer_prompt = PromptTemplate(
+        input_variables=["original_query", "outline", "search_details"],
+        template=WRITER_TEMPLATE
+    )
+
+    # Use the newer approach to avoid deprecation warnings
+    writer_chain = writer_prompt | writer_llm
+
+    # Generate the final answer
+    writer_response = writer_chain.invoke({
+        "original_query": state.original_query,
+        "outline": outline,
+        "search_details": search_details
+    })
+
+    # Extract the content if it's a message object
+    if hasattr(writer_response, 'content'):
+        answer = writer_response.content
+    else:
+        answer = writer_response
 
     # Update the state with the final answer
     state.final_answer = answer.strip()
