@@ -128,9 +128,48 @@ Options:
 
 The system uses the following agents in its deep search pipeline:
 
+```
+                  ┌──────────────────┐
+                  │   User Interface │
+                  │   (CLI or API)   │
+                  └────────┬─────────┘
+                           │
+                           ▼
+          ┌─────────────────────────────────┐
+          │        Search Pipeline          │
+          │                                 │
+┌─────────┴───────────┐   ┌────────────────┴─────────────┐
+│  Query Refinement   │──►│       Query Expansion        │
+│       Agent         │   │          Agent               │
+└─────────────────────┘   └────────────────┬─────────────┘
+                                           │
+                                           ▼
+                           ┌─────────────────────────────┐
+                           │     Iterative Search Loop   │◄────┐
+                           └────────────────┬────────────┘     │
+                                            │                   │
+                                            ▼                   │
+┌─────────────────────┐   ┌────────────────┴─────────────┐     │
+│  BM25 Keyword-based │◄──┤  FAISS Semantic Indexing     │     │
+│    Search Agent     │   │         Agent                │     │
+└─────────┬───────────┘   └─────────────────────────────┘     │
+          │                                                    │
+          ▼                                                    │
+┌─────────┴───────────┐   ┌─────────────────────────────┐     │
+│  Deep Reasoning     │──►│      Knowledge Gap           │─────┘
+│       Agent         │   │      Detection               │
+└─────────┬───────────┘   └─────────────────────────────┘
+          │
+          ▼
+┌─────────┴───────────┐
+│  Answer Generation  │
+│  (Structured Format)│
+└─────────────────────┘
+```
+
 1. Query Refinement Agent - Improves the original query for better search results
 2. Query Expansion Agent - Generates multiple diverse queries targeting different aspects
-3. Tavily Search Agent - Fetches real-time web search results
+3. Tavily Search Agent - Fetches real-time web search results (not shown in diagram)
 4. Dynamic FAISS Indexing Agent - Creates vector embeddings for semantic search
 5. Dynamic BM25 Search Agent - Performs keyword-based retrieval
 6. Deep Reasoning Agent - Analyzes results, identifies knowledge gaps, and synthesizes information into structured answers using a two-stage approach:
