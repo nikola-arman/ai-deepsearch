@@ -27,12 +27,20 @@ Original query: {original_query}
 Refined query: {refined_query}
 
 INSTRUCTIONS:
-1. Generate 5 unique search queries that approach the user's question from different angles
-2. Each query should focus on specific aspects or dimensions of the original question
-3. All queries should be directly relevant to answering the original question
-4. Keep all named entities (companies, products, people, etc.) EXACTLY as written
-5. Make the queries search-friendly and specific
-6. Format your response as a JSON array of strings containing ONLY the queries.
+1. Generate 5 HIGHLY DIVERSE search queries that approach the user's question from completely different angles
+2. Each query MUST focus on a DISTINCT aspect, perspective, or dimension of the original question
+3. Ensure NO TWO QUERIES are semantically similar or cover the same information need
+4. Consider technical aspects, practical applications, comparisons, historical context, and future implications
+5. Keep all named entities (companies, products, people, etc.) EXACTLY as written
+6. Make the queries specific, targeted, and optimized for search engines
+7. Format your response as a JSON array of strings containing ONLY the queries
+
+Here's an example of diverse queries for "how does blockchain work":
+["technical explanation of blockchain distributed ledger",
+"practical applications of blockchain technology beyond cryptocurrency",
+"blockchain consensus mechanisms comparison",
+"evolution of blockchain technology since Bitcoin",
+"blockchain scalability challenges and solutions"]
 
 CRITICAL: Your entire response MUST be valid parseable JSON, starting with '[' and ending with ']'.
 Do not include any text before or after the JSON array.
@@ -69,8 +77,8 @@ def query_expansion_agent(state: SearchState) -> SearchState:
     Returns:
         Updated state with multiple generated queries
     """
-    # Initialize the LLM
-    llm = init_query_expansion_llm(temperature=0.5)
+    # Initialize the LLM with higher temperature for more diversity
+    llm = init_query_expansion_llm(temperature=0.8)
 
     # Create the prompt
     query_expansion_prompt = PromptTemplate(
@@ -181,16 +189,45 @@ def query_expansion_agent(state: SearchState) -> SearchState:
                     expanded_queries = [refined_query]
                     logger.warning("Could not extract any queries, using refined query as fallback")
 
-    # Always include the refined query if it's not already in the list
-    if refined_query not in expanded_queries:
-        expanded_queries.insert(0, refined_query)
+    # Post-process queries to ensure diversity
+    processed_queries = []
 
-    # Filter out any empty queries
-    expanded_queries = [query for query in expanded_queries if query and query.strip()]
+    # Include the refined query if it's substantive
+    if refined_query and len(refined_query.split()) > 2:
+        processed_queries.append(refined_query)
 
-    # Ensure we have at least one query
-    if not expanded_queries:
-        expanded_queries = [refined_query]
+    # Add other queries, ensuring they're diverse from what we already have
+    for query in expanded_queries:
+        # Skip very short queries or ones that are too similar to others we've already included
+        if len(query.split()) < 3:
+            continue
+
+        # Check for similarity with existing processed queries
+        too_similar = False
+        for existing in processed_queries:
+            # Simple word overlap calculation
+            query_words = set(query.lower().split())
+            existing_words = set(existing.lower().split())
+            # Calculate Jaccard similarity
+            overlap = len(query_words.intersection(existing_words))
+            union = len(query_words.union(existing_words))
+            similarity = overlap / union if union > 0 else 0
+
+            # If more than 70% similar by word overlap, consider too similar
+            if similarity > 0.7:
+                too_similar = True
+                logger.info(f"Skipping too similar query: {query} (similar to {existing})")
+                break
+
+        if not too_similar:
+            processed_queries.append(query)
+
+    # Ensure we have at least the refined query if nothing else
+    if not processed_queries:
+        processed_queries = [refined_query]
+
+    # Limit to 5 diverse queries
+    expanded_queries = processed_queries[:5]
 
     # Update the state
     state.generated_queries = expanded_queries
