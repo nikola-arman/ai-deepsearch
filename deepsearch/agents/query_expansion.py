@@ -27,42 +27,46 @@ Refined query: {refined_query}
 
 # ANALYSIS PROCESS
 First, analyze the refined query carefully:
-1. What is the EXACT core information need behind this refined query?
-2. What specific knowledge or answers is the user looking for?
-3. What are the 3-5 MOST RELEVANT aspects or dimensions of this specific topic?
-4. What directly related background information would help provide a complete answer?
+1. What is the core information need behind this refined query?
+2. What are the key entities and concepts in this query?
+3. What are 5-7 DIFFERENT ASPECTS or angles of this topic that would be valuable to explore?
+4. What related concepts would provide useful context for a complete answer?
 
 # QUERY GENERATION INSTRUCTIONS
 Based on your analysis, generate 5 search queries that:
-1. Are ALL DIRECTLY RELATED to the REFINED query - do NOT add new unrelated topics
-2. MUST maintain the core information need and topic from the refined query
-3. Focus on different facets of EXACTLY THE SAME TOPIC in the refined query
-4. All queries should feel like slight variations or elaborations on the refined query
-5. Keep all named entities (companies, products, people, etc.) from the refined query
-6. AVOID adding topics or products that weren't mentioned in the refined query
+1. EXPAND on the refined query with more specific details or broader context
+2. Explore DIFFERENT FACETS of the same general topic
+3. Include key entities from the refined query
+4. Add relevant modifiers, related concepts, or specific aspects
+5. Vary in scope (some narrower/focused, some broader/comprehensive)
+6. Use different phrasing and vocabulary while maintaining meaning
 
-# CRITICAL
-EVERY query MUST be about the EXACT SAME TOPIC as the refined query. The queries should NOT diverge into related but different topics - they should be variations on the SAME specific information need.
+# BALANCING FOCUS AND EXPANSION
+- Each query should be clearly connected to the original topic
+- Queries should be MEANINGFULLY DIFFERENT from each other
+- Add relevant context, qualifiers, timeframes, or specificity
+- Include both technical and practical perspectives when appropriate
+- Queries should feel like they're exploring different angles of the same topic
 
 # EXAMPLES
 
-GOOD EXPANSION (stays on topic):
+GOOD EXPANSION (diverse but related):
 Refined query: "new updates from Nvidia"
 Expanded queries:
-["latest Nvidia software updates and releases",
-"recent Nvidia driver updates and their improvements",
-"Nvidia's newest product announcements and releases",
-"latest Nvidia GPU driver updates for gaming performance",
-"Nvidia's recent technology updates and advancements"]
+["latest Nvidia driver updates and performance improvements",
+"Nvidia's recent hardware announcements and upcoming product releases",
+"DLSS and ray tracing updates in Nvidia's newest software",
+"Nvidia AI and machine learning framework updates 2025",
+"professional graphics and workstation updates from Nvidia"]
 
-BAD EXPANSION (strays from topic):
+BAD EXPANSION (too similar):
 Refined query: "new updates from Nvidia"
 Expanded queries:
 ["new updates from Nvidia",
-"Nvidia RTX 4090 specifications",
-"AMD vs Nvidia comparison",
-"Nvidia stock price prediction 2025",
-"historical timeline of Nvidia's GPU innovations"]
+"recent updates from Nvidia",
+"latest updates from Nvidia",
+"current Nvidia updates",
+"Nvidia's new updates"]
 
 # RESPONSE FORMAT
 Your entire response MUST be valid parseable JSON, starting with '[' and ending with ']'.
@@ -94,7 +98,7 @@ def query_expansion_agent(state: SearchState) -> SearchState:
         Updated state with multiple generated queries
     """
     # Initialize the LLM with higher temperature for more diversity
-    llm = init_query_expansion_llm(temperature=0.7)  # Slightly lower temperature for more focused diversity
+    llm = init_query_expansion_llm(temperature=0.8)  # Increase temperature for more creative expansions
 
     # Create the prompt
     query_expansion_prompt = PromptTemplate(
@@ -205,68 +209,74 @@ def query_expansion_agent(state: SearchState) -> SearchState:
                     expanded_queries = [refined_query]
                     logger.warning("Could not extract any queries, using refined query as fallback")
 
-    # Post-process queries to ensure relevance to the refined query
+    # Post-process queries to ensure balance of diversity and relevance
     processed_queries = []
 
-    # Always include the refined query as the first query
+    # Always include the refined query in the mix
     processed_queries.append(refined_query)
 
-    # Extract key terms from refined query for relevance checking
+    # Extract key terms from refined query for basic relevance checking
     refined_terms = set(refined_query.lower().split())
     refined_entities = extract_entities(refined_query)
 
-    # Add other queries, ensuring they're diverse but related to the refined query
+    # Score queries by combining relevance and diversity metrics
+    scored_queries = []
     for query in expanded_queries:
-        # Skip very short queries
-        if len(query.split()) < 3:
+        # Skip very short queries or duplicates
+        if len(query.split()) < 3 or query.lower() == refined_query.lower():
             continue
 
-        # Skip exact duplicate of refined query
-        if query.lower() == refined_query.lower():
-            continue
-
-        # Check for relevance to refined query
+        # Check for core relevance through entity or term overlap
         query_terms = set(query.lower().split())
         query_entities = extract_entities(query)
 
-        # Check for entity overlap - at least one entity should match
-        entity_overlap = False
+        # Calculate entity overlap
+        entity_overlap = 0
         if refined_entities and query_entities:
-            entity_overlap = len(set(refined_entities).intersection(set(query_entities))) > 0
+            entity_overlap = len(set(refined_entities).intersection(set(query_entities))) / len(refined_entities) if refined_entities else 0
 
         # Calculate term overlap
         term_overlap = len(refined_terms.intersection(query_terms)) / len(refined_terms) if refined_terms else 0
 
-        # A query is relevant if it has significant term overlap OR contains shared entities
-        is_relevant = term_overlap >= 0.4 or entity_overlap
+        # Calculate a base relevance score
+        relevance_score = max(entity_overlap, term_overlap * 0.8)
 
-        if not is_relevant:
+        # Skip completely irrelevant queries
+        if relevance_score < 0.2 and not any(e in query.lower() for e in refined_entities):
             logger.info(f"Skipping irrelevant query: {query}")
             continue
 
-        # Check for similarity with existing processed queries
-        too_similar = False
+        # Calculate diversity score against existing processed queries
+        diversity_score = 1.0  # Start with maximum diversity
         for existing in processed_queries:
-            # Simple word overlap calculation
+            # Calculate Jaccard similarity
             query_words = set(query.lower().split())
             existing_words = set(existing.lower().split())
-            # Calculate Jaccard similarity
             overlap = len(query_words.intersection(existing_words))
             union = len(query_words.union(existing_words))
             similarity = overlap / union if union > 0 else 0
 
-            # If more than 70% similar by word overlap, consider too similar
-            if similarity > 0.7:
-                too_similar = True
-                logger.info(f"Skipping too similar query: {query} (similar to {existing})")
-                break
+            # Reduce diversity score based on similarity to existing queries
+            diversity_score = min(diversity_score, 1 - similarity)
 
-        if not too_similar:
+        # Combine scores - balance relevance and diversity
+        # We want queries that are somewhat relevant but also diverse
+        combined_score = (relevance_score * 0.6) + (diversity_score * 0.4)
+
+        scored_queries.append((query, combined_score))
+
+    # Sort by combined score (descending)
+    scored_queries.sort(key=lambda x: x[1], reverse=True)
+
+    # Add the top queries to our processed list
+    for query, score in scored_queries:
+        if query not in processed_queries and len(processed_queries) < 5:
             processed_queries.append(query)
 
-    # If we don't have enough relevant queries, generate slight variations of the refined query
-    if len(processed_queries) < 3:
-        variations = generate_query_variations(refined_query)
+    # If we don't have enough diverse queries, add some variations
+    if len(processed_queries) < 5:
+        # Generate more creative variations than before
+        variations = generate_creative_variations(refined_query, refined_entities)
         for variation in variations:
             if variation not in processed_queries:
                 processed_queries.append(variation)
@@ -308,7 +318,8 @@ def extract_entities(text):
                 entities.append(clean_word.lower())
 
     # Also extract company/product names that might be lowercase
-    common_tech_entities = ['nvidia', 'amd', 'intel', 'apple', 'microsoft', 'google', 'amazon']
+    common_tech_entities = ['nvidia', 'amd', 'intel', 'apple', 'microsoft', 'google', 'amazon',
+                           'gpu', 'cpu', 'ai', 'driver', 'software', 'hardware', 'update']
     for word in words:
         clean_word = word.strip('.,;:!?()"\'').lower()
         if clean_word in common_tech_entities and clean_word not in entities:
@@ -316,28 +327,46 @@ def extract_entities(text):
 
     return entities
 
-def generate_query_variations(query):
-    """Generate simple variations of a query."""
+def generate_creative_variations(query, entities):
+    """Generate more creative variations of a query based on common patterns and entities."""
     variations = []
 
-    words = query.split()
-    if not words:
-        return variations
+    # Tech-specific context additions based on identified entities
+    contexts = {
+        'nvidia': ['gaming', 'graphics cards', 'DLSS', 'ray tracing', 'AI', 'professional graphics',
+                  'machine learning', 'data center', 'GPU', 'drivers', 'GeForce', 'performance'],
+        'apple': ['iOS', 'macOS', 'devices', 'M-series chips', 'App Store', 'software', 'hardware'],
+        'microsoft': ['Windows', 'Office', 'Azure', 'Cloud', 'Teams', 'enterprise', 'Surface'],
+        'google': ['Android', 'Chrome', 'Search', 'Cloud', 'AI', 'Workspace', 'Pixel'],
+        'ai': ['machine learning', 'neural networks', 'deep learning', 'frameworks', 'tools'],
+        'update': ['changelog', 'new features', 'improvements', 'releases', 'versions']
+    }
 
-    # Add "latest" variation
-    if not any(w.lower() in ['latest', 'recent', 'new', 'newest'] for w in words):
-        variations.append(f"latest {query}")
+    # Base query without any additional qualifiers
+    base_words = query.lower().split()
 
-    # Add "recent" variation
-    if not any(w.lower() in ['recent', 'latest', 'new', 'newest'] for w in words):
-        variations.append(f"recent {query}")
+    # Generate entity-specific expansions
+    for entity in entities:
+        if entity in contexts:
+            for context in contexts[entity][:3]:  # Limit to prevent too many variations
+                if context.lower() not in base_words:
+                    variations.append(f"{query} for {context}")
+                    variations.append(f"{entity} {context} {query.replace(entity, '').strip()}")
 
-    # Add "comprehensive" variation
-    if not any(w.lower() in ['comprehensive', 'complete', 'detailed'] for w in words):
-        variations.append(f"comprehensive {query}")
+    # Add time-based variations
+    time_frames = ['recent', 'latest', '2025', 'upcoming', 'new']
+    for time in time_frames:
+        if time not in base_words:
+            variations.append(f"{time} {query}")
 
-    # Add "guide to" variation
-    if not any(w.lower() in ['guide', 'tutorial', 'how'] for w in words):
-        variations.append(f"guide to {query}")
+    # Add perspective variations
+    perspectives = ['comprehensive guide to', 'technical details of', 'benefits of',
+                    'how to use', 'comparison of', 'analysis of']
+    for perspective in perspectives:
+        if not any(w in perspective for w in base_words):
+            variations.append(f"{perspective} {query}")
 
-    return variations
+    # Shuffle and return unique variations
+    import random
+    random.shuffle(variations)
+    return list(dict.fromkeys(variations))  # Remove duplicates while preserving order
