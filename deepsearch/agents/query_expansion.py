@@ -26,33 +26,43 @@ Original query: {original_query}
 Refined query: {refined_query}
 
 # ANALYSIS PROCESS
-First, analyze the user's query:
-1. What is the core information need behind this query?
+First, analyze the refined query carefully:
+1. What is the EXACT core information need behind this refined query?
 2. What specific knowledge or answers is the user looking for?
-3. What are the different aspects or dimensions of this topic that would be relevant?
-4. What background information would help provide a complete answer?
-5. What are potential follow-up questions the user might have?
+3. What are the 3-5 MOST RELEVANT aspects or dimensions of this specific topic?
+4. What directly related background information would help provide a complete answer?
 
 # QUERY GENERATION INSTRUCTIONS
-Based on your analysis, generate 5 HIGHLY DIVERSE search queries that:
-1. Target the DIFFERENT ASPECTS of what the user is trying to learn
-2. Address potential knowledge gaps the user may have about the topic
-3. Focus on distinct information needs related to the original question
-4. Include technical, practical, comparative, historical, and future-oriented perspectives
-5. Keep all named entities (companies, products, people, etc.) EXACTLY as written
+Based on your analysis, generate 5 search queries that:
+1. Are ALL DIRECTLY RELATED to the REFINED query - do NOT add new unrelated topics
+2. MUST maintain the core information need and topic from the refined query
+3. Focus on different facets of EXACTLY THE SAME TOPIC in the refined query
+4. All queries should feel like slight variations or elaborations on the refined query
+5. Keep all named entities (companies, products, people, etc.) from the refined query
+6. AVOID adding topics or products that weren't mentioned in the refined query
 
-# EXAMPLE
-For the query "How does blockchain work?", first identify the information needs:
-- Core need: Understanding blockchain technology's fundamental mechanisms
-- Aspects: Technical details, real-world applications, historical development, comparisons to other technologies
-- Knowledge gaps: How consensus works, scalability issues, security implications
+# CRITICAL
+EVERY query MUST be about the EXACT SAME TOPIC as the refined query. The queries should NOT diverge into related but different topics - they should be variations on the SAME specific information need.
 
-Then generate diverse queries addressing these needs:
-["technical explanation of blockchain distributed ledger mechanisms",
-"practical applications of blockchain technology beyond cryptocurrency",
-"blockchain consensus protocols comparison proof-of-work vs proof-of-stake",
-"evolution and history of blockchain technology since 2008",
-"blockchain scalability challenges and layer 2 solutions"]
+# EXAMPLES
+
+GOOD EXPANSION (stays on topic):
+Refined query: "new updates from Nvidia"
+Expanded queries:
+["latest Nvidia software updates and releases",
+"recent Nvidia driver updates and their improvements",
+"Nvidia's newest product announcements and releases",
+"latest Nvidia GPU driver updates for gaming performance",
+"Nvidia's recent technology updates and advancements"]
+
+BAD EXPANSION (strays from topic):
+Refined query: "new updates from Nvidia"
+Expanded queries:
+["new updates from Nvidia",
+"Nvidia RTX 4090 specifications",
+"AMD vs Nvidia comparison",
+"Nvidia stock price prediction 2025",
+"historical timeline of Nvidia's GPU innovations"]
 
 # RESPONSE FORMAT
 Your entire response MUST be valid parseable JSON, starting with '[' and ending with ']'.
@@ -84,7 +94,7 @@ def query_expansion_agent(state: SearchState) -> SearchState:
         Updated state with multiple generated queries
     """
     # Initialize the LLM with higher temperature for more diversity
-    llm = init_query_expansion_llm(temperature=0.8)
+    llm = init_query_expansion_llm(temperature=0.7)  # Slightly lower temperature for more focused diversity
 
     # Create the prompt
     query_expansion_prompt = PromptTemplate(
@@ -195,17 +205,43 @@ def query_expansion_agent(state: SearchState) -> SearchState:
                     expanded_queries = [refined_query]
                     logger.warning("Could not extract any queries, using refined query as fallback")
 
-    # Post-process queries to ensure diversity
+    # Post-process queries to ensure relevance to the refined query
     processed_queries = []
 
-    # Include the refined query if it's substantive
-    if refined_query and len(refined_query.split()) > 2:
-        processed_queries.append(refined_query)
+    # Always include the refined query as the first query
+    processed_queries.append(refined_query)
 
-    # Add other queries, ensuring they're diverse from what we already have
+    # Extract key terms from refined query for relevance checking
+    refined_terms = set(refined_query.lower().split())
+    refined_entities = extract_entities(refined_query)
+
+    # Add other queries, ensuring they're diverse but related to the refined query
     for query in expanded_queries:
-        # Skip very short queries or ones that are too similar to others we've already included
+        # Skip very short queries
         if len(query.split()) < 3:
+            continue
+
+        # Skip exact duplicate of refined query
+        if query.lower() == refined_query.lower():
+            continue
+
+        # Check for relevance to refined query
+        query_terms = set(query.lower().split())
+        query_entities = extract_entities(query)
+
+        # Check for entity overlap - at least one entity should match
+        entity_overlap = False
+        if refined_entities and query_entities:
+            entity_overlap = len(set(refined_entities).intersection(set(query_entities))) > 0
+
+        # Calculate term overlap
+        term_overlap = len(refined_terms.intersection(query_terms)) / len(refined_terms) if refined_terms else 0
+
+        # A query is relevant if it has significant term overlap OR contains shared entities
+        is_relevant = term_overlap >= 0.4 or entity_overlap
+
+        if not is_relevant:
+            logger.info(f"Skipping irrelevant query: {query}")
             continue
 
         # Check for similarity with existing processed queries
@@ -228,9 +264,14 @@ def query_expansion_agent(state: SearchState) -> SearchState:
         if not too_similar:
             processed_queries.append(query)
 
-    # Ensure we have at least the refined query if nothing else
-    if not processed_queries:
-        processed_queries = [refined_query]
+    # If we don't have enough relevant queries, generate slight variations of the refined query
+    if len(processed_queries) < 3:
+        variations = generate_query_variations(refined_query)
+        for variation in variations:
+            if variation not in processed_queries:
+                processed_queries.append(variation)
+                if len(processed_queries) >= 5:
+                    break
 
     # Limit to 5 diverse queries
     expanded_queries = processed_queries[:5]
@@ -244,3 +285,59 @@ def query_expansion_agent(state: SearchState) -> SearchState:
         logger.info(f"  Query {i+1}: {query}")
 
     return state
+
+def extract_entities(text):
+    """Extract potential named entities from text based on capital letters."""
+    if not text:
+        return []
+
+    # Simple heuristic: words that start with capital letters, not at the beginning of sentences
+    words = text.split()
+    entities = []
+
+    for i, word in enumerate(words):
+        # Skip first word or words after punctuation
+        if i == 0 or (i > 0 and words[i-1][-1] in '.?!'):
+            continue
+
+        # Check if word starts with capital letter
+        if word and word[0].isupper():
+            # Remove punctuation
+            clean_word = word.strip('.,;:!?()"\'')
+            if clean_word:
+                entities.append(clean_word.lower())
+
+    # Also extract company/product names that might be lowercase
+    common_tech_entities = ['nvidia', 'amd', 'intel', 'apple', 'microsoft', 'google', 'amazon']
+    for word in words:
+        clean_word = word.strip('.,;:!?()"\'').lower()
+        if clean_word in common_tech_entities and clean_word not in entities:
+            entities.append(clean_word)
+
+    return entities
+
+def generate_query_variations(query):
+    """Generate simple variations of a query."""
+    variations = []
+
+    words = query.split()
+    if not words:
+        return variations
+
+    # Add "latest" variation
+    if not any(w.lower() in ['latest', 'recent', 'new', 'newest'] for w in words):
+        variations.append(f"latest {query}")
+
+    # Add "recent" variation
+    if not any(w.lower() in ['recent', 'latest', 'new', 'newest'] for w in words):
+        variations.append(f"recent {query}")
+
+    # Add "comprehensive" variation
+    if not any(w.lower() in ['comprehensive', 'complete', 'detailed'] for w in words):
+        variations.append(f"comprehensive {query}")
+
+    # Add "guide to" variation
+    if not any(w.lower() in ['guide', 'tutorial', 'how'] for w in words):
+        variations.append(f"guide to {query}")
+
+    return variations
