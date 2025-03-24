@@ -128,6 +128,111 @@ Your expanded answer should be thorough, informative, and directly address the o
 while carefully following the outline structure.
 """
 
+# Define the prompt template for generating key points
+KEY_POINTS_TEMPLATE = """You are an expert research analyst. Your task is to extract the most important key points from search results.
+
+ORIGINAL QUERY: {original_query}
+
+SEARCH DETAILS:
+{search_details}
+
+KEY POINTS IDENTIFIED DURING SEARCH:
+{key_points}
+
+INSTRUCTIONS:
+Create a concise list of 5-7 bullet points that represent the most important findings and facts related to the query.
+Each point should be clear, specific, and directly relevant to answering the original query.
+
+Format your response as a markdown list of bullet points ONLY:
+- Key point 1
+- Key point 2
+...
+
+Do not include any introduction, explanation, or conclusion outside of the bullet points.
+"""
+
+# Define the prompt template for direct answer generation
+DIRECT_ANSWER_TEMPLATE = """You are an expert content writer. Your task is to formulate a direct answer to the original query.
+
+ORIGINAL QUERY: {original_query}
+
+KEY POINTS:
+{key_points}
+
+SEARCH DETAILS:
+{search_details}
+
+INSTRUCTIONS:
+Create a well-rounded, complete direct answer to the original query. The answer should:
+1. Be comprehensive but concise (3-5 paragraphs)
+2. Address the core question directly without tangents
+3. Synthesize the key points into a coherent response
+4. Use an authoritative, clear writing style
+5. Avoid phrases like "based on the search results" or "according to the information provided"
+
+Your direct answer should be self-contained and provide a complete response to the original query.
+Do not include any headings, bullet points, or section markers.
+"""
+
+# Define the template for detailed notes generation
+DETAILED_NOTES_TEMPLATE = """You are an expert content writer. Your task is to provide detailed notes expanding on the direct answer.
+
+ORIGINAL QUERY: {original_query}
+
+KEY POINTS:
+{key_points}
+
+DIRECT ANSWER:
+{direct_answer}
+
+SEARCH DETAILS:
+{search_details}
+
+INSTRUCTIONS:
+Create detailed, structured notes that expand on the direct answer with more in-depth information. Your notes should:
+1. Be organized into 3-5 logical sections with clear headings
+2. Include technical details, examples, and comparisons where relevant
+3. Elaborate on all important aspects of the topic not fully covered in the direct answer
+4. Maintain a coherent flow between sections
+5. Use proper markdown formatting for sections and subsections
+6. Where relevant, include:
+   - Code examples with proper syntax highlighting
+   - Tables for comparing options or features
+   - Bulleted lists for steps or features
+   - Numbered lists for sequential processes
+
+Format your response using proper markdown, like this example:
+```
+## Section Heading 1
+
+Detailed content with **bold text** for emphasis and *italics* for terminology.
+
+### Subsection 1.1
+- Feature one
+- Feature two
+
+### Subsection 1.2
+Step-by-step process:
+1. First step
+2. Second step
+3. Third step
+
+## Section Heading 2
+
+Content with `inline code` and code blocks:
+
+```python
+def example_function():
+    return "Hello, world!"
+```
+
+| Option | Pros | Cons |
+|--------|------|------|
+| Option 1 | Fast, Easy | Limited |
+| Option 2 | Powerful | Complex |
+```
+"""
+
 def init_reasoning_llm(temperature: float = 0.3):
     """Initialize the language model for reasoning using OpenAI-compatible API."""
     # Use OpenAI-compatible server
@@ -403,9 +508,10 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 3) -> SearchS
 
 def generate_final_answer(state: SearchState) -> SearchState:
     """
-    Generates the final, structured answer in a two-stage process:
-    1. Create an outline using the reasoning agent
-    2. Expand the outline into full content with the writer agent
+    Generates the final, structured answer in a three-stage process:
+    1. Generate concise key points
+    2. Create a direct answer based on key points
+    3. Expand with detailed notes
 
     Args:
         state: The current search state with key points and other information
@@ -413,71 +519,83 @@ def generate_final_answer(state: SearchState) -> SearchState:
     Returns:
         Updated state with the final structured answer
     """
-    # Stage 1: Generate the outline using the reasoning agent
-    # Initialize the LLM with a lower temperature for structured outline
-    outline_llm = init_reasoning_llm(temperature=0.2)
-
-    # Create the outline generation prompt
-    outline_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "search_details"],
-        template=ANSWER_TEMPLATE
-    )
-
-    # Use the newer approach to avoid deprecation warnings
-    outline_chain = outline_prompt | outline_llm
-
-    # Format the key points
-    key_points_text = "\n".join([f"- {point}" for point in state.key_points])
-
     # Format the search details
     search_details = format_search_details(state)
 
-    # Generate the outline
-    outline_response = outline_chain.invoke({
-        "original_query": state.original_query,
-        "key_points": key_points_text,
-        "search_details": search_details
-    })
+    # Format the key points from the deep reasoning
+    initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
 
-    # Extract the content if it's a message object
-    if hasattr(outline_response, 'content'):
-        outline = outline_response.content
-    else:
-        outline = outline_response
-
-    # Log the outline for debugging
-    logger.info("Generated outline for final answer")
-
-    # Stage 2: Expand the outline into full content with the writer agent
-    # Initialize the LLM with a more creative temperature for content writing
-    writer_llm = init_reasoning_llm(temperature=0.5)
-
-    # Create the writer prompt
-    writer_prompt = PromptTemplate(
-        input_variables=["original_query", "outline", "search_details"],
-        template=WRITER_TEMPLATE
+    # Stage 1: Generate refined key points
+    key_points_llm = init_reasoning_llm(temperature=0.2)
+    key_points_prompt = PromptTemplate(
+        input_variables=["original_query", "search_details", "key_points"],
+        template=KEY_POINTS_TEMPLATE
     )
+    key_points_chain = key_points_prompt | key_points_llm
 
-    # Use the newer approach to avoid deprecation warnings
-    writer_chain = writer_prompt | writer_llm
-
-    # Generate the final answer
-    writer_response = writer_chain.invoke({
+    key_points_response = key_points_chain.invoke({
         "original_query": state.original_query,
-        "outline": outline,
+        "search_details": search_details,
+        "key_points": initial_key_points
+    })
+
+    # Extract the content if it's a message object
+    key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
+    logger.info("Generated key points for final answer")
+
+    # Stage 2: Generate direct answer
+    direct_answer_llm = init_reasoning_llm(temperature=0.3)
+    direct_answer_prompt = PromptTemplate(
+        input_variables=["original_query", "key_points", "search_details"],
+        template=DIRECT_ANSWER_TEMPLATE
+    )
+    direct_answer_chain = direct_answer_prompt | direct_answer_llm
+
+    direct_answer_response = direct_answer_chain.invoke({
+        "original_query": state.original_query,
+        "key_points": key_points,
         "search_details": search_details
     })
 
     # Extract the content if it's a message object
-    if hasattr(writer_response, 'content'):
-        answer = writer_response.content
-    else:
-        answer = writer_response
+    direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
+    logger.info("Generated direct answer")
+
+    # Stage 3: Generate detailed notes
+    detailed_notes_llm = init_reasoning_llm(temperature=0.4)
+    detailed_notes_prompt = PromptTemplate(
+        input_variables=["original_query", "key_points", "direct_answer", "search_details"],
+        template=DETAILED_NOTES_TEMPLATE
+    )
+    detailed_notes_chain = detailed_notes_prompt | detailed_notes_llm
+
+    detailed_notes_response = detailed_notes_chain.invoke({
+        "original_query": state.original_query,
+        "key_points": key_points,
+        "direct_answer": direct_answer,
+        "search_details": search_details
+    })
+
+    # Extract the content if it's a message object
+    detailed_notes = detailed_notes_response.content if hasattr(detailed_notes_response, 'content') else detailed_notes_response
+    logger.info("Generated detailed notes")
+
+    # Combine all sections into the final answer with enhanced markdown
+    final_answer = f"""## 📌 Key Points
+
+{key_points}
+
+## 💡 Direct Answer
+
+{direct_answer}
+
+{detailed_notes.replace('# DETAILED NOTES', '## 📚 Detailed Notes')}
+"""
 
     # Update the state with the final answer
-    state.final_answer = answer.strip()
+    state.final_answer = final_answer.strip()
 
-    # Set a reasonable confidence score - could be improved with more advanced heuristics
+    # Set a confidence score
     state.confidence_score = 0.8 if state.key_points else 0.5
 
     return state
