@@ -284,7 +284,8 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
             "key_points": key_points,
             "detailed_notes": detailed_notes,
             "confidence": state.confidence_score,
-            "sources": sources
+            "sources": sources,
+            "has_error": False
         }
     except Exception as e:
         # Handle any unexpected errors
@@ -294,7 +295,8 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
             "refined_query": None,
             "answer": "An unexpected error occurred while processing your query. Please try again later.",
             "confidence": 0.0,
-            "sources": []
+            "sources": [],
+            "has_error": True
         }
 
 
