@@ -46,6 +46,34 @@ def init_embedding_model():
         raise
 
 
+def sanitize_text_for_embedding(text):
+    """Sanitize text for embedding to ensure it's a valid string."""
+    if isinstance(text, str):
+        return text.strip()
+    elif isinstance(text, (list, tuple)) and len(text) > 0:
+        # If it's a list or tuple, try to convert the first element to string
+        first_element = text[0]
+        if isinstance(first_element, (int, float)):
+            # Convert numeric value to string
+            logger.warning(f"Converting numeric value {first_element} to string for embedding")
+            return str(first_element)
+        elif isinstance(first_element, str):
+            return first_element.strip()
+        else:
+            # Try to convert arbitrary object to string
+            return str(first_element)
+    elif isinstance(text, (int, float)):
+        # Convert numeric value to string
+        logger.warning(f"Converting numeric value {text} to string for embedding")
+        return str(text)
+    elif text is None:
+        return ""
+    else:
+        # Try to convert arbitrary object to string
+        logger.warning(f"Converting {type(text)} to string for embedding")
+        return str(text)
+
+
 def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[Optional[faiss.Index], Optional[List], Optional[List[int]]]:
     """Create a FAISS index from search results."""
     if not search_results:
@@ -58,12 +86,18 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
         valid_indices = []
 
         for i, result in enumerate(search_results):
-            # Check if content exists, is a string, and is not empty
-            if (result.content and
-                isinstance(result.content, str) and
-                len(result.content.strip()) > 0):
-                texts.append(result.content.strip())
-                valid_indices.append(i)
+            # Apply more robust content validation and sanitization
+            if result.content is not None:
+                # Sanitize the content to ensure it's a valid string
+                sanitized_content = sanitize_text_for_embedding(result.content)
+                # Only include non-empty content
+                if sanitized_content and len(sanitized_content.strip()) > 0:
+                    texts.append(sanitized_content.strip())
+                    valid_indices.append(i)
+                else:
+                    logger.warning(f"Skipping empty content after sanitization at index {i}")
+            else:
+                logger.warning(f"Skipping result with None content at index {i}")
 
         if not texts:
             logger.warning("No valid text content in search results for FAISS indexing")
@@ -80,6 +114,11 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
         # Process each text individually to identify problematic ones
         for i, text in enumerate(texts):
             try:
+                # Additional type validation just before embedding
+                if not isinstance(text, str):
+                    logger.warning(f"Converting non-string text to string at index {i}")
+                    text = str(text)
+
                 # Get embedding for a single text to isolate errors
                 single_embedding = embeddings.embed_query(text)
                 embedded_texts.append(single_embedding)
@@ -117,8 +156,12 @@ def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indi
 
     try:
         # Ensure query is a valid string
-        if not isinstance(query, str) or not query.strip():
-            logger.warning("Invalid query for FAISS search")
+        if not isinstance(query, str):
+            logger.warning(f"Converting non-string query of type {type(query)} to string")
+            query = sanitize_text_for_embedding(query)
+
+        if not query or not query.strip():
+            logger.warning("Invalid query for FAISS search after sanitization")
             return []
 
         query = query.strip()

@@ -28,12 +28,32 @@ def convert_tavily_results(tavily_results: List[Dict[str, Any]]) -> List[SearchR
     """Convert Tavily search results to our SearchResult model."""
     search_results = []
 
-    for result in tavily_results:
+    for i, result in enumerate(tavily_results):
+        # Extract content with validation
+        content = result.get("content", "")
+
+        # Ensure content is a string
+        if not isinstance(content, str):
+            logger.warning(f"Tavily result {i} has non-string content of type {type(content)}")
+
+            # Try to convert to string properly
+            if content is None:
+                content = ""
+            elif isinstance(content, (list, tuple)) and len(content) > 0:
+                # Log details of problematic list content
+                logger.warning(f"List/tuple content detected: {content[:10] if len(content) > 10 else content}")
+                # Join list elements into a string if they're strings, otherwise convert each element to string
+                content = " ".join(str(item) for item in content)
+            else:
+                # Convert other types to string
+                content = str(content)
+
+        # Create the search result
         search_results.append(
             SearchResult(
-                title=result.get("title", "Untitled"),
-                url=result.get("url", ""),
-                content=result.get("content", ""),
+                title=str(result.get("title", "Untitled")),  # Ensure title is a string
+                url=str(result.get("url", "")),              # Ensure URL is a string
+                content=content,                             # Now always a string
                 score=None  # Tavily doesn't provide scores by default
             )
         )
