@@ -21,14 +21,29 @@ openai_api_key = os.environ.get("OPENAI_API_KEY", "not-needed")
 
 def init_embedding_model():
     """Initialize the embedding model using OpenAI-compatible API."""
-    # Use OpenAI-compatible embeddings from the server
-    embeddings = OpenAIEmbeddings(
-        model=os.getenv("EMBEDDING_MODEL_ID", "no-need"),
-        openai_api_key=openai_api_key,
-        openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
-        dimensions=384  # Adjust based on your model
-    )
-    return embeddings
+    try:
+        # Use OpenAI-compatible embeddings from the server
+        embeddings = OpenAIEmbeddings(
+            model=os.getenv("EMBEDDING_MODEL_ID", "text-embedding-ada-002"),  # Default to a known model
+            openai_api_key=openai_api_key,
+            openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
+            dimensions=384  # Adjust based on your model
+        )
+
+        # Test the embeddings with a simple query to catch any initialization issues
+        try:
+            test_embedding = embeddings.embed_query("test")
+            if not test_embedding or len(test_embedding) == 0:
+                raise ValueError("Embedding model returned empty embeddings")
+            logger.info(f"Embedding model initialized successfully. Vector dimension: {len(test_embedding)}")
+        except Exception as e:
+            logger.error(f"Failed to generate test embedding: {str(e)}")
+            raise
+
+        return embeddings
+    except Exception as e:
+        logger.error(f"Failed to initialize embedding model: {str(e)}")
+        raise
 
 
 def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[Optional[faiss.Index], Optional[List], Optional[List[int]]]:
@@ -38,23 +53,45 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
         return None, None, None
 
     try:
-        # Extract the content from search results
-        texts = [result.content for result in search_results if result.content and len(result.content.strip()) > 0]
+        # Extract the content from search results and ensure they're all valid strings
+        texts = []
+        valid_indices = []
+
+        for i, result in enumerate(search_results):
+            # Check if content exists, is a string, and is not empty
+            if (result.content and
+                isinstance(result.content, str) and
+                len(result.content.strip()) > 0):
+                texts.append(result.content.strip())
+                valid_indices.append(i)
 
         if not texts:
             logger.warning("No valid text content in search results for FAISS indexing")
             return None, None, None
 
-        # Track which search results have valid content
-        valid_indices = [i for i, result in enumerate(search_results) if result.content and len(result.content.strip()) > 0]
-
-        if not valid_indices:
-            logger.warning("No valid indices for FAISS indexing")
-            return None, None, None
-
-        # Generate embeddings for each text
+        # Log the number of valid texts
         logger.debug(f"Generating embeddings for {len(texts)} texts")
-        embedded_texts = embeddings.embed_documents(texts)
+
+        # Catch any potential embedding errors for individual texts
+        embedded_texts = []
+        final_texts = []
+        final_indices = []
+
+        # Process each text individually to identify problematic ones
+        for i, text in enumerate(texts):
+            try:
+                # Get embedding for a single text to isolate errors
+                single_embedding = embeddings.embed_query(text)
+                embedded_texts.append(single_embedding)
+                final_texts.append(text)
+                final_indices.append(valid_indices[i])
+            except Exception as e:
+                logger.warning(f"Skipping text at index {valid_indices[i]} due to embedding error: {str(e)}")
+                continue
+
+        if not embedded_texts:
+            logger.warning("No valid embeddings generated")
+            return None, None, None
 
         # Create a FAISS index
         dimension = len(embedded_texts[0])
@@ -66,7 +103,7 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
         # Add the vectors to the index
         index.add(np.array(embedded_texts, dtype=np.float32))
 
-        return index, embedded_texts, valid_indices
+        return index, embedded_texts, final_indices
     except Exception as e:
         logger.error(f"Error creating FAISS index: {str(e)}", exc_info=True)
         return None, None, None
@@ -79,8 +116,19 @@ def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indi
         return []
 
     try:
+        # Ensure query is a valid string
+        if not isinstance(query, str) or not query.strip():
+            logger.warning("Invalid query for FAISS search")
+            return []
+
+        query = query.strip()
+
         # Generate embedding for the query
-        query_embedding = embeddings.embed_query(query)
+        try:
+            query_embedding = embeddings.embed_query(query)
+        except Exception as e:
+            logger.error(f"Error embedding query: {str(e)}")
+            return []
 
         # Normalize the query vector for cosine similarity
         query_embedding_np = np.array([query_embedding], dtype=np.float32)
@@ -103,7 +151,8 @@ def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indi
                             title=result.title,
                             url=result.url,
                             content=result.content,
-                            score=score
+                            score=score,
+                            query=query  # Add the query that produced this result
                         )
                     )
 
@@ -134,7 +183,7 @@ def faiss_indexing_agent(state: SearchState) -> SearchState:
         return state
 
     # Ensure we have at least some content to work with
-    valid_results = [r for r in state.tavily_results if r.content and len(r.content.strip()) > 0]
+    valid_results = [r for r in state.tavily_results if r.content and isinstance(r.content, str) and len(r.content.strip()) > 0]
     if not valid_results:
         # If no valid content in results, skip FAISS
         logger.info("No valid content in Tavily results for FAISS indexing")
@@ -143,7 +192,12 @@ def faiss_indexing_agent(state: SearchState) -> SearchState:
 
     try:
         # Initialize the embedding model
-        embeddings = init_embedding_model()
+        try:
+            embeddings = init_embedding_model()
+        except Exception as e:
+            logger.error(f"Failed to initialize embedding model. Skipping FAISS search: {str(e)}")
+            state.faiss_results = []
+            return state
 
         # Create a FAISS index from the search results
         index, embedded_texts, valid_indices = create_faiss_index(embeddings, valid_results)
@@ -155,6 +209,12 @@ def faiss_indexing_agent(state: SearchState) -> SearchState:
 
         # Use refined query if available, otherwise use original query
         query = state.refined_query if state.refined_query else state.original_query
+
+        # Validate query
+        if not query or not isinstance(query, str) or not query.strip():
+            logger.warning("Invalid query for FAISS search")
+            state.faiss_results = []
+            return state
 
         # Search the index with the query
         faiss_results = faiss_search(
