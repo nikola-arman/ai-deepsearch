@@ -128,8 +128,8 @@ def bm25_search_agent(state: SearchState) -> SearchState:
             state.combined_results = state.faiss_results if state.faiss_results else []
             return state
 
-        # Use refined query if available, otherwise use original query
-        query = state.refined_query if state.refined_query else state.original_query
+        # Use the original query
+        query = state.original_query
 
         # Search the index with the query
         bm25_results = bm25_search(

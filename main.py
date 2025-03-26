@@ -24,25 +24,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger("deepsearch")
 
-def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_iterations: int = 3) -> Dict[str, Any]:
+def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, Any]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
         # Initialize state
         state = SearchState(original_query=query)
 
-        # Use original query as refined query (query refinement removed)
-        logger.info("Step 1: Using original query (query refinement removed)")
-        state.refined_query = state.original_query
-
-        # Step 2: Query Expansion - generate multiple queries
-        logger.info("Step 2: Expanding query into multiple search queries...")
+        # Step 1: Query Expansion - generate multiple queries
+        logger.info("Step 1: Expanding query into multiple search queries...")
         try:
             state = query_expansion_agent(state)
             logger.info(f"  Generated {len(state.generated_queries)} search queries")
         except Exception as e:
             logger.error(f"  Error in query expansion: {str(e)}", exc_info=True)
-            # If expansion fails, use just the refined query
-            state.generated_queries = [state.refined_query]
+            # If expansion fails, use just the original query
+            state.generated_queries = [state.original_query]
 
         # Iterative search loop
         while not state.search_complete and state.current_iteration < max_iterations:
@@ -62,8 +58,7 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
 
                 # Create a temporary state for this query
                 temp_state = SearchState(
-                    original_query=state.original_query,
-                    refined_query=query  # Use the current query as the refined query
+                    original_query=query  # Use the current query as the original query for this temp state
                 )
 
                 # Step 3a: Tavily Search for this query
@@ -177,7 +172,6 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
 
         return {
             "original_query": state.original_query,
-            "refined_query": state.refined_query,
             "generated_queries": state.generated_queries,
             "iterations": state.current_iteration,
             "answer": answer,
@@ -191,7 +185,6 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
         logger.error(f"Unexpected error in deep search pipeline: {str(e)}", exc_info=True)
         return {
             "original_query": query,
-            "refined_query": None,
             "answer": "An unexpected error occurred while processing your query. Please try again later.",
             "confidence": 0.0,
             "sources": []
@@ -207,7 +200,6 @@ def main():
     parser.add_argument("query", type=str, help="The query to search for")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
     parser.add_argument("--show-confidence", "-c", action="store_true", help="Show confidence score")
-    parser.add_argument("--disable-refinement", "-d", action="store_true", help="Disable query refinement")
     parser.add_argument("--max-iterations", "-i", type=int, default=3, help="Maximum number of search iterations")
 
     args = parser.parse_args()
@@ -216,24 +208,20 @@ def main():
     print(f"Searching for: {args.query}\n")
     print("Processing... (this may take a while depending on your hardware)\n")
 
-    result = run_deep_search_pipeline(args.query, args.disable_refinement, args.max_iterations)
+    result = run_deep_search_pipeline(args.query, args.max_iterations)
 
     # Print the results
     print("\n" + "="*80)
     print("SEARCH RESULTS")
     print("="*80)
 
-    if result['refined_query']:
-        print(f"\nOriginal query: {result['original_query']}")
-        print(f"Refined query: {result['refined_query']}")
-    else:
-        print(f"\nQuery: {result['original_query']}")
+    print(f"\nQuery: {result['original_query']}")
 
     if args.verbose:
         print(f"\nSearch iterations: {result['iterations']}")
         print("\nGenerated queries:")
         for i, query in enumerate(result['generated_queries']):
-            if query != result['refined_query'] and query != result['original_query']:
+            if query != result['original_query']:
                 print(f"  - {query}")
 
     print("\n" + result['answer'])

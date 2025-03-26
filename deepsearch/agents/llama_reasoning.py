@@ -137,7 +137,7 @@ def llama_reasoning_agent(state: SearchState) -> SearchState:
     formatted_results = format_search_results(state)
 
     # Use refined query if available, otherwise use original query
-    query = state.refined_query if state.refined_query else state.original_query
+    query = state.original_query
 
     # Generate the answer
     response = chain.invoke({

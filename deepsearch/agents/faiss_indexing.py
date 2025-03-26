@@ -1,10 +1,11 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 import os
 import numpy as np
 import faiss
 import logging
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
+import re
 
 from deepsearch.models import SearchState, SearchResult
 
@@ -74,16 +75,57 @@ def sanitize_text_for_embedding(text):
         return str(text)
 
 
-def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[Optional[faiss.Index], Optional[List], Optional[List[int]]]:
+def chunk_text(text: str, max_length: int = 1000) -> List[str]:
+    """Split text into chunks of approximately max_length tokens.
+
+    Args:
+        text: Text to split into chunks
+        max_length: Maximum number of characters per chunk (rough approximation of tokens)
+
+    Returns:
+        List of text chunks
+    """
+    # Basic sentence splitting on periods, exclamation marks, or question marks
+    # followed by spaces and capital letters
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
+
+    chunks = []
+    current_chunk = []
+    current_length = 0
+
+    for sentence in sentences:
+        sentence_length = len(sentence)
+
+        if current_length + sentence_length <= max_length:
+            current_chunk.append(sentence)
+            current_length += sentence_length
+        else:
+            # If the current chunk has content, add it to chunks
+            if current_chunk:
+                chunks.append(' '.join(current_chunk))
+            # Start new chunk with current sentence
+            current_chunk = [sentence]
+            current_length = sentence_length
+
+    # Add the last chunk if it has content
+    if current_chunk:
+        chunks.append(' '.join(current_chunk))
+
+    return chunks
+
+
+def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[Optional[faiss.Index], Optional[List], Optional[List[int]], Optional[Dict]]:
     """Create a FAISS index from search results."""
     if not search_results:
         logger.warning("No search results provided for FAISS indexing")
-        return None, None, None
+        return None, None, None, None
 
     try:
         # Extract the content from search results and ensure they're all valid strings
         texts = []
         valid_indices = []
+        original_to_chunk_map = {}  # Map to track which chunks belong to which original text
+        chunk_count = 0
 
         for i, result in enumerate(search_results):
             # Apply more robust content validation and sanitization
@@ -92,8 +134,13 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
                 sanitized_content = sanitize_text_for_embedding(result.content)
                 # Only include non-empty content
                 if sanitized_content and len(sanitized_content.strip()) > 0:
-                    texts.append(sanitized_content.strip())
-                    valid_indices.append(i)
+                    # Split content into chunks if it's too long
+                    chunks = chunk_text(sanitized_content.strip())
+                    for chunk in chunks:
+                        texts.append(chunk)
+                        valid_indices.append(i)
+                        original_to_chunk_map[chunk_count] = i
+                        chunk_count += 1
                 else:
                     logger.warning(f"Skipping empty content after sanitization at index {i}")
             else:
@@ -101,17 +148,18 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
 
         if not texts:
             logger.warning("No valid text content in search results for FAISS indexing")
-            return None, None, None
+            return None, None, None, None
 
         # Log the number of valid texts
-        logger.debug(f"Generating embeddings for {len(texts)} texts")
+        logger.debug(f"Generating embeddings for {len(texts)} chunks")
 
-        # Catch any potential embedding errors for individual texts
+        # Process each text individually to identify problematic ones
         embedded_texts = []
         final_texts = []
         final_indices = []
+        final_chunk_map = {}
 
-        # Process each text individually to identify problematic ones
+        # Process each chunk individually to isolate errors
         for i, text in enumerate(texts):
             try:
                 # Additional type validation just before embedding
@@ -124,13 +172,14 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
                 embedded_texts.append(single_embedding)
                 final_texts.append(text)
                 final_indices.append(valid_indices[i])
+                final_chunk_map[len(embedded_texts) - 1] = original_to_chunk_map[i]
             except Exception as e:
-                logger.warning(f"Skipping text at index {valid_indices[i]} due to embedding error: {str(e)}")
+                logger.warning(f"Skipping chunk at index {i} due to embedding error: {str(e)}")
                 continue
 
         if not embedded_texts:
             logger.warning("No valid embeddings generated")
-            return None, None, None
+            return None, None, None, None
 
         # Create a FAISS index
         dimension = len(embedded_texts[0])
@@ -142,13 +191,13 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
         # Add the vectors to the index
         index.add(np.array(embedded_texts, dtype=np.float32))
 
-        return index, embedded_texts, final_indices
+        return index, embedded_texts, final_indices, final_chunk_map
     except Exception as e:
         logger.error(f"Error creating FAISS index: {str(e)}", exc_info=True)
-        return None, None, None
+        return None, None, None, None
 
 
-def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indices: List[int], search_results: List[SearchResult], top_k: int = 5):
+def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indices: List[int], search_results: List[SearchResult], chunk_to_original_map: Dict[int, int], top_k: int = 5):
     """Search the FAISS index with the query."""
     if not index or not embedded_texts or not valid_indices or not query:
         logger.warning("Missing required parameters for FAISS search")
@@ -177,30 +226,45 @@ def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indi
         query_embedding_np = np.array([query_embedding], dtype=np.float32)
         faiss.normalize_L2(query_embedding_np)
 
-        # Search the index
-        distances, indices = index.search(query_embedding_np, min(top_k, len(embedded_texts)))
+        # Search the index - get more results initially since we'll combine chunks
+        chunk_k = min(top_k * 3, len(embedded_texts))  # Get more chunks initially
+        distances, indices = index.search(query_embedding_np, chunk_k)
 
-        # Map the results back to search results with scores
-        faiss_results = []
+        # Track scores by original document
+        doc_scores = {}  # Map from original doc index to best score
+        doc_chunks = {}  # Map from original doc index to matching chunks
+
+        # Map the results back to original documents and combine scores
         for i, idx in enumerate(indices[0]):
-            if idx < len(valid_indices):
-                original_idx = valid_indices[idx]
+            if idx < len(embedded_texts):
+                # Get the original document index
+                original_idx = chunk_to_original_map.get(int(idx), valid_indices[idx])
                 if original_idx < len(search_results):
-                    result = search_results[original_idx]
-                    # Convert distance to score (higher is better)
                     score = float(distances[0][i])
-                    faiss_results.append(
-                        SearchResult(
-                            title=result.title,
-                            url=result.url,
-                            content=result.content,
-                            score=score,
-                            query=query  # Add the query that produced this result
-                        )
-                    )
 
-        # Sort by score in descending order
-        faiss_results.sort(key=lambda x: x.score if x.score is not None else 0, reverse=True)
+                    # Track the best score for each original document
+                    if original_idx not in doc_scores or score > doc_scores[original_idx]:
+                        doc_scores[original_idx] = score
+
+                    # Store the matching chunk
+                    if original_idx not in doc_chunks:
+                        doc_chunks[original_idx] = []
+                    doc_chunks[original_idx].append(embedded_texts[idx])
+
+        # Create results using the best scores
+        faiss_results = []
+        for original_idx, score in sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]:
+            if original_idx < len(search_results):
+                result = search_results[original_idx]
+                faiss_results.append(
+                    SearchResult(
+                        title=result.title,
+                        url=result.url,
+                        content=result.content,
+                        score=score,
+                        query=query  # Add the query that produced this result
+                    )
+                )
 
         return faiss_results
     except Exception as e:
@@ -243,15 +307,18 @@ def faiss_indexing_agent(state: SearchState) -> SearchState:
             return state
 
         # Create a FAISS index from the search results
-        index, embedded_texts, valid_indices = create_faiss_index(embeddings, valid_results)
+        index, embedded_texts, valid_indices, chunk_to_original_map = create_faiss_index(embeddings, valid_results)
 
         if not index or not embedded_texts or not valid_indices:
             logger.warning("Failed to create FAISS index")
             state.faiss_results = []
             return state
 
-        # Use refined query if available, otherwise use original query
-        query = state.refined_query if state.refined_query else state.original_query
+        # Store the chunk mapping in the state metadata
+        state.metadata['chunk_to_original_map'] = chunk_to_original_map
+
+        # Use the original query
+        query = state.original_query
 
         # Validate query
         if not query or not isinstance(query, str) or not query.strip():
@@ -267,6 +334,7 @@ def faiss_indexing_agent(state: SearchState) -> SearchState:
             embedded_texts=embedded_texts,
             valid_indices=valid_indices,
             search_results=valid_results,
+            chunk_to_original_map=chunk_to_original_map,
             top_k=5
         )
 

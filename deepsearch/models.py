@@ -39,7 +39,6 @@ class SearchResult(BaseModel):
 class SearchState(BaseModel):
     """Represents the state of the search process."""
     original_query: str
-    refined_query: Optional[str] = None
     generated_queries: List[str] = Field(default_factory=list)  # List of generated queries
     current_iteration: int = 0  # Track the iteration count for recursive search
     tavily_results: List[SearchResult] = Field(default_factory=list)

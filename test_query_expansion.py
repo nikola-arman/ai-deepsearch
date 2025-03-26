@@ -46,7 +46,6 @@ def test_query_expansion(query):
 
     # Initialize state
     state = SearchState(original_query=query)
-    state.refined_query = query  # Use the same query as refined
 
     # Run query expansion
     state = query_expansion_agent(state)

@@ -21,18 +21,16 @@ logger = logging.getLogger(__name__)
 
 
 
-def run_simple_pipeline(query: str, disable_refinement: bool = False) -> Dict[str, Any]:
+def run_simple_pipeline(query: str) -> Dict[str, Any]:
     """Run a simple pipeline without graph complexity."""
     try:
         # Initialize state
         state = SearchState(original_query=query)
 
-        # Use original query as refined query (query refinement removed)
-        logger.info("Step 1: Using original query (query refinement removed)")
-        state.refined_query = state.original_query
+        logger.info(f"Using query: {state.original_query}")
 
-        # Step 2: Tavily Search
-        logger.info("Step 2: Performing web search...")
+        # Step 1: Tavily Search
+        logger.info("Step 1: Performing web search...")
         try:
             state = tavily_search_agent(state)
             logger.info(f"  Found {len(state.tavily_results)} results")
@@ -40,8 +38,8 @@ def run_simple_pipeline(query: str, disable_refinement: bool = False) -> Dict[st
             logger.error(f"  Error in web search: {str(e)}", exc_info=True)
             state.tavily_results = []
 
-        # Step 3: FAISS Indexing (semantic search)
-        logger.info("Step 3: Performing semantic search...")
+        # Step 2: FAISS Indexing (semantic search)
+        logger.info("Step 2: Performing semantic search...")
         try:
             state = faiss_indexing_agent(state)
             logger.info(f"  Found {len(state.faiss_results)} semantically relevant results")
@@ -49,8 +47,8 @@ def run_simple_pipeline(query: str, disable_refinement: bool = False) -> Dict[st
             logger.error(f"  Error in semantic search: {str(e)}", exc_info=True)
             state.faiss_results = []
 
-        # Step 4: BM25 Search (keyword search)
-        logger.info("Step 4: Performing keyword search...")
+        # Step 3: BM25 Search (keyword search)
+        logger.info("Step 3: Performing keyword search...")
         try:
             state = bm25_search_agent(state)
             logger.info(f"  Found {len(state.bm25_results)} keyword relevant results")
@@ -62,8 +60,8 @@ def run_simple_pipeline(query: str, disable_refinement: bool = False) -> Dict[st
             if not state.combined_results:
                 state.combined_results = state.faiss_results + state.tavily_results
 
-        # Step 5: LLM Reasoning
-        logger.info("Step 5: Generating answer...")
+        # Step 4: LLM Reasoning
+        logger.info("Step 4: Generating answer...")
         try:
             state = llama_reasoning_agent(state)
             logger.info(f"  Confidence: {state.confidence_score}")
@@ -84,7 +82,6 @@ def run_simple_pipeline(query: str, disable_refinement: bool = False) -> Dict[st
 
         return {
             "original_query": state.original_query,
-            "refined_query": state.refined_query,
             "answer": state.final_answer,
             "confidence": state.confidence_score,
             "sources": sources[:5],  # Limit to 5 sources,
@@ -96,32 +93,27 @@ def run_simple_pipeline(query: str, disable_refinement: bool = False) -> Dict[st
         logger.error(f"Unexpected error in pipeline: {str(e)}", exc_info=True)
         return {
             "original_query": query,
-            "refined_query": None,
             "answer": "An unexpected error occurred while processing your query. Please try again later.",
             "confidence": 0.0,
             "sources": [],
             "has_error": True
         }
 
-def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_iterations: int = 3) -> Dict[str, Any]:
+def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, Any]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
         # Initialize state
         state = SearchState(original_query=query)
 
-        # Use original query as refined query (query refinement removed)
-        logger.info("Step 1: Using original query (query refinement removed)")
-        state.refined_query = state.original_query
-
-        # Step 2: Query Expansion - generate multiple queries
-        logger.info("Step 2: Expanding query into multiple search queries...")
+        # Step 1: Query Expansion - generate multiple queries
+        logger.info("Step 1: Expanding query into multiple search queries...")
         try:
             state = query_expansion_agent(state)
             logger.info(f"  Generated {len(state.generated_queries)} search queries")
         except Exception as e:
             logger.error(f"  Error in query expansion: {str(e)}", exc_info=True)
-            # If expansion fails, use just the refined query
-            state.generated_queries = [state.refined_query]
+            # If expansion fails, use just the original query
+            state.generated_queries = [state.original_query]
 
         # Iterative search loop
         while not state.search_complete and state.current_iteration < max_iterations:
@@ -141,11 +133,10 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
 
                 # Create a temporary state for this query
                 temp_state = SearchState(
-                    original_query=state.original_query,
-                    refined_query=query  # Use the current query as the refined query
+                    original_query=query  # Use the current query as the original query for this temp state
                 )
 
-                # Step 3a: Tavily Search for this query
+                # Step 2: Tavily Search for this query
                 logger.info(f"    Performing web search...")
                 try:
                     temp_state = tavily_search_agent(temp_state)
@@ -156,7 +147,7 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
                 except Exception as e:
                     logger.error(f"    Error in web search: {str(e)}", exc_info=True)
 
-                # Step 3b: FAISS Indexing (semantic search) for this query
+                # Step 3: FAISS Indexing (semantic search) for this query
                 logger.info(f"    Performing semantic search...")
                 try:
                     temp_state = faiss_indexing_agent(temp_state)
@@ -167,7 +158,7 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
                 except Exception as e:
                     logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
 
-                # Step 3c: BM25 Search (keyword search) for this query
+                # Step 4: BM25 Search (keyword search) for this query
                 logger.info(f"    Performing keyword search...")
                 try:
                     temp_state = bm25_search_agent(temp_state)
@@ -213,7 +204,7 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
                 state.combined_results = list(unique_results.values())
                 logger.info(f"  Deduplicated to {len(state.combined_results)} unique results")
 
-            # Step 4: Deep Reasoning - analyze results and decide whether to continue
+            # Step 5: Deep Reasoning - analyze results and decide whether to continue
             logger.info(f"  Analyzing search results and determining next steps...")
             try:
                 state = deep_reasoning_agent(state, max_iterations)
@@ -256,7 +247,6 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
 
         return {
             "original_query": state.original_query,
-            "refined_query": state.refined_query,
             "generated_queries": state.generated_queries,
             "iterations": state.current_iteration,
             "answer": answer,
@@ -271,7 +261,6 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
         logger.error(f"Unexpected error in deep search pipeline: {str(e)}", exc_info=True)
         return {
             "original_query": query,
-            "refined_query": None,
             "answer": "An unexpected error occurred while processing your query. Please try again later.",
             "confidence": 0.0,
             "sources": [],

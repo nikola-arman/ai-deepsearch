@@ -72,8 +72,8 @@ def tavily_search_agent(state: SearchState) -> SearchState:
         Updated state with search results
     """
     try:
-        # Use refined query if available, otherwise use original query
-        query = state.refined_query if state.refined_query else state.original_query
+        # Use the original query
+        query = state.original_query
 
         logger.debug(f"Searching Tavily for: {query}")
 

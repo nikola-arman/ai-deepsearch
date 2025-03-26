@@ -23,20 +23,19 @@ openai_api_key = os.environ.get("OPENAI_API_KEY", "not-needed")
 QUERY_EXPANSION_TEMPLATE = """You are a query expansion expert. Your task is to understand the user's information needs and generate diverse search queries that will help find comprehensive answers.
 
 Original query: {original_query}
-Refined query: {refined_query}
 
 # ANALYSIS PROCESS
-First, analyze the refined query carefully:
-1. What is the core information need behind this refined query?
+First, analyze the query carefully:
+1. What is the core information need behind this query?
 2. What are the key entities and concepts in this query?
 3. What are 5-7 DIFFERENT ASPECTS or angles of this topic that would be valuable to explore?
 4. What related concepts would provide useful context for a complete answer?
 
 # QUERY GENERATION INSTRUCTIONS
 Based on your analysis, generate 5 search queries that:
-1. EXPAND on the refined query with more specific details or broader context
+1. EXPAND on the query with more specific details or broader context
 2. Explore DIFFERENT FACETS of the same general topic
-3. Include key entities from the refined query
+3. Include key entities from the query
 4. Add relevant modifiers, related concepts, or specific aspects
 5. Vary in scope (some narrower/focused, some broader/comprehensive)
 6. Use different phrasing and vocabulary while maintaining meaning
@@ -51,7 +50,7 @@ Based on your analysis, generate 5 search queries that:
 # EXAMPLES
 
 GOOD EXPANSION (diverse but related):
-Refined query: "new updates from Nvidia"
+Original query: "new updates from Nvidia"
 Expanded queries:
 ["latest Nvidia driver updates and performance improvements",
 "Nvidia's recent hardware announcements and upcoming product releases",
@@ -60,7 +59,7 @@ Expanded queries:
 "professional graphics and workstation updates from Nvidia"]
 
 BAD EXPANSION (too similar):
-Refined query: "new updates from Nvidia"
+Original query: "new updates from Nvidia"
 Expanded queries:
 ["new updates from Nvidia",
 "recent updates from Nvidia",
@@ -92,7 +91,7 @@ def query_expansion_agent(state: SearchState) -> SearchState:
     Generates multiple diverse queries based on the user's original query.
 
     Args:
-        state: The current search state with original and potentially refined query
+        state: The current search state with original query
 
     Returns:
         Updated state with multiple generated queries
@@ -102,20 +101,16 @@ def query_expansion_agent(state: SearchState) -> SearchState:
 
     # Create the prompt
     query_expansion_prompt = PromptTemplate(
-        input_variables=["original_query", "refined_query"],
+        input_variables=["original_query"],
         template=QUERY_EXPANSION_TEMPLATE
     )
 
     # Use the newer approach to avoid deprecation warnings
     chain = query_expansion_prompt | llm
 
-    # Ensure refined_query is available
-    refined_query = state.refined_query if state.refined_query else state.original_query
-
     # Generate the expanded queries
     response = chain.invoke({
-        "original_query": state.original_query,
-        "refined_query": refined_query
+        "original_query": state.original_query
     })
 
     # Extract the content if it's a message object
@@ -138,7 +133,7 @@ def query_expansion_agent(state: SearchState) -> SearchState:
         if not isinstance(expanded_queries, list):
             # Handle case where the response isn't a list
             logger.warning("Query expansion output is not a list, using default")
-            expanded_queries = [refined_query]
+            expanded_queries = [state.original_query]
     except json.JSONDecodeError:
         # If parsing fails, extract queries using a simple heuristic
         logger.warning(f"Failed to parse query expansion JSON output: {expanded_queries_text[:100]}...")
@@ -158,7 +153,7 @@ def query_expansion_agent(state: SearchState) -> SearchState:
                 logger.info("Successfully parsed JSON after basic fixing")
 
                 if not isinstance(expanded_queries, list):
-                    expanded_queries = [refined_query]
+                    expanded_queries = [state.original_query]
             except json.JSONDecodeError:
                 # If still can't parse, try splitting manually
                 logger.info("Attempting to extract queries from bracket-enclosed text")
@@ -205,25 +200,25 @@ def query_expansion_agent(state: SearchState) -> SearchState:
                     expanded_queries = potential_queries
                     logger.info(f"Extracted {len(expanded_queries)} queries from line by line analysis")
                 else:
-                    # Fall back to using just the refined query
-                    expanded_queries = [refined_query]
-                    logger.warning("Could not extract any queries, using refined query as fallback")
+                    # Fall back to using just the original query
+                    expanded_queries = [state.original_query]
+                    logger.warning("Could not extract any queries, using original query as fallback")
 
     # Post-process queries to ensure balance of diversity and relevance
     processed_queries = []
 
-    # Always include the refined query in the mix
-    processed_queries.append(refined_query)
+    # Always include the original query in the mix
+    processed_queries.append(state.original_query)
 
-    # Extract key terms from refined query for basic relevance checking
-    refined_terms = set(refined_query.lower().split())
-    refined_entities = extract_entities(refined_query)
+    # Extract key terms from original query for basic relevance checking
+    original_terms = set(state.original_query.lower().split())
+    original_entities = extract_entities(state.original_query)
 
     # Score queries by combining relevance and diversity metrics
     scored_queries = []
     for query in expanded_queries:
         # Skip very short queries or duplicates
-        if len(query.split()) < 3 or query.lower() == refined_query.lower():
+        if len(query.split()) < 3 or query.lower() == state.original_query.lower():
             continue
 
         # Check for core relevance through entity or term overlap
@@ -232,17 +227,17 @@ def query_expansion_agent(state: SearchState) -> SearchState:
 
         # Calculate entity overlap
         entity_overlap = 0
-        if refined_entities and query_entities:
-            entity_overlap = len(set(refined_entities).intersection(set(query_entities))) / len(refined_entities) if refined_entities else 0
+        if original_entities and query_entities:
+            entity_overlap = len(set(original_entities).intersection(set(query_entities))) / len(original_entities) if original_entities else 0
 
         # Calculate term overlap
-        term_overlap = len(refined_terms.intersection(query_terms)) / len(refined_terms) if refined_terms else 0
+        term_overlap = len(original_terms.intersection(query_terms)) / len(original_terms) if original_terms else 0
 
         # Calculate a base relevance score
         relevance_score = max(entity_overlap, term_overlap * 0.8)
 
         # Skip completely irrelevant queries
-        if relevance_score < 0.2 and not any(e in query.lower() for e in refined_entities):
+        if relevance_score < 0.2 and not any(e in query.lower() for e in original_entities):
             logger.info(f"Skipping irrelevant query: {query}")
             continue
 
@@ -276,7 +271,7 @@ def query_expansion_agent(state: SearchState) -> SearchState:
     # If we don't have enough diverse queries, add some variations
     if len(processed_queries) < 5:
         # Generate more creative variations than before
-        variations = generate_creative_variations(refined_query, refined_entities)
+        variations = generate_creative_variations(state.original_query, original_entities)
         for variation in variations:
             if variation not in processed_queries:
                 processed_queries.append(variation)

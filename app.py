@@ -61,7 +61,6 @@ class SearchRequest(BaseModel):
     query: str = Field(..., description="The query to search for")
     include_sources: bool = Field(True, description="Include sources in the response")
     include_confidence: bool = Field(False, description="Include confidence score in the response")
-    disable_refinement: bool = Field(False, description="Disable query refinement")
     max_iterations: int = Field(3, description="Maximum number of search iterations")
 
 
@@ -73,7 +72,6 @@ class KeyPoint(BaseModel):
 class SearchResponse(BaseModel):
     """Search response model."""
     original_query: str
-    refined_query: Optional[str] = None
     answer: str
     key_points: Optional[List[KeyPoint]] = None
     detailed_notes: Optional[str] = None
@@ -110,14 +108,12 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
         # Run the deep search pipeline
         result = run_deep_search_pipeline(
             request.query,
-            request.disable_refinement,
             request.max_iterations
         )
 
         # Build the response
         response = {
             "original_query": result["original_query"],
-            "refined_query": result["refined_query"],
             "answer": result["answer"],
             "generated_queries": result["generated_queries"],
             "iterations": result["iterations"]

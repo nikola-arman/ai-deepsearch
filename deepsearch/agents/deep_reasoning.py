@@ -283,13 +283,9 @@ def format_search_details(state: SearchState) -> str:
     # Add the original query
     details += f"- Original query: {state.original_query}\n"
 
-    # Add the refined query if present
-    if state.refined_query:
-        details += f"- Refined query: {state.refined_query}\n"
-
     # Add all the generated queries
     for i, query in enumerate(state.generated_queries):
-        if query != state.refined_query and query != state.original_query:
+        if query != state.original_query:
             details += f"- {query}\n"
 
     # Add knowledge gaps that were identified
