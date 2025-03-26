@@ -8,7 +8,6 @@ os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 from typing import Dict, Any
 from deepsearch.models import SearchState
 from deepsearch.agents import (
-    query_refinement_agent,
     tavily_search_agent,
     faiss_indexing_agent,
     bm25_search_agent,
@@ -28,19 +27,9 @@ def run_simple_pipeline(query: str, disable_refinement: bool = False) -> Dict[st
         # Initialize state
         state = SearchState(original_query=query)
 
-        # Step 1: Query Refinement (if not disabled)
-        if not disable_refinement:
-            logger.info("Step 1: Refining query...")
-            try:
-                state = query_refinement_agent(state)
-                logger.info(f"  Refined query: {state.refined_query}")
-            except Exception as e:
-                logger.error(f"  Error in query refinement: {str(e)}", exc_info=True)
-                # If refinement fails, use original query
-                state.refined_query = state.original_query
-        else:
-            logger.info("Step 1: Query refinement disabled, using original query")
-            state.refined_query = state.original_query
+        # Use original query as refined query (query refinement removed)
+        logger.info("Step 1: Using original query (query refinement removed)")
+        state.refined_query = state.original_query
 
         # Step 2: Tavily Search
         logger.info("Step 2: Performing web search...")
@@ -120,19 +109,9 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
         # Initialize state
         state = SearchState(original_query=query)
 
-        # Step 1: Query Refinement (if not disabled)
-        if not disable_refinement:
-            logger.info("Step 1: Refining query...")
-            try:
-                state = query_refinement_agent(state)
-                logger.info(f"  Refined query: {state.refined_query}")
-            except Exception as e:
-                logger.error(f"  Error in query refinement: {str(e)}", exc_info=True)
-                # If refinement fails, use original query
-                state.refined_query = state.original_query
-        else:
-            logger.info("Step 1: Query refinement disabled, using original query")
-            state.refined_query = state.original_query
+        # Use original query as refined query (query refinement removed)
+        logger.info("Step 1: Using original query (query refinement removed)")
+        state.refined_query = state.original_query
 
         # Step 2: Query Expansion - generate multiple queries
         logger.info("Step 2: Expanding query into multiple search queries...")
@@ -303,14 +282,14 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
 def prompt(messages: list[dict[str, str]], **kwargs) -> str:
     assert len(messages) > 0, "received empty messages"
     query = messages[-1]['content']
-    
+
     res: Dict = run_deep_search_pipeline(query)
-    
+
     sep = "-" * 30
     final_resp = res["answer"]
 
     if len(res["sources"]) > 0:
-        final_resp += "\n## References:\n" 
+        final_resp += "\n## References:\n"
 
         for item in res["sources"]:
             final_resp += "- [{title}]({url})\n".format(**item)

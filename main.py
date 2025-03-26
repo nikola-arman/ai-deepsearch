@@ -10,7 +10,6 @@ import os
 from typing import Dict, Any
 from deepsearch.models import SearchState, SearchResult
 from deepsearch.agents import (
-    query_refinement_agent,
     tavily_search_agent,
     faiss_indexing_agent,
     bm25_search_agent,
@@ -31,19 +30,9 @@ def run_deep_search_pipeline(query: str, disable_refinement: bool = False, max_i
         # Initialize state
         state = SearchState(original_query=query)
 
-        # Step 1: Query Refinement (if not disabled)
-        if not disable_refinement:
-            logger.info("Step 1: Refining query...")
-            try:
-                state = query_refinement_agent(state)
-                logger.info(f"  Refined query: {state.refined_query}")
-            except Exception as e:
-                logger.error(f"  Error in query refinement: {str(e)}", exc_info=True)
-                # If refinement fails, use original query
-                state.refined_query = state.original_query
-        else:
-            logger.info("Step 1: Query refinement disabled, using original query")
-            state.refined_query = state.original_query
+        # Use original query as refined query (query refinement removed)
+        logger.info("Step 1: Using original query (query refinement removed)")
+        state.refined_query = state.original_query
 
         # Step 2: Query Expansion - generate multiple queries
         logger.info("Step 2: Expanding query into multiple search queries...")
