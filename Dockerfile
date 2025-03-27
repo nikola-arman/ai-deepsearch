@@ -1,4 +1,4 @@
-from danieltn11/agent-infra:latest
+from nikolasigmoid/py-agent-infra:latest
 
 copy app app
 copy deepsearch deepsearch
