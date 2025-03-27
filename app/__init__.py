@@ -1,4 +1,4 @@
-from . import eternalai_mcp_middleware # do not remove this
+import eai_http_middleware # do not remove this
 
 import os
 os.environ['TAVILY_API_KEY'] = 'no-need'
