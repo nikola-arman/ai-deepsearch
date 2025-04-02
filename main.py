@@ -12,8 +12,8 @@ from deepsearch.models import SearchState, SearchResult
 from deepsearch.agents import (
     tavily_search_agent,
     faiss_indexing_agent,
-    query_expansion_agent,
     bm25_search_agent,
+    query_expansion_agent,
     deep_reasoning_agent
 )
 
@@ -24,45 +24,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("deepsearch")
 
-def check_embeddings_available():
-    """Check if embeddings model is available and working properly."""
-    try:
-        # Import the initialization function from faiss_indexing
-        from deepsearch.agents.faiss_indexing import init_embedding_model
-
-        # Try to initialize the embedding model
-        embeddings = init_embedding_model()
-
-        # Test with a simple query
-        test_embedding = embeddings.embed_query("test embeddings functionality")
-
-        # If we got a valid embedding, consider it working
-        if test_embedding and len(test_embedding) > 0:
-            logger.info("Embeddings check passed: Embedding model is working properly")
-            return True, embeddings
-        else:
-            logger.warning("Embeddings check failed: Received empty embedding")
-            return False, None
-    except Exception as e:
-        logger.warning(f"Embeddings check failed: {str(e)}")
-        return False, None
-
 def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, Any]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
         # Initialize state
         state = SearchState(original_query=query)
-
-        # Check if embeddings are available
-        embeddings_available, embeddings_model = check_embeddings_available()
-        if embeddings_available:
-            logger.info("Embeddings functionality is available. FAISS search will be used.")
-            # Store embeddings model in state metadata for later use
-            state.metadata["embeddings_model"] = embeddings_model
-            state.metadata["use_faiss"] = True
-        else:
-            logger.warning("Embeddings functionality is not available. FAISS search will be disabled.")
-            state.metadata["use_faiss"] = False
 
         # Step 1: Query Expansion - generate multiple queries
         logger.info("Step 1: Expanding query into multiple search queries...")
@@ -95,12 +61,6 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, A
                     original_query=query  # Use the current query as the original query for this temp state
                 )
 
-                # Transfer the metadata about embeddings availability
-                if "use_faiss" in state.metadata:
-                    temp_state.metadata["use_faiss"] = state.metadata["use_faiss"]
-                if "embeddings_model" in state.metadata:
-                    temp_state.metadata["embeddings_model"] = state.metadata["embeddings_model"]
-
                 # Step 3a: Tavily Search for this query
                 logger.info(f"    Performing web search...")
                 try:
@@ -113,22 +73,15 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, A
                     logger.error(f"    Error in web search: {str(e)}", exc_info=True)
 
                 # Step 3b: FAISS Indexing (semantic search) for this query
-                # Only run if embeddings are available
-                if temp_state.metadata.get("use_faiss", False):
-                    logger.info(f"    Performing semantic search...")
-                    try:
-                        temp_state = faiss_indexing_agent(temp_state)
-                        # Tag results with the query that produced them
-                        for result in temp_state.faiss_results:
-                            result.query = query
-                        logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
-                    except Exception as e:
-                        logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
-                        # Disable FAISS for future iterations if it fails
-                        state.metadata["use_faiss"] = False
-                        temp_state.metadata["use_faiss"] = False
-                else:
-                    logger.info(f"    Skipping semantic search (embeddings unavailable)")
+                logger.info(f"    Performing semantic search...")
+                try:
+                    temp_state = faiss_indexing_agent(temp_state)
+                    # Tag results with the query that produced them
+                    for result in temp_state.faiss_results:
+                        result.query = query
+                    logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
+                except Exception as e:
+                    logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
 
                 # Step 3c: BM25 Search (keyword search) for this query
                 logger.info(f"    Performing keyword search...")
