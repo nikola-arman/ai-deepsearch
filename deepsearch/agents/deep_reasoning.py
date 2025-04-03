@@ -70,7 +70,7 @@ Your task is to formulate an OUTLINE ONLY for a complete answer with three disti
 1. KEY POINTS: List 5-7 bullet points that would be the most important findings and facts
 2. DIRECT ANSWER: Provide a brief description of what should be covered in the direct answer section (2-3 paragraphs)
 3. DETAILED NOTES: Create a comprehensive outline with:
-   a. Main section headings (3-5 sections)
+   a. Main section headings (3-7 sections)
    b. For each section, provide 2-4 sub-points that should be covered
    c. Note any specific technical details, examples, or comparisons that should be included
    d. Suggest logical flow for presenting the information
@@ -164,18 +164,21 @@ SEARCH DETAILS:
 
 INSTRUCTIONS:
 Create a well-rounded, complete direct answer to the original query. The answer should:
-1. Be comprehensive but concise (3-5 paragraphs)
+1. Be comprehensive but concise (use as many paragraphs as needed to cover the topic thoroughly)
 2. Address the core question directly without tangents
 3. Synthesize the key points into a coherent response
 4. Use an authoritative, clear writing style
 5. Avoid phrases like "based on the search results" or "according to the information provided"
+6. Use line breaks between paragraphs for better readability
+7. Use **bold** for important terms and concepts
+8. Use *italics* for emphasis when appropriate
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, or section markers.
 """
 
 # Define the template for detailed notes generation
-DETAILED_NOTES_TEMPLATE = """You are an expert content writer. Your task is to provide detailed notes expanding on the direct answer.
+DETAILED_NOTES_TEMPLATE = """You are an expert content writer. Your task is to provide an outline of detailed sections for expanding on the direct answer.
 
 ORIGINAL QUERY: {original_query}
 
@@ -189,48 +192,77 @@ SEARCH DETAILS:
 {search_details}
 
 INSTRUCTIONS:
-Create detailed, structured notes that expand on the direct answer with more in-depth information. Your notes should:
-1. Be organized into 3-5 logical sections with clear headings
+Create an outline for detailed, structured notes that expand on the direct answer with more in-depth information. Your outline should:
+1. Include logical sections with clear headings (up to 10 sections for thorough coverage)
+2. Focus on clear, descriptive section titles that reflect the key aspects of the topic
+3. Keep the outline simple - just the section headings in markdown format
+
+Format your response as a numbered list of section headings in markdown format, like this:
+1. ## Section Heading 1
+2. ## Section Heading 2
+3. ## Section Heading 3
+
+DO NOT include any content under these headings - just provide the section headings.
+Each section will be expanded in a separate step. Do not include an introduction or conclusion.
+"""
+
+# Define the template for generating content for a single section
+SECTION_CONTENT_TEMPLATE = """You are an expert content writer. Your task is to write detailed content for a specific section of a comprehensive report.
+
+ORIGINAL QUERY: {original_query}
+
+KEY POINTS:
+{key_points}
+
+DIRECT ANSWER:
+{direct_answer}
+
+SEARCH DETAILS:
+{search_details}
+
+SECTION TO EXPAND: {section_heading}
+
+INSTRUCTIONS:
+Create rich, detailed content for the section "{section_heading}". Your content should:
+1. Be thorough and comprehensive (at least 2-4 paragraphs plus additional elements as needed)
 2. Include technical details, examples, and comparisons where relevant
-3. Elaborate on all important aspects of the topic not fully covered in the direct answer
-4. Maintain a coherent flow between sections
-5. Use proper markdown formatting for sections and subsections
-6. Where relevant, include:
+3. Elaborate on all important aspects related to this specific section
+4. Use proper markdown formatting for subsections and formatting
+5. Where relevant, include:
    - Code examples with proper syntax highlighting
    - Tables for comparing options or features
    - Bulleted lists for steps or features
    - Numbered lists for sequential processes
+   - Mathematical formulas if applicable
+6. Use **bold** for important terms and concepts
+7. Use *italics* for emphasis when appropriate
+8. Create subsections with ### heading level when needed to organize complex information
 
-Format your response using proper markdown, like this example:
-```
-## Section Heading 1
+IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
+Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
 
-Detailed content with **bold text** for emphasis and *italics* for terminology.
+Focus ONLY on this section without repeating information from other sections.
+Provide in-depth, authoritative content with specific facts, figures, and examples where possible.
+"""
 
-### Subsection 1.1
-- Feature one
-- Feature two
+# Define the template for initial query generation
+QUERY_GENERATOR_TEMPLATE = """You are an expert research strategist. Your task is to break down a complex research query into multiple focused search queries.
 
-### Subsection 1.2
-Step-by-step process:
-1. First step
-2. Second step
-3. Third step
+ORIGINAL QUERY: {original_query}
 
-## Section Heading 2
+INSTRUCTIONS:
+Analyze the original query and break it down into 5 distinct, focused search queries that collectively cover all important aspects of the original question. Each query should:
 
-Content with `inline code` and code blocks:
+1. Target a specific aspect of the original question
+2. Be clear, concise, and searchable (under 100 characters if possible)
+3. Use natural language that would work well with search engines
+4. Avoid overlapping too much with other queries
+5. Focus on factual information rather than opinions
 
-```python
-def example_function():
-    return "Hello, world!"
-```
+Format your response as a JSON array of 5 strings representing the search queries:
+["query1", "query2", "query3", "query4", "query5"]
 
-| Option | Pros | Cons |
-|--------|------|------|
-| Option 1 | Fast, Easy | Limited |
-| Option 2 | Powerful | Complex |
-```
+CRITICAL: Your entire response MUST be a valid, parseable JSON array and nothing else. Do not include any text before or after the JSON array. Do not include any explanation, markdown formatting, or code blocks around the JSON. The response must start with '[' and end with ']' and contain only valid JSON.
 """
 
 def init_reasoning_llm(temperature: float = 0.3):
@@ -244,6 +276,60 @@ def init_reasoning_llm(temperature: float = 0.3):
         max_tokens=1024
     )
     return llm
+
+def generate_initial_queries(original_query: str) -> List[str]:
+    """
+    Generate multiple focused search queries from the original complex query.
+
+    Args:
+        original_query: The original user query, which might be complex or very long
+
+    Returns:
+        A list of 5 focused search queries
+    """
+    # Initialize the LLM with low temperature for consistent output
+    llm = init_reasoning_llm(temperature=0.2)
+
+    # Create the query generator prompt
+    query_generator_prompt = PromptTemplate(
+        input_variables=["original_query"],
+        template=QUERY_GENERATOR_TEMPLATE
+    )
+
+    # Create the chain
+    chain = query_generator_prompt | llm
+
+    # Generate the search queries
+    response = chain.invoke({"original_query": original_query})
+
+    # Extract the content if it's a message object
+    query_text = response.content if hasattr(response, 'content') else response
+
+    # Clean up the response text
+    query_text = query_text.strip()
+    # Remove any markdown code block markers
+    query_text = re.sub(r'^```json\s*', '', query_text)
+    query_text = re.sub(r'\s*```$', '', query_text)
+
+    try:
+        # Parse the JSON response
+        queries = json.loads(query_text)
+
+        # Ensure we have a list of strings
+        if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
+            logger.info(f"Generated {len(queries)} initial search queries")
+            for i, query in enumerate(queries):
+                logger.info(f"  Initial query {i+1}: {query}")
+            return queries
+        else:
+            logger.warning("Query generator did not return a proper list of strings")
+            # Fall back to using the original query
+            return [original_query]
+
+    except json.JSONDecodeError:
+        logger.error(f"Failed to parse query generator JSON output: {query_text[:100]}...")
+        # Fall back to using the original query
+        return [original_query]
 
 def format_search_results(state: SearchState) -> str:
     """Format the search results for the prompt."""
@@ -307,6 +393,18 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     Returns:
         Updated state with analysis and potentially new search queries
     """
+    # If this is the first iteration, generate initial search queries
+    if state.current_iteration == 0:
+        # Generate initial focused queries from the original query
+        initial_queries = generate_initial_queries(state.original_query)
+
+        # Store the generated queries
+        state.generated_queries = initial_queries
+
+        # Don't analyze results yet since we need to perform searches first
+        state.current_iteration += 1
+        return state
+
     # Check if we have any search results to work with
     if (not state.combined_results and
         not state.faiss_results and
@@ -504,10 +602,11 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
 
 def generate_final_answer(state: SearchState) -> SearchState:
     """
-    Generates the final, structured answer in a three-stage process:
+    Generates the final, structured answer in a multi-stage process:
     1. Generate concise key points
     2. Create a direct answer based on key points
-    3. Expand with detailed notes
+    3. Generate an outline for detailed notes sections
+    4. Expand each section with dedicated LLM calls
 
     Args:
         state: The current search state with key points and other information
@@ -557,15 +656,15 @@ def generate_final_answer(state: SearchState) -> SearchState:
     direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
     logger.info("Generated direct answer")
 
-    # Stage 3: Generate detailed notes
-    detailed_notes_llm = init_reasoning_llm(temperature=0.4)
-    detailed_notes_prompt = PromptTemplate(
+    # Stage 3: Generate detailed notes outline (section headings only)
+    outline_llm = init_reasoning_llm(temperature=0.3)
+    outline_prompt = PromptTemplate(
         input_variables=["original_query", "key_points", "direct_answer", "search_details"],
         template=DETAILED_NOTES_TEMPLATE
     )
-    detailed_notes_chain = detailed_notes_prompt | detailed_notes_llm
+    outline_chain = outline_prompt | outline_llm
 
-    detailed_notes_response = detailed_notes_chain.invoke({
+    outline_response = outline_chain.invoke({
         "original_query": state.original_query,
         "key_points": key_points,
         "direct_answer": direct_answer,
@@ -573,8 +672,72 @@ def generate_final_answer(state: SearchState) -> SearchState:
     })
 
     # Extract the content if it's a message object
-    detailed_notes = detailed_notes_response.content if hasattr(detailed_notes_response, 'content') else detailed_notes_response
-    logger.info("Generated detailed notes")
+    section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
+    logger.info("Generated section outline for detailed notes")
+
+    # Parse the section headings from the outline
+    section_headings = []
+    for line in section_outline.strip().split('\n'):
+        # Match lines that contain section headings (## Something)
+        if '##' in line:
+            # Extract just the heading text, removing numbers and other artifacts
+            heading = line.split('##')[1].strip()
+            if heading:  # Skip empty headings
+                section_headings.append(heading)
+
+    logger.info(f"Identified {len(section_headings)} sections to expand")
+
+    # Stage 4: Generate detailed content for each section
+    section_llm = init_reasoning_llm(temperature=0.4)
+    section_prompt = PromptTemplate(
+        input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading"],
+        template=SECTION_CONTENT_TEMPLATE
+    )
+    section_chain = section_prompt | section_llm
+
+    # Generate content for each section
+    detailed_notes = "## 📚 Detailed Notes\n\n"
+    for heading in section_headings:
+        logger.info(f"Generating content for section: {heading}")
+
+        section_response = section_chain.invoke({
+            "original_query": state.original_query,
+            "key_points": key_points,
+            "direct_answer": direct_answer,
+            "search_details": search_details,
+            "section_heading": heading
+        })
+
+        # Extract the content if it's a message object
+        section_content = section_response.content if hasattr(section_response, 'content') else section_response
+
+        # Process the content to remove any headings that match the current heading
+        # This prevents duplication of the heading we're about to add
+        content_lines = section_content.split('\n')
+        cleaned_lines = []
+        skip_next_line = False
+
+        for line in content_lines:
+            # Skip lines that contain the section heading with ## prefix
+            if f"## {heading}" in line or f"##  {heading}" in line or heading in line and line.startswith('##'):
+                skip_next_line = True
+                continue
+
+            # Skip empty line after a heading to maintain proper spacing
+            if skip_next_line and not line.strip():
+                skip_next_line = False
+                continue
+
+            # Keep all other lines
+            cleaned_lines.append(line)
+            skip_next_line = False
+
+        cleaned_content = '\n'.join(cleaned_lines)
+
+        # Add the heading and cleaned content to the detailed notes
+        detailed_notes += f"## {heading}\n\n{cleaned_content.strip()}\n\n"
+
+    logger.info("Generated all section content for detailed notes")
 
     # Combine all sections into the final answer with enhanced markdown
     final_answer = f"""## Key Points

@@ -30,19 +30,22 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 5) -> Dict[str, A
         # Initialize state
         state = SearchState(original_query=query)
 
-        # Step 1: Query Expansion - generate multiple queries
-        logger.info("Step 1: Expanding query into multiple search queries...")
+        # Instead of using query_expansion_agent, let the deep_reasoning_agent handle initial query generation
+        # This avoids potential conflicts and allows for better reasoning about query generation
+        logger.info("Step 1: Initial reasoning to analyze query and generate search queries...")
         try:
-            state = query_expansion_agent(state)
-            logger.info(f"  Generated {len(state.generated_queries)} search queries")
+            # Initial call to deep_reasoning_agent will generate the queries
+            state = deep_reasoning_agent(state, max_iterations)
+            logger.info(f"  Generated {len(state.generated_queries)} initial search queries")
         except Exception as e:
-            logger.error(f"  Error in query expansion: {str(e)}", exc_info=True)
-            # If expansion fails, use just the original query
+            logger.error(f"  Error in initial reasoning: {str(e)}", exc_info=True)
+            # If reasoning fails, use just the original query
             state.generated_queries = [state.original_query]
+            state.current_iteration = 1  # Ensure we don't skip the first iteration
 
         # Iterative search loop
         while not state.search_complete and state.current_iteration < max_iterations:
-            iteration = state.current_iteration + 1
+            iteration = state.current_iteration
             logger.info(f"Beginning search iteration {iteration}...")
 
             # Reset results for this iteration but keep accumulated results
