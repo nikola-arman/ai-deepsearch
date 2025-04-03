@@ -61,7 +61,7 @@ class SearchRequest(BaseModel):
     query: str = Field(..., description="The query to search for")
     include_sources: bool = Field(True, description="Include sources in the response")
     include_confidence: bool = Field(False, description="Include confidence score in the response")
-    max_iterations: int = Field(3, description="Maximum number of search iterations")
+    max_iterations: int = Field(5, description="Maximum number of search iterations")
 
 
 class KeyPoint(BaseModel):

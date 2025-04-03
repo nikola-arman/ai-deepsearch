@@ -296,7 +296,7 @@ def format_search_details(state: SearchState) -> str:
 
     return details
 
-def deep_reasoning_agent(state: SearchState, max_iterations: int = 3) -> SearchState:
+def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchState:
     """
     Uses deep reasoning to analyze results, identify knowledge gaps, and decide if further search is needed.
 
