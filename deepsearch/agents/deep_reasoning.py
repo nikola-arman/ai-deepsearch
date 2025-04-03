@@ -577,15 +577,15 @@ def generate_final_answer(state: SearchState) -> SearchState:
     logger.info("Generated detailed notes")
 
     # Combine all sections into the final answer with enhanced markdown
-    final_answer = f"""## 📌 Key Points
+    final_answer = f"""## Key Points
 
 {key_points}
 
-## 💡 Direct Answer
+## Direct Answer
 
-{direct_answer}
+{direct_answer.strip()}
 
-{detailed_notes.replace('# DETAILED NOTES', '## 📚 Detailed Notes')}
+{detailed_notes.replace('# DETAILED NOTES', '## Detailed Notes')}
 """
 
     # Update the state with the final answer
