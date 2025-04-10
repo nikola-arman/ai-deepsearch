@@ -735,7 +735,7 @@ def generate_final_answer(state: SearchState) -> SearchState:
     section_chain = section_prompt | section_llm
 
     # Generate content for each section
-    detailed_notes = "## 📚 Detailed Notes\n\n"
+    detailed_notes = "## Detailed Notes\n\n"
     for heading in section_headings:
         logger.info(f"Generating content for section: {heading}")
 
