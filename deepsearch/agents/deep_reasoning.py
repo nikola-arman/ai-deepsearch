@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 import re
+import datetime  # Add import for datetime module
 
 from deepsearch.models import SearchState, SearchResult
 
@@ -27,6 +28,8 @@ ORIGINAL QUERY: {original_query}
 
 CURRENT SEARCH ITERATION: {iteration}
 
+CURRENT DATE: {current_date} (ISO 8601 format: YYYY-MM-DD)
+
 SEARCH RESULTS:
 {search_results}
 
@@ -38,7 +41,9 @@ INSTRUCTIONS:
 2. Identify any NEW knowledge gaps that require further searches. Do NOT repeat previously identified knowledge gaps.
 3. Decide if the search process should continue or if we have sufficient information to answer the query.
 4. If further searches are needed, generate specific new search queries to fill the NEW knowledge gaps.
-5. Format your response as a JSON object with the following structure:
+5. IMPORTANT: Include the current year or time period in queries when relevant (especially for financial, news, trend, or stock queries) to ensure recency and up-to-date information.
+6. When referring to time periods, use clear universal formats (e.g., "Q1 2024", "May 2024", "2024", etc.)
+7. Format your response as a JSON object with the following structure:
 
 {{
   "key_points": ["point 1", "point 2", "..."],
@@ -73,8 +78,8 @@ Your task is to formulate an OUTLINE ONLY for a complete answer with three disti
 1. KEY POINTS: List 5-7 bullet points that would be the most important findings and facts
 2. DIRECT ANSWER: Provide a brief description of what should be covered in the direct answer section (2-3 paragraphs)
 3. DETAILED NOTES: Create a comprehensive outline with:
-   a. Main section headings (3-7 sections)
-   b. For each section, provide 2-4 sub-points that should be covered
+   a. Main section headings (3-5 sections)
+   b. For each section, provide 2-3 sub-points that should be covered
    c. Note any specific technical details, examples, or comparisons that should be included
    d. Suggest logical flow for presenting the information
 
@@ -196,7 +201,7 @@ SEARCH DETAILS:
 
 INSTRUCTIONS:
 Create an outline for detailed, structured notes that expand on the direct answer with more in-depth information. Your outline should:
-1. Include logical sections with clear headings (up to 10 sections for thorough coverage)
+1. Include logical sections with clear headings (up to 5 sections for thorough coverage)
 2. Focus on clear, descriptive section titles that reflect the key aspects of the topic
 3. Keep the outline simple - just the section headings in markdown format
 
@@ -252,6 +257,8 @@ QUERY_GENERATOR_TEMPLATE = """You are an expert research strategist. Your task i
 
 ORIGINAL QUERY: {original_query}
 
+CURRENT DATE: {current_date} (ISO 8601 format: YYYY-MM-DD)
+
 INSTRUCTIONS:
 Analyze the original query and break it down into 5 distinct, focused search queries that collectively cover all important aspects of the original question. Each query should:
 
@@ -260,6 +267,8 @@ Analyze the original query and break it down into 5 distinct, focused search que
 3. Use natural language that would work well with search engines
 4. Avoid overlapping too much with other queries
 5. Focus on factual information rather than opinions
+6. IMPORTANT: Include the current year or time period in queries when relevant (especially for financial, news, trend, or stock queries) to ensure recency
+7. When referring to time periods, use clear universal formats (e.g., "Q1 2024", "May 2024", "2024", etc.)
 
 Format your response as a JSON array of 5 strings representing the search queries:
 ["query1", "query2", "query3", "query4", "query5"]
@@ -292,9 +301,12 @@ def generate_initial_queries(original_query: str) -> List[str]:
     # Initialize the LLM with low temperature for consistent output
     llm = init_reasoning_llm(temperature=0.2)
 
+    # Get current date information in ISO 8601 format (YYYY-MM-DD)
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+
     # Create the query generator prompt
     query_generator_prompt = PromptTemplate(
-        input_variables=["original_query"],
+        input_variables=["original_query", "current_date"],
         template=QUERY_GENERATOR_TEMPLATE
     )
 
@@ -302,7 +314,10 @@ def generate_initial_queries(original_query: str) -> List[str]:
     chain = query_generator_prompt | llm
 
     # Generate the search queries
-    response = chain.invoke({"original_query": original_query})
+    response = chain.invoke({
+        "original_query": original_query,
+        "current_date": current_date
+    })
 
     # Extract the content if it's a message object
     query_text = response.content if hasattr(response, 'content') else response
@@ -422,9 +437,12 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     # Initialize the LLM with a very low temperature for structured output
     llm = init_reasoning_llm(temperature=0.1)
 
+    # Get current date information in ISO 8601 format (YYYY-MM-DD)
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+
     # Create the reasoning prompt
     reasoning_prompt = PromptTemplate(
-        input_variables=["original_query", "iteration", "search_results", "previous_knowledge_gaps", "max_iterations"],
+        input_variables=["original_query", "iteration", "search_results", "previous_knowledge_gaps", "max_iterations", "current_date"],
         template=REASONING_TEMPLATE
     )
 
@@ -443,7 +461,8 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
         "iteration": state.current_iteration,
         "search_results": formatted_results,
         "previous_knowledge_gaps": formatted_previous_gaps,
-        "max_iterations": max_iterations
+        "max_iterations": max_iterations,
+        "current_date": current_date
     })
 
     # Extract the content if it's a message object
