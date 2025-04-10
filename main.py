@@ -221,7 +221,7 @@ def main():
     parser.add_argument("query", type=str, help="The query to search for")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
     parser.add_argument("--show-confidence", "-c", action="store_true", help="Show confidence score")
-    parser.add_argument("--max-iterations", "-i", type=int, default=5, help="Maximum number of search iterations")
+    parser.add_argument("--max-iterations", "-i", type=int, default=3, help="Maximum number of search iterations")
 
     args = parser.parse_args()
 
