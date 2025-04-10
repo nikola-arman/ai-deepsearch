@@ -50,5 +50,6 @@ class SearchState(BaseModel):
     detailed_notes: Optional[str] = None  # Detailed notes for the answer
     confidence_score: Optional[float] = None
     knowledge_gaps: List[str] = Field(default_factory=list)  # Track knowledge gaps for further search
+    historical_knowledge_gaps: List[str] = Field(default_factory=list)  # Track all previously identified knowledge gaps
     search_complete: bool = False  # Flag to indicate if search is complete
     metadata: Dict[str, Any] = Field(default_factory=dict)

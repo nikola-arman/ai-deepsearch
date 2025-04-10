@@ -30,11 +30,14 @@ CURRENT SEARCH ITERATION: {iteration}
 SEARCH RESULTS:
 {search_results}
 
+PREVIOUSLY IDENTIFIED KNOWLEDGE GAPS:
+{previous_knowledge_gaps}
+
 INSTRUCTIONS:
 1. Analyze the search results carefully to extract key information related to the original query.
-2. Identify any knowledge gaps that require further searches.
+2. Identify any NEW knowledge gaps that require further searches. Do NOT repeat previously identified knowledge gaps.
 3. Decide if the search process should continue or if we have sufficient information to answer the query.
-4. If further searches are needed, generate specific new search queries to fill the knowledge gaps.
+4. If further searches are needed, generate specific new search queries to fill the NEW knowledge gaps.
 5. Format your response as a JSON object with the following structure:
 
 {{
@@ -229,7 +232,6 @@ Create rich, detailed content for the section "{section_heading}". Your content 
 3. Elaborate on all important aspects related to this specific section
 4. Use proper markdown formatting for subsections and formatting
 5. Where relevant, include:
-   - Code examples with proper syntax highlighting
    - Tables for comparing options or features
    - Bulleted lists for steps or features
    - Numbered lists for sequential processes
@@ -422,7 +424,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
 
     # Create the reasoning prompt
     reasoning_prompt = PromptTemplate(
-        input_variables=["original_query", "iteration", "search_results", "max_iterations"],
+        input_variables=["original_query", "iteration", "search_results", "previous_knowledge_gaps", "max_iterations"],
         template=REASONING_TEMPLATE
     )
 
@@ -432,11 +434,15 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     # Format the search results
     formatted_results = format_search_results(state)
 
+    # Format the previous knowledge gaps
+    formatted_previous_gaps = "None identified yet." if not state.historical_knowledge_gaps else "\n".join([f"- {gap}" for gap in state.historical_knowledge_gaps])
+
     # Generate the analysis and reasoning
     response = chain.invoke({
         "original_query": state.original_query,
         "iteration": state.current_iteration,
         "search_results": formatted_results,
+        "previous_knowledge_gaps": formatted_previous_gaps,
         "max_iterations": max_iterations
     })
 
@@ -460,7 +466,18 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
 
         # Update the state with the analysis results
         state.key_points = analysis.get("key_points", [])
-        state.knowledge_gaps = analysis.get("knowledge_gaps", [])
+        new_knowledge_gaps = analysis.get("knowledge_gaps", [])
+
+        # Filter out any knowledge gaps that have been identified before
+        filtered_knowledge_gaps = [gap for gap in new_knowledge_gaps
+                                  if gap not in state.historical_knowledge_gaps]
+
+        # Update current knowledge gaps (for this iteration)
+        state.knowledge_gaps = filtered_knowledge_gaps
+
+        # Add new knowledge gaps to the historical list
+        state.historical_knowledge_gaps.extend(filtered_knowledge_gaps)
+
         state.search_complete = analysis.get("search_complete", False)
 
         # If we need to continue searching, add new queries
@@ -571,7 +588,10 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
 
             # Update the state with the analysis results
             state.key_points = analysis.get("key_points", [])
-            state.knowledge_gaps = analysis.get("knowledge_gaps", [])
+            new_knowledge_gaps = analysis.get("knowledge_gaps", [])
+            filtered_knowledge_gaps = [gap for gap in new_knowledge_gaps if gap not in state.historical_knowledge_gaps]
+            state.knowledge_gaps = filtered_knowledge_gaps
+            state.historical_knowledge_gaps.extend(filtered_knowledge_gaps)
             state.search_complete = analysis.get("search_complete", False)
 
             # If we need to continue searching, add new queries

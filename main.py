@@ -8,6 +8,7 @@ import logging
 from dotenv import load_dotenv
 import os
 from typing import Dict, Any
+import concurrent.futures
 from deepsearch.models import SearchState, SearchResult
 from deepsearch.agents import (
     tavily_search_agent,
@@ -23,6 +24,50 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("deepsearch")
+
+def process_single_query(query: str, iteration: int) -> SearchState:
+    """Process a single query in parallel."""
+    logger.info(f"  Processing query: {query}")
+
+    # Create a temporary state for this query
+    temp_state = SearchState(
+        original_query=query  # Use the current query as the original query for this temp state
+    )
+
+    # Step 3a: Tavily Search for this query
+    logger.info(f"    Performing web search...")
+    try:
+        temp_state = tavily_search_agent(temp_state)
+        # Tag results with the query that produced them
+        for result in temp_state.tavily_results:
+            result.query = query
+        logger.info(f"    Found {len(temp_state.tavily_results)} web results")
+    except Exception as e:
+        logger.error(f"    Error in web search: {str(e)}", exc_info=True)
+
+    # Step 3b: FAISS Indexing (semantic search) for this query
+    logger.info(f"    Performing semantic search...")
+    try:
+        temp_state = faiss_indexing_agent(temp_state)
+        # Tag results with the query that produced them
+        for result in temp_state.faiss_results:
+            result.query = query
+        logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
+    except Exception as e:
+        logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
+
+    # Step 3c: BM25 Search (keyword search) for this query
+    logger.info(f"    Performing keyword search...")
+    try:
+        temp_state = bm25_search_agent(temp_state)
+        # Tag results with the query that produced them
+        for result in temp_state.bm25_results:
+            result.query = query
+        logger.info(f"    Found {len(temp_state.bm25_results)} keyword results")
+    except Exception as e:
+        logger.error(f"    Error in keyword search: {str(e)}", exc_info=True)
+
+    return temp_state
 
 def run_deep_search_pipeline(query: str, max_iterations: int = 5) -> Dict[str, Any]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
@@ -55,54 +100,27 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 5) -> Dict[str, A
             state.bm25_results = []
             state.combined_results = []
 
-            # Process each query in this iteration
-            for i, query in enumerate(state.generated_queries):
-                logger.info(f"  Processing query {i+1}/{len(state.generated_queries)}: {query}")
+            # Process queries in parallel
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                # Submit all query processing tasks
+                future_to_query = {
+                    executor.submit(process_single_query, query, iteration): query
+                    for query in state.generated_queries
+                }
 
-                # Create a temporary state for this query
-                temp_state = SearchState(
-                    original_query=query  # Use the current query as the original query for this temp state
-                )
-
-                # Step 3a: Tavily Search for this query
-                logger.info(f"    Performing web search...")
-                try:
-                    temp_state = tavily_search_agent(temp_state)
-                    # Tag results with the query that produced them
-                    for result in temp_state.tavily_results:
-                        result.query = query
-                    logger.info(f"    Found {len(temp_state.tavily_results)} web results")
-                except Exception as e:
-                    logger.error(f"    Error in web search: {str(e)}", exc_info=True)
-
-                # Step 3b: FAISS Indexing (semantic search) for this query
-                logger.info(f"    Performing semantic search...")
-                try:
-                    temp_state = faiss_indexing_agent(temp_state)
-                    # Tag results with the query that produced them
-                    for result in temp_state.faiss_results:
-                        result.query = query
-                    logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
-                except Exception as e:
-                    logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
-
-                # Step 3c: BM25 Search (keyword search) for this query
-                logger.info(f"    Performing keyword search...")
-                try:
-                    temp_state = bm25_search_agent(temp_state)
-                    # Tag results with the query that produced them
-                    for result in temp_state.bm25_results:
-                        result.query = query
-                    logger.info(f"    Found {len(temp_state.bm25_results)} keyword results")
-                except Exception as e:
-                    logger.error(f"    Error in keyword search: {str(e)}", exc_info=True)
-
-                # Collect results from this query
-                state.tavily_results.extend(temp_state.tavily_results)
-                state.faiss_results.extend(temp_state.faiss_results)
-                state.bm25_results.extend(temp_state.bm25_results)
-                if temp_state.combined_results:
-                    state.combined_results.extend(temp_state.combined_results)
+                # Collect results as they complete
+                for future in concurrent.futures.as_completed(future_to_query):
+                    query = future_to_query[future]
+                    try:
+                        temp_state = future.result()
+                        # Collect results from this query
+                        state.tavily_results.extend(temp_state.tavily_results)
+                        state.faiss_results.extend(temp_state.faiss_results)
+                        state.bm25_results.extend(temp_state.bm25_results)
+                        if temp_state.combined_results:
+                            state.combined_results.extend(temp_state.combined_results)
+                    except Exception as e:
+                        logger.error(f"Error processing query '{query}': {str(e)}", exc_info=True)
 
             # Add back previous results to ensure continuity
             if state.combined_results:
