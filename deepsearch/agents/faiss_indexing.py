@@ -294,7 +294,7 @@ def faiss_indexing_agent(state: SearchState) -> SearchState:
         Updated state with FAISS search results
     """
     # Check if we have Tavily results to work with
-    if (not state.tavily_results or len(state.tavily_results) == 0) and (not state.pubmed_results or len(state.pubmed_results) == 0):
+    if not state.tavily_results or len(state.tavily_results) == 0  :
         # If no results, skip this agent
         logger.info("No Tavily results available for FAISS indexing")
         state.faiss_results = []
@@ -303,8 +303,6 @@ def faiss_indexing_agent(state: SearchState) -> SearchState:
     # Ensure we have at least some content to work with
     valid_results = [
         r for r in state.tavily_results if r.content and isinstance(r.content, str) and len(r.content.strip()) > 0
-    ] + [
-        r for r in state.pubmed_results if r.content and isinstance(r.content, str) and len(r.content.strip()) > 0
     ]
 
     if not valid_results:
