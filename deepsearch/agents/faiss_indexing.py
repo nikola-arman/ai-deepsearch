@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple, Dict, Generator
 import os
 import numpy as np
 import faiss
@@ -18,6 +18,11 @@ load_dotenv()
 # Get the OpenAI-compatible API base URL and API key
 openai_api_base = os.environ.get("OPENAI_API_BASE", "http://localhost:8080/v1")
 openai_api_key = os.environ.get("OPENAI_API_KEY", "not-needed")
+
+
+def batching(data: Generator, batch_size = 1):
+    for i in range(0, len(data), batch_size):
+        yield data[i:i + batch_size]
 
 
 def init_embedding_model():
@@ -153,28 +158,34 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
         # Log the number of valid texts
         logger.debug(f"Generating embeddings for {len(texts)} chunks")
 
-        # Process each text individually to identify problematic ones
+        # Process texts in batches to isolate errors
+        batch_size = 32
         embedded_texts = []
         final_texts = []
         final_indices = []
         final_chunk_map = {}
-
-        # Process each chunk individually to isolate errors
-        for i, text in enumerate(texts):
+    
+        for batch_idx, batch_texts in enumerate(batching(texts, batch_size)):
             try:
-                # Additional type validation just before embedding
-                if not isinstance(text, str):
-                    logger.warning(f"Converting non-string text to string at index {i}")
-                    text = str(text)
-
-                # Get embedding for a single text to isolate errors
-                single_embedding = embeddings.embed_query(text)
-                embedded_texts.append(single_embedding)
-                final_texts.append(text)
-                final_indices.append(valid_indices[i])
-                final_chunk_map[len(embedded_texts) - 1] = original_to_chunk_map[i]
+                # Additional type validation for the batch
+                batch_texts = [
+                    str(text) if not isinstance(text, str) else text 
+                    for text in batch_texts
+                ]
+                
+                # Get embeddings for the batch
+                batch_embeddings = embeddings.embed_documents(batch_texts)
+                
+                # Add each embedding and its associated data
+                for i, (text, embedding) in enumerate(zip(batch_texts, batch_embeddings)):
+                    embedded_texts.append(embedding)
+                    final_texts.append(text)
+                    original_idx = valid_indices[batch_idx * batch_size + i]
+                    final_indices.append(original_idx)
+                    final_chunk_map[len(embedded_texts) - 1] = original_to_chunk_map[batch_idx * batch_size + i]
+            
             except Exception as e:
-                logger.warning(f"Skipping chunk at index {i} due to embedding error: {str(e)}")
+                logger.warning(f"Skipping batch at index {batch_idx} due to embedding error: {str(e)}")
                 continue
 
         if not embedded_texts:
@@ -283,14 +294,19 @@ def faiss_indexing_agent(state: SearchState) -> SearchState:
         Updated state with FAISS search results
     """
     # Check if we have Tavily results to work with
-    if not state.tavily_results or len(state.tavily_results) == 0:
+    if (not state.tavily_results or len(state.tavily_results) == 0) and (not state.pubmed_results or len(state.pubmed_results) == 0):
         # If no results, skip this agent
         logger.info("No Tavily results available for FAISS indexing")
         state.faiss_results = []
         return state
 
     # Ensure we have at least some content to work with
-    valid_results = [r for r in state.tavily_results if r.content and isinstance(r.content, str) and len(r.content.strip()) > 0]
+    valid_results = [
+        r for r in state.tavily_results if r.content and isinstance(r.content, str) and len(r.content.strip()) > 0
+    ] + [
+        r for r in state.pubmed_results if r.content and isinstance(r.content, str) and len(r.content.strip()) > 0
+    ]
+
     if not valid_results:
         # If no valid content in results, skip FAISS
         logger.info("No valid content in Tavily results for FAISS indexing")

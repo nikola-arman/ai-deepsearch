@@ -70,6 +70,8 @@ def format_search_results(state: SearchState) -> str:
             results.extend(state.bm25_results)
         if state.tavily_results:
             results.extend(state.tavily_results)
+        if state.pubmed_results:
+            results.extend(state.pubmed_results)
 
     # Format each result
     for i, result in enumerate(results):
@@ -115,7 +117,8 @@ def llama_reasoning_agent(state: SearchState) -> SearchState:
     if (not state.combined_results and
         not state.faiss_results and
         not state.bm25_results and
-        not state.tavily_results):
+        not state.tavily_results and
+        not state.pubmed_results):
         # No results, set a low confidence and an appropriate message
         state.final_answer = "I couldn't find relevant information to answer your query."
         state.confidence_score = 0.1

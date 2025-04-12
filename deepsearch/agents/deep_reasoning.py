@@ -363,6 +363,8 @@ def format_search_results(state: SearchState) -> str:
             results.extend(state.bm25_results)
         if state.tavily_results:
             results.extend(state.tavily_results)
+        if state.pubmed_results:
+            results.extend(state.pubmed_results)
 
     # Format each result with the query that produced it (if available)
     for i, result in enumerate(results):

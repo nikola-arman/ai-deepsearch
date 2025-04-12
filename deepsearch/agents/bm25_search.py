@@ -102,7 +102,7 @@ def bm25_search_agent(state: SearchState) -> SearchState:
     state.combined_results = []
 
     # Check if we have Tavily results to work with
-    if not state.tavily_results or len(state.tavily_results) == 0:
+    if (not state.tavily_results or len(state.tavily_results) == 0) and (not state.pubmed_results or len(state.pubmed_results) == 0):
         logger.info("No Tavily results available for BM25 search")
         # If no Tavily results, just use the FAISS results
         state.bm25_results = []
@@ -110,7 +110,12 @@ def bm25_search_agent(state: SearchState) -> SearchState:
         return state
 
     # Ensure we have at least some content to work with
-    valid_results = [r for r in state.tavily_results if r.content and len(r.content.strip()) > 0]
+    valid_results = [
+        r for r in state.tavily_results if r.content and len(r.content.strip()) > 0
+    ] + [
+        r for r in state.pubmed_results if r.content and len(r.content.strip()) > 0
+    ]
+
     if not valid_results:
         logger.info("No valid content in Tavily results for BM25 search")
         # If no valid content in results, skip BM25
