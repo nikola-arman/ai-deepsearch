@@ -40,6 +40,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Initialize sidebar toggle
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const sidebar = document.querySelector('.sidebar');
+        const chatContainer = document.querySelector('.chat-container');
+        
+        // Check if sidebar state is saved
+        const isSidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+        if (isSidebarCollapsed) {
+            sidebar.classList.add('collapsed');
+            chatContainer.classList.add('expanded');
+        }
+        
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            chatContainer.classList.toggle('expanded');
+            // Save sidebar state
+            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+        });
+
         // Event listeners
         userInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -223,6 +242,14 @@ document.addEventListener('DOMContentLoaded', () => {
         displayMessages(chats[chatId].messages);
     }
 
+    // Configure marked options
+    marked.setOptions({
+        breaks: true,
+        gfm: true,
+        headerIds: false,
+        mangle: false
+    });
+
     // Display messages in the chat
     function displayMessages(messages) {
         chatMessages.innerHTML = '';
@@ -275,7 +302,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (msg.content) {
                     const contentText = document.createElement('div');
-                    contentText.textContent = msg.content;
+                    contentText.className = 'markdown-content';
+                    contentText.innerHTML = marked.parse(msg.content);
                     researchDiv.appendChild(contentText);
                 }
                 
@@ -308,7 +336,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 contentDiv.appendChild(researchDiv);
             } else {
                 // Regular message
-                contentDiv.textContent = msg.content;
+                const contentText = document.createElement('div');
+                contentText.className = 'markdown-content';
+                contentText.innerHTML = marked.parse(msg.content);
+                contentDiv.appendChild(contentText);
             }
             
             // For user messages, append avatar after content for right alignment

@@ -8,12 +8,13 @@
 body {
     background-color: #f7f7f8;
     height: 100vh;
+    overflow: hidden;
 }
 
 .app-container {
     display: flex;
     height: 100vh;
-    overflow: hidden;
+    position: relative;
 }
 
 .sidebar {
@@ -24,6 +25,16 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
+    transition: transform 0.3s ease;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 10;
+}
+
+.sidebar.collapsed {
+    transform: translateX(-100%);
 }
 
 #new-chat-btn {
@@ -36,6 +47,7 @@ body {
     cursor: pointer;
     font-size: 14px;
     transition: background-color 0.3s;
+    width: 100%;
 }
 
 #new-chat-btn:hover {
@@ -45,6 +57,8 @@ body {
 .chat-history {
     overflow-y: auto;
     flex-grow: 1;
+    margin-right: -10px;
+    padding-right: 10px;
 }
 
 .history-item {
@@ -58,6 +72,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    height: 40px;
+    box-sizing: border-box;
 }
 
 .history-item:hover {
@@ -79,10 +95,12 @@ body {
 .history-item-actions {
     display: none;
     margin-left: 5px;
+    height: 100%;
 }
 
 .history-item:hover .history-item-actions {
     display: flex;
+    align-items: center;
 }
 
 .edit-chat-btn, .delete-chat-btn {
@@ -95,6 +113,9 @@ body {
     opacity: 0.6;
     border-radius: 3px;
     margin-left: 3px;
+    height: 100%;
+    display: flex;
+    align-items: center;
 }
 
 .edit-chat-btn:hover {
@@ -131,6 +152,14 @@ body {
     flex-direction: column;
     background-color: #343541;
     color: white;
+    margin-left: 260px;
+    transition: margin-left 0.3s ease;
+    height: 100vh;
+    position: relative;
+}
+
+.chat-container.expanded {
+    margin-left: 0;
 }
 
 .chat-messages {
@@ -140,6 +169,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    height: calc(100vh - 120px);
 }
 
 .message-container {
@@ -163,20 +193,19 @@ body {
     width: auto;
     display: inline-flex;
     height: auto;
+    max-width: 85%;
 }
 
 .user-message {
     background-color: #5436da;
     justify-content: flex-end;
     align-self: flex-end;
-    max-width: 85%;
 }
 
 .ai-message {
     background-color: #444654;
     justify-content: flex-start;
     align-self: flex-start;
-    max-width: 85%;
 }
 
 .message-avatar {
@@ -220,6 +249,15 @@ body {
     width: 100%;
     position: sticky;
     bottom: 0;
+    box-sizing: border-box;
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: 0 auto;
+    gap: 10px;
 }
 
 #user-input {
@@ -227,27 +265,29 @@ body {
     border: 1px solid #565869;
     background-color: #40414f;
     color: white;
-    border-radius: 5px;
-    padding: 12px;
+    border-radius: 3rem;
+    padding: 0 20px;
     resize: none;
-    min-height: 50px;
-    max-height: 150px;
+    height: 50px;
+    max-height: 100px;
     overflow-y: auto;
     outline: none;
     font-size: 16px;
+    line-height: 50px;
+    display: block;
 }
 
 #send-btn {
     background-color: #19c37d;
     color: white;
     border: none;
-    border-radius: 5px;
-    padding: 12px 16px;
-    margin-left: 10px;
+    border-radius: 3rem;
+    padding: 12px 24px;
     cursor: pointer;
     font-size: 16px;
     height: 50px;
     transition: background-color 0.3s;
+    flex-shrink: 0;
 }
 
 #send-btn:hover {
@@ -259,14 +299,48 @@ body {
     cursor: not-allowed;
 }
 
+#sidebar-toggle {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 5px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s;
+}
+
+#sidebar-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+#sidebar-toggle svg {
+    width: 20px;
+    height: 20px;
+}
+
 @media (max-width: 768px) {
-    .app-container {
-        flex-direction: column;
-    }
     .sidebar {
-        width: 100%;
-        height: auto;
-        max-height: 40vh;
+        position: fixed;
+        transform: translateX(-100%);
+    }
+    
+    .sidebar.expanded {
+        transform: translateX(0);
+    }
+    
+    .chat-container {
+        margin-left: 0;
+    }
+    
+    .chat-container.expanded {
+        margin-left: 260px;
     }
 }
 
@@ -374,4 +448,101 @@ body {
 
 .sources-list a:hover {
     text-decoration: underline;
+}
+
+/* Markdown styles */
+.markdown-content {
+    line-height: 1.1;
+    color: #c5c5d2;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    color: #ffffff;
+    margin-bottom: 0.4em;
+    font-weight: 600;
+}
+
+.markdown-content p {
+    margin-bottom: 0.6em;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    padding-left: 2em;
+}
+
+.markdown-content li {
+    margin-bottom: 0.2em;
+}
+
+.markdown-content code {
+    background-color: #40414f;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.markdown-content pre {
+    background-color: #40414f;
+    padding: 1em;
+    border-radius: 5px;
+    overflow-x: auto;
+    margin-bottom: 0.7em;
+}
+
+.markdown-content pre code {
+    background-color: transparent;
+    padding: 0;
+}
+
+.markdown-content blockquote {
+    border-left: 4px solid #565869;
+    padding-left: 1em;
+    margin-left: 0;
+    margin-bottom: 1em;
+    color: #8e8ea0;
+}
+
+.markdown-content a {
+    color: #8e8fff;
+    text-decoration: none;
+}
+
+.markdown-content a:hover {
+    text-decoration: underline;
+}
+
+.markdown-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1em;
+}
+
+.markdown-content th,
+.markdown-content td {
+    border: 1px solid #565869;
+    padding: 0.5em;
+    text-align: left;
+}
+
+.markdown-content th {
+    background-color: #40414f;
+}
+
+.markdown-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 5px;
+}
+
+.markdown-content pre,
+.markdown-content code,
+.markdown-content blockquote {
+    text-align: left;
 } 
