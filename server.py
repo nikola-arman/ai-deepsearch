@@ -85,16 +85,15 @@ async def chat_completion_loop(messages: list[dict[str, str]], **additional_kwar
         api_key=os.getenv("LLM_API_KEY", os.environ.get("OPENAI_API_KEY", 'no-need')),
         base_url=os.getenv("LLM_BASE_URL", 'https://api.openai.com/v1'),
     )
-    
-    name = "Bio Medical Deep Search"
-    description = "deepdive into biomedical research"
+
+    name = "Bio-Medical Deep Search"
+    description = "a user-friendly assistant, deepdive into biomedical research, walkarround PubMed and answer any question related to biomedical ressearch and advancements"
 
     messages[-1]['content'] = f'''
 {messages[-1]['content']}
 {"-" * 30}
-Use the basic information below to quickly complete simple tasks like introducing, greeting, or answering follow-up questions, etc
-You are {name}, {description}
-'''
+Use the basic information below to quickly complete simple tasks like introducing, greeting, or answering follow-up questions, etc. Also, follow the conversation and keep it natural and concise:
+Information: You are {name}, {description}.'''
 
     completion = await client.chat.completions.create(
         model=os.getenv("LLM_MODEL_ID", "gpt-4o-mini"),
@@ -221,5 +220,5 @@ async def custom_404_handler(request: Request, exc):
 app.mount("/", StaticFiles(directory=public_dir, html=True), name="static")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
+    port = int(os.environ.get("PORT", 2013))
     uvicorn.run(app, host="0.0.0.0", port=port)
