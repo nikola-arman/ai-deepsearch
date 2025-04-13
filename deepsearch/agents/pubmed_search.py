@@ -99,13 +99,13 @@ def pubmed_search_agent(state: SearchState) -> SearchState:
         # Perform the search
         search_response = client.query(
             query=query,
-            max_results=10  # Fetch enough results for good indexing
+            max_results=30  # Fetch enough results for good indexing
         )
 
         # Convert the results to our model
         pubmed_results = convert_pubmed_results(search_response)
-        print("DEBUG found", len(pubmed_results), "results")
-        logger.debug(f"Found {len(pubmed_results)} results from PubMed")
+        print("DEBUG found", len(pubmed_results), "results for query ", query)
+        logger.debug(f"Found {len(pubmed_results)} results from PubMed for query {query}")
 
         # Update the state
         state.pubmed_results = pubmed_results
