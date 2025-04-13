@@ -9,6 +9,7 @@ import re
 import datetime  # Add import for datetime module
 
 from deepsearch.models import SearchState, SearchResult
+import datetime
 
 # Set up logging
 logger = logging.getLogger("deepsearch.deep_reasoning")
@@ -180,6 +181,9 @@ Create a well-rounded, complete direct answer to the original query. The answer 
 6. Use line breaks between paragraphs for better readability
 7. Use **bold** for important terms and concepts
 8. Use *italics* for emphasis when appropriate
+9. Include in-line citations using the format (Author/Title, Year) for each fact or claim
+10. For each citation, include a brief context about the source (e.g., "A study by (Author, Year) found that...")
+11. When citing multiple sources for the same point, use the format (Author1, Year1; Author2, Year2)
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, or section markers.
@@ -244,6 +248,9 @@ Create rich, detailed content for the section "{section_heading}". Your content 
 6. Use **bold** for important terms and concepts
 7. Use *italics* for emphasis when appropriate
 8. Create subsections with ### heading level when needed to organize complex information
+9. Include in-line citations using the format [Author/Title, Year] for each fact or claim
+10. For each citation, include a brief context about the source (e.g., "A study by [Author, Year] found that...")
+11. When citing multiple sources for the same point, use the format [Author1, Year1; Author2, Year2]
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
@@ -367,15 +374,32 @@ def format_search_results(state: SearchState) -> str:
             results.extend(state.pubmed_results)
 
     # Format each result with the query that produced it (if available)
-    for i, result in enumerate(results):
+    group_by_url = {}
+
+    for result in results:
+        if result.url not in group_by_url:
+            group_by_url[result.url] = []
+        group_by_url[result.url].append(result)
+
+    for i, (url, results) in enumerate(group_by_url.items()):
         results_text += f"RESULT {i+1}:\n"
-        results_text += f"Title: {result.title}\n"
-        results_text += f"URL: {result.url}\n"
-        if result.query:
-            results_text += f"Query: {result.query}\n"
-        results_text += f"Content: {result.content}\n"
-        if result.score is not None:
-            results_text += f"Relevance Score: {result.score:.4f}\n"
+        results_text += f"URL: {url}\n"
+        authors = ""
+    
+        for author in results[0].authors:
+            authors += f"- {author.firstname} {author.lastname} ({author.initials})\n"
+    
+        results_text += f"Authors: {authors}\n"
+        results_text += f"Title: {results[0].title} ({results[0].publication_date})\n"
+        results_text += f"Content: \n"
+        score = 0
+
+        for result in sorted(results, key=lambda x: x.score, reverse=True):
+            results_text += f"- {result.content}\n"
+            results_text += "\n"
+            score = max(score, result.score)
+
+        results_text += f"Relevance Score: {score:.4f}\n"
         results_text += "\n"
 
     return results_text
@@ -444,7 +468,10 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
 
     # Create the reasoning prompt
     reasoning_prompt = PromptTemplate(
-        input_variables=["original_query", "iteration", "search_results", "previous_knowledge_gaps", "max_iterations", "current_date"],
+        input_variables=[
+            "original_query", "iteration", "search_results", 
+            "previous_knowledge_gaps", "max_iterations", "current_date"
+        ],
         template=REASONING_TEMPLATE
     )
 
@@ -455,7 +482,9 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     formatted_results = format_search_results(state)
 
     # Format the previous knowledge gaps
-    formatted_previous_gaps = "None identified yet." if not state.historical_knowledge_gaps else "\n".join([f"- {gap}" for gap in state.historical_knowledge_gaps])
+    formatted_previous_gaps = "None identified yet." if not state.historical_knowledge_gaps else "\n".join(
+        [f"- {gap}" for gap in state.historical_knowledge_gaps]
+    )
 
     # Generate the analysis and reasoning
     response = chain.invoke({
@@ -648,6 +677,7 @@ def generate_final_answer(state: SearchState) -> SearchState:
     2. Create a direct answer based on key points
     3. Generate an outline for detailed notes sections
     4. Expand each section with dedicated LLM calls
+    5. Add a references section with all cited sources
 
     Args:
         state: The current search state with key points and other information
@@ -780,6 +810,43 @@ def generate_final_answer(state: SearchState) -> SearchState:
 
     logger.info("Generated all section content for detailed notes")
 
+    # Stage 5: Generate references section
+    references = "## References\n\n"
+    if state.combined_results:
+        # Sort results by relevance score if available
+        sorted_results = sorted(
+            state.combined_results,
+            key=lambda x: x.score if x.score is not None else 0,
+            reverse=True
+        )
+        
+        urls = set([])
+        
+        # Add each source with its title and URL
+        for i, result in enumerate(sorted_results, 1):
+            # Extract year from URL if it's a PubMed article
+            
+            url = result.url
+            
+            if url not in urls:
+                urls.add(url)
+            else:
+                continue
+            
+            if result.publication_date:
+                publication_date = datetime.datetime.strptime(result.publication_date, "%Y-%m-%d")
+                year = publication_date.year
+            else:
+                year = None
+
+            
+            # Format the reference
+            references += f"{i}. [{result.title}]({result.url})"
+            if year:
+                references += f" ({year})"
+            
+            references += "\n"
+
     # Combine all sections into the final answer with enhanced markdown
     final_answer = f"""## Key Points
 
@@ -790,12 +857,12 @@ def generate_final_answer(state: SearchState) -> SearchState:
 {direct_answer.strip()}
 
 {detailed_notes.replace('# DETAILED NOTES', '## Detailed Notes')}
+
+{references}
 """
 
     # Update the state with the final answer
     state.final_answer = final_answer.strip()
-
-    # Set a confidence score
     state.confidence_score = 0.8 if state.key_points else 0.5
 
     return state

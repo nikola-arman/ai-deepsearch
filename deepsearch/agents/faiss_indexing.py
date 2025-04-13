@@ -273,7 +273,9 @@ def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indi
                         url=result.url,
                         content=result.content,
                         score=score,
-                        query=query  # Add the query that produced this result
+                        query=query,  # Add the query that produced this result,
+                        publication_date=result.publication_date,
+                        authors=result.authors
                     )
                 )
 

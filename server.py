@@ -69,7 +69,7 @@ async def chat_completion_loop(messages: list[dict[str, str]], **additional_kwar
             "type": "function",
             "function": {
                 "name": "do_specialized",
-                "description": "Use this if you have to idea to response.",
+                "description": f"Start deep diving into the problem",
                 "parameters": {
                     "type": "object",
                     "properties": {},

@@ -11,7 +11,6 @@ httpx>=0.26.0
 python-dotenv>=1.0.0
 openai>=1.0.0
 langchain_openai
-pymed
-
+git+https://github.com/daniel-bvm/pymed
 git+https://github.com/daniel-bvm/http-middleware
 aiofiles==23.2.1

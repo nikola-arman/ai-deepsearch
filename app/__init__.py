@@ -206,13 +206,27 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[
             # Deduplicate combined results by URL
             if state.combined_results:
                 unique_results = {}
+
                 for result in state.combined_results:
                     # Keep the highest scoring result for each URL
-                    if result.url not in unique_results or (result.score is not None and
-                        (unique_results[result.url].score is None or result.score > unique_results[result.url].score)):
-                        unique_results[result.url] = result
+                    if result.url not in unique_results:
+                        unique_results[result.url + result.content] = []
+                    
+                    unique_results[result.url + result.content].append(result)
 
-                state.combined_results = list(unique_results.values())
+                for k in list(unique_results.keys()):
+                    unique_results[k] = sorted(
+                        unique_results[k], 
+                        key=lambda x: x.score, 
+                        reverse=True
+                    )[:3]
+
+                state.combined_results = [
+                    item 
+                    for sublist in unique_results.values() 
+                    for item in sublist
+                ]
+
                 logger.info(f"  Deduplicated to {len(state.combined_results)} unique results")
 
             # Step 5: Deep Reasoning - analyze results and decide whether to continue
@@ -239,7 +253,9 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[
                 state = await sync2async(generate_final_answer)(state)
             except Exception as e:
                 logger.error(f"Error generating final answer: {str(e)}", exc_info=True)
-                state.final_answer = "I reached the maximum number of search iterations but couldn't generate a comprehensive answer. Here's what I found: " + "\n".join([f"- {point}" for point in state.key_points])
+                state.final_answer = "I reached the maximum number of search iterations but couldn't generate a comprehensive answer. Here's what I found: " + "\n".join(
+                    [f"- {point}" for point in state.key_points]
+                )
                 state.confidence_score = 0.5
 
         # Return the results
@@ -284,19 +300,14 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> str:
 
     res: Dict = await run_deep_search_pipeline(query)
     
-    import json
-    
-    with open("res.json", "w") as f:
-        json.dump(res, f, indent=2)
-
     sep = "-" * 30
     final_resp = res["answer"]
 
-    if len(res["sources"]) > 0:
-        final_resp += "\n## References:\n"
+    # if len(res["sources"]) > 0:
+    #     final_resp += "\n## References:\n"
 
-        for item in res["sources"]:
-            final_resp += "- [{title}]({url})\n".format(**item)
+    #     for item in res["sources"]:
+    #         final_resp += "- [{title}]({url})\n".format(**item)
 
     if not res["has_error"]:
         if final_resp.strip()[-1] != '\n':

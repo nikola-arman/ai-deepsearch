@@ -18,6 +18,11 @@ def sanitize_content(content) -> str:
         # For any other type, convert to string
         return str(content)
 
+class AuthorInfo(BaseModel):
+    collective: Optional[str] = None
+    lastname: Optional[str] = None
+    firstname: Optional[str] = None
+    initials: Optional[str] = None
 
 class SearchResult(BaseModel):
     """Represents a single search result."""
@@ -26,6 +31,8 @@ class SearchResult(BaseModel):
     content: str
     score: Optional[float] = None
     query: Optional[str] = None  # Track which query generated this result
+    publication_date: Optional[str] = None
+    authors: Optional[List[AuthorInfo]] = []
 
     @model_validator(mode='before')
     @classmethod
