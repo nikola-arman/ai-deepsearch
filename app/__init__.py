@@ -323,4 +323,4 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> str:
             sep=sep
         )
 
-    return final_resp, res
+    return final_resp # , res

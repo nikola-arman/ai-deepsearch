@@ -108,13 +108,13 @@ Information: You are {name}, {description}.'''
         completion.choices[0].message.tool_calls is not None \
         and len(completion.choices[0].message.tool_calls) > 0
     ):
-        res, raw = await prompt(
+        res = await prompt(
             original_message,
             **additional_kwargs
         )
-        return res, raw
+        return res
 
-    return completion.choices[0].message.content, {}
+    return completion.choices[0].message.content
 
 async def run_research_task(task_id: str, messages: List[Dict[str, str]]):
     """Run research in background and store results."""
@@ -129,17 +129,13 @@ async def run_research_task(task_id: str, messages: List[Dict[str, str]]):
         save_task_to_disk(task_id, task_data)
         
         # Run the research pipeline
-        results, raw = await chat_completion_loop(messages)
+        results = await chat_completion_loop(messages)
         
         # Update task with results
         task_data["status"] = "completed"
         task_data["results"] = results
-        task_data["raw"] = raw
         save_task_to_disk(task_id, task_data)
         print(f"task {task_id} completed")
-        
-        with open(f"cache/raw-{task_id}.json", "w") as f:
-            json.dump(raw, f, indent=4)
         
     except Exception as e:
         # Handle any errors
