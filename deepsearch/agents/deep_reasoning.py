@@ -21,6 +21,10 @@ load_dotenv()
 openai_api_base = os.environ.get("OPENAI_API_BASE", "http://localhost:8080/v1")
 openai_api_key = os.environ.get("OPENAI_API_KEY", "not-needed")
 
+def get_pmid(url: str) -> str:
+    """Extract the PMID from a PubMed URL."""
+    return url.strip("/").split("/")[-1]
+
 # Define the prompt template for analysis and reasoning
 REASONING_TEMPLATE = """You are an expert research analyst and reasoning agent. Your task is to analyze search results,
 identify relevant information, and determine if further searches are needed.
@@ -28,8 +32,6 @@ identify relevant information, and determine if further searches are needed.
 ORIGINAL QUERY: {original_query}
 
 CURRENT SEARCH ITERATION: {iteration}
-
-CURRENT DATE: {current_date} (ISO 8601 format: YYYY-MM-DD)
 
 SEARCH RESULTS:
 {search_results}
@@ -42,10 +44,10 @@ INSTRUCTIONS:
 2. Identify any NEW knowledge gaps that require further searches. Do NOT repeat previously identified knowledge gaps.
 3. Decide if the search process should continue or if we have sufficient information to answer the query.
 4. If further searches are needed, generate specific new search queries to fill the NEW knowledge gaps.
-5. IMPORTANT: Include the current year or time period in queries when relevant (especially for financial, news, trend, or stock queries) to ensure recency and up-to-date information.
-6. When referring to time periods, use clear universal formats (e.g., "Q1 2024", "May 2024", "2024", etc.)
-7. Format your response as a JSON object with the following structure:
-
+5. When referring to time periods, use clear universal formats (e.g., "Q1 2024", "May 2024", "2024", etc.)
+6. Include in-text citations using the format [Author/Article, Year](PMID:$PMID) for each fact or claim. For example, [Smith et al., 2024](PMID:1234567890). The $PMID is the PubMed ID of the article, mentioned in each search result.
+7. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID:1234567890) found that...")
+8. Format your response as a JSON object with the following structure:
 {{
   "key_points": ["point 1", "point 2", "..."],
   "knowledge_gaps": ["gap 1", "gap 2", "..."],
@@ -53,6 +55,7 @@ INSTRUCTIONS:
   "search_complete": true/false,
   "reasoning": "Your explanation of why the search is complete or needs to continue"
 }}
+
 
 CRITICAL: Your entire response MUST be a valid, parseable JSON object and nothing else. Do not include any text before or after the JSON object. Do not include any explanation, markdown formatting, or code blocks around the JSON. The response must start with '{{' and end with '}}' and contain only valid JSON.
 
@@ -181,9 +184,9 @@ Create a well-rounded, complete direct answer to the original query. The answer 
 6. Use line breaks between paragraphs for better readability
 7. Use **bold** for important terms and concepts
 8. Use *italics* for emphasis when appropriate
-9. Include in-line citations using the format (Author/Title, Year) for each fact or claim
-10. For each citation, include a brief context about the source (e.g., "A study by (Author, Year) found that...")
-11. When citing multiple sources for the same point, use the format (Author1, Year1; Author2, Year2)
+9. Include in-text citations using the format [Author/Article, Year](PMID:$PMID) for each fact or claim. For example, [Smith et al., 2024](PMID:1234567890)
+10. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID:1234567890) found that...")
+11. IMPORTANT: only use the provided information to answer the query.
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, or section markers.
@@ -248,9 +251,9 @@ Create rich, detailed content for the section "{section_heading}". Your content 
 6. Use **bold** for important terms and concepts
 7. Use *italics* for emphasis when appropriate
 8. Create subsections with ### heading level when needed to organize complex information
-9. Include in-line citations using the format [Author/Title, Year] for each fact or claim
-10. For each citation, include a brief context about the source (e.g., "A study by [Author, Year] found that...")
-11. When citing multiple sources for the same point, use the format [Author1, Year1; Author2, Year2]
+9. Include in-text citations using the format [Author/Article, Year](PMID:$PMID) for each fact or claim. For example, [Smith et al., 2024](PMID:1234567890)
+10. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID:1234567890) found that...")
+11. If there are multiple citations, separate them with a comma and a space (e.g., "[Smith et al., 2024](PMID:1234567890), [Smith et al., 2024](PMID:1234567890)")
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
@@ -264,8 +267,6 @@ QUERY_GENERATOR_TEMPLATE = """You are an expert research strategist. Your task i
 
 ORIGINAL QUERY: {original_query}
 
-CURRENT DATE: {current_date} (ISO 8601 format: YYYY-MM-DD)
-
 INSTRUCTIONS:
 Analyze the original query and break it down into 5 distinct, focused search queries that collectively cover all important aspects of the original question. Each query should:
 
@@ -274,8 +275,7 @@ Analyze the original query and break it down into 5 distinct, focused search que
 3. Use natural language that would work well with search engines
 4. Avoid overlapping too much with other queries
 5. Focus on factual information rather than opinions
-6. IMPORTANT: Include the current year or time period in queries when relevant (especially for financial, news, trend, or stock queries) to ensure recency
-7. When referring to time periods, use clear universal formats (e.g., "Q1 2024", "May 2024", "2024", etc.)
+7. When referring to time periods, use clear universal formats (e.g., "Q1 2010", "May 2015", "2024", etc.)
 
 Format your response as a JSON array of 5 strings representing the search queries:
 ["query1", "query2", "query3", "query4", "query5"]
@@ -383,14 +383,31 @@ def format_search_results(state: SearchState) -> str:
 
     for i, (url, results) in enumerate(group_by_url.items()):
         results_text += f"RESULT {i+1}:\n"
-        results_text += f"URL: {url}\n"
+        
+        date = None
+        if results[0].publication_date:
+            date = datetime.datetime.strptime(results[0].publication_date, "%Y-%m-%d")
+        
         authors = ""
+        
+        if len(results[0].authors) > 0:
+            first_author = results[0].authors[0]
+            
+            if first_author.firstname and first_author.lastname:
+                first_author_name = first_author.firstname + " " + first_author.lastname
+
+                authors = first_author_name \
+                    + (" et al." if len(results[0].authors) > 1 else "")
+
+        results_text += f"Title: {results[0].title}\n"
+        
+        if authors:
+            results_text += f"Author: {authors}\n"
     
-        for author in results[0].authors:
-            authors += f"- {author.firstname} {author.lastname} ({author.initials})\n"
+        if date:
+            results_text += f"Year: {date.year}\n"
     
-        results_text += f"Authors: {authors}\n"
-        results_text += f"Title: {results[0].title} ({results[0].publication_date})\n"
+        results_text += f"PMID: {get_pmid(results[0].url)}\n"
         results_text += f"Content: \n"
         score = 0
 
@@ -764,6 +781,17 @@ def generate_final_answer(state: SearchState) -> SearchState:
         input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading"],
         template=SECTION_CONTENT_TEMPLATE
     )
+    
+    for heading in section_headings:
+        with open(f'section_content_{heading}.txt', 'w') as f:
+            f.write(section_prompt.invoke({
+                "original_query": state.original_query,
+                "key_points": key_points,
+                "direct_answer": direct_answer,
+                "search_details": search_details,
+                "section_heading": heading
+            }).to_string())
+    
     section_chain = section_prompt | section_llm
 
     # Generate content for each section
@@ -810,43 +838,6 @@ def generate_final_answer(state: SearchState) -> SearchState:
 
     logger.info("Generated all section content for detailed notes")
 
-    # Stage 5: Generate references section
-    references = "## References\n\n"
-    if state.combined_results:
-        # Sort results by relevance score if available
-        sorted_results = sorted(
-            state.combined_results,
-            key=lambda x: x.score if x.score is not None else 0,
-            reverse=True
-        )
-        
-        urls = set([])
-        
-        # Add each source with its title and URL
-        for i, result in enumerate(sorted_results, 1):
-            # Extract year from URL if it's a PubMed article
-            
-            url = result.url
-            
-            if url not in urls:
-                urls.add(url)
-            else:
-                continue
-            
-            if result.publication_date:
-                publication_date = datetime.datetime.strptime(result.publication_date, "%Y-%m-%d")
-                year = publication_date.year
-            else:
-                year = None
-
-            
-            # Format the reference
-            references += f"{i}. [{result.title}]({result.url})"
-            if year:
-                references += f" ({year})"
-            
-            references += "\n"
-
     # Combine all sections into the final answer with enhanced markdown
     final_answer = f"""## Key Points
 
@@ -858,11 +849,80 @@ def generate_final_answer(state: SearchState) -> SearchState:
 
 {detailed_notes.replace('# DETAILED NOTES', '## Detailed Notes')}
 
-{references}
 """
+
+    cited_pmids = set([])    
+    pat = re.compile(r'\[.*\]\(PMID:\s?(\d+)\)')
+
+    for line in final_answer.split('\n'):
+        match = pat.search(line)
+        if match:
+            cited_pmids.add(match.group(1))
+    
+    searched_pmids = set([])
+ 
+    # Stage 5: Generate references section
+    references = "## References\n\n"
+    if state.combined_results and cited_pmids:
+        # Sort results by relevance score if available
+        sorted_results = sorted(
+            state.combined_results,
+            key=lambda x: x.score if x.score is not None else 0,
+            reverse=True
+        )
+        
+        track = set([])
+        
+        # Add each source with its title and URL
+        for i, result in enumerate(sorted_results):
+            url = result.url
+            pmid = get_pmid(url)
+
+            # if pmid not in cited_pmids:
+            #     continue
+            
+            if pmid not in track:
+                track.add(pmid)
+                searched_pmids.add(pmid)
+            else:
+                continue
+                        
+            if result.publication_date:
+                publication_date = datetime.datetime.strptime(result.publication_date, "%Y-%m-%d")
+                year = publication_date.year
+            else:
+                year = None
+
+            authors = result.authors[0].firstname + " " + result.authors[0].lastname + " et al." if len(result.authors) > 1 else ""
+            
+            # Format the reference
+            references += f"{i}. [{result.title}]({result.url})"
+            if year:
+                references += f" ({year})"
+            
+            references += "\n"
+
+    hallucinated_pmids = set([])
+    for pmid in cited_pmids:
+        if pmid in searched_pmids:
+            final_answer = re.sub(
+                r'\[(.*)\]\(PMID:\s?(\d+)\)', 
+                r'[\1](https://pubmed.ncbi.nlm.nih.gov/\2)', 
+                final_answer
+            )
+            
+            final_answer = re.sub(
+                r'PMID:\s?(\d+)', 
+                r'[\1](https://pubmed.ncbi.nlm.nih.gov/\1)', 
+                final_answer
+            )
+        else:
+            hallucinated_pmids.add(pmid)
+
+    final_answer += references
 
     # Update the state with the final answer
     state.final_answer = final_answer.strip()
-    state.confidence_score = 0.8 if state.key_points else 0.5
+    state.confidence_score = (0.8 if state.key_points else 0.5) * ((1 - 0.2 * len(hallucinated_pmids) / len(cited_pmids)) if len(cited_pmids) > 0 else 1)
 
     return state

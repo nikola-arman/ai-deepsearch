@@ -6,4 +6,11 @@ load_dotenv()
 
 from app import prompt
 import asyncio
-print(asyncio.run(prompt([{"role": "user", "content": "research about lung cancer"}])))
+res, raw = asyncio.run(prompt([{"role": "user", "content": "research about lung cancer"}]))
+
+
+with open("res.md", "w") as f:
+    f.write(res)
+
+with open("raw.md", "w") as f:
+    f.write(str(raw))

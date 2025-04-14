@@ -281,7 +281,11 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[
             "detailed_notes": detailed_notes,
             "confidence": state.confidence_score,
             "sources": sources,
-            "has_error": False
+            "has_error": False,
+            "combined_results": [
+                e.model_dump()
+                for e in state.combined_results
+            ]
         }
     except Exception as e:
         # Handle any unexpected errors
@@ -291,7 +295,8 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[
             "answer": "An unexpected error occurred while processing your query. Please try again later.",
             "confidence": 0.0,
             "sources": [],
-            "has_error": True
+            "has_error": True,
+            "combined_results": state.combined_results
         }
 
 async def prompt(messages: list[dict[str, str]], **kwargs) -> str:
@@ -318,4 +323,4 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> str:
             sep=sep
         )
 
-    return final_resp
+    return final_resp, res

@@ -35,7 +35,7 @@ def convert_pubmed_results(pubmed_results: List[PubMedArticle]) -> List[SearchRe
             dict_result = result.toDict()
             # Extract content with validation
             title = dict_result.get("title", "Untitled")
-            pubmed_id = dict_result.get("pubmed_id", "unknown") # .split("\n")[0] # idk what i am doing, but it seems to work
+            pubmed_id = dict_result.get("pubmed_id", "unknown")
 
             methods = dict_result.get("methods", "")
             abstract = dict_result.get("abstract", "")
