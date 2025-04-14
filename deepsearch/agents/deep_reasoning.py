@@ -45,9 +45,7 @@ INSTRUCTIONS:
 3. Decide if the search process should continue or if we have sufficient information to answer the query.
 4. If further searches are needed, generate specific new search queries to fill the NEW knowledge gaps.
 5. When referring to time periods, use clear universal formats (e.g., "Q1 2024", "May 2024", "2024", etc.)
-6. Include in-text citations using the format [Author/Article, Year](PMID:$PMID) for each fact or claim. For example, [Smith et al., 2024](PMID:1234567890). The $PMID is the PubMed ID of the article, mentioned in each search result.
-7. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID:1234567890) found that...")
-8. Format your response as a JSON object with the following structure:
+6. Format your response as a JSON object with the following structure:
 {{
   "key_points": ["point 1", "point 2", "..."],
   "knowledge_gaps": ["gap 1", "gap 2", "..."],
@@ -55,9 +53,11 @@ INSTRUCTIONS:
   "search_complete": true/false,
   "reasoning": "Your explanation of why the search is complete or needs to continue"
 }}
+7. IMPORTANT: Include in-text citations using the markdown syntax "[Author/Article, Year](PMID:$PMID)" for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $PMID is the PubMed ID of the article, mentioned in each search result.
+8. For each citation, include a brief context about the source (e.g., "A study by  [Author/Article, Year](PMID:$PMID) found that...")
 
 
-CRITICAL: Your entire response MUST be a valid, parseable JSON object and nothing else. Do not include any text before or after the JSON object. Do not include any explanation, markdown formatting, or code blocks around the JSON. The response must start with '{{' and end with '}}' and contain only valid JSON.
+CRITICAL: Your entire response MUST be a valid, parseable JSON object and nothing else. Do not include any text before or after the JSON object. Do not include any explanation, markdown formatting, or code blocks around the JSON. The response must start with '{{' and end with '}}' and contain only valid JSON, include in-text citation for each fact or claim in correct format.
 
 If there are no knowledge gaps or the search should stop, return an empty array for "knowledge_gaps" and "new_queries"
 and set "search_complete" to true.
@@ -152,8 +152,10 @@ KEY POINTS IDENTIFIED DURING SEARCH:
 {key_points}
 
 INSTRUCTIONS:
-Create a concise list of 5-7 bullet points that represent the most important findings and facts related to the query.
-Each point should be clear, specific, and directly relevant to answering the original query.
+1. Create a concise list of 5-7 bullet points that represent the most important findings and facts related to the query.
+2. Each point should be clear, specific, and directly relevant to answering the original query.
+3. IMPORTANT: Include in-text citations using the markdown syntax "[Author/Article, Year](PMID:$PMID)" for each fact or claim. Where the $PMID is the PubMed ID of the article, mentioned in the search results.
+4. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID: 12331312) found that...")
 
 Format your response as a markdown list of bullet points ONLY:
 - Key point 1
@@ -184,9 +186,8 @@ Create a well-rounded, complete direct answer to the original query. The answer 
 6. Use line breaks between paragraphs for better readability
 7. Use **bold** for important terms and concepts
 8. Use *italics* for emphasis when appropriate
-9. Include in-text citations using the format [Author/Article, Year](PMID:$PMID) for each fact or claim. For example, [Smith et al., 2024](PMID:1234567890)
-10. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID:1234567890) found that...")
-11. IMPORTANT: only use the provided information to answer the query.
+9. IMPORTANT: Include in-text citations using the format "[Author/Article, Year](PMID:$PMID)" for each fact or claim. Where the $PMID is the PubMed ID of the article, mentioned in the search results (e.g., [Smith et al., 2024](PMID: 12331312))
+10. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID: 12331312) found that...")
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, or section markers.
@@ -251,9 +252,8 @@ Create rich, detailed content for the section "{section_heading}". Your content 
 6. Use **bold** for important terms and concepts
 7. Use *italics* for emphasis when appropriate
 8. Create subsections with ### heading level when needed to organize complex information
-9. Include in-text citations using the format [Author/Article, Year](PMID:$PMID) for each fact or claim. For example, [Smith et al., 2024](PMID:1234567890)
-10. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID:1234567890) found that...")
-11. If there are multiple citations, separate them with a comma and a space (e.g., "[Smith et al., 2024](PMID:1234567890), [Smith et al., 2024](PMID:1234567890)")
+9. IMPORTANT: Include in-text citations using the format "[Author/Article, Year](PMID:$PMID)" for each fact or claim. Where the $PMID is the PubMed ID of the original article (e.g., [Smith et al., 2024](PMID: 12331312))
+10. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID: 12331312) found that...")
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
@@ -357,7 +357,6 @@ def generate_initial_queries(original_query: str) -> List[str]:
 
 def format_search_results(state: SearchState) -> str:
     """Format the search results for the prompt."""
-    results_text = ""
 
     # Use combined results if available
     results = state.combined_results if state.combined_results else []
@@ -366,24 +365,46 @@ def format_search_results(state: SearchState) -> str:
     if not results:
         if state.faiss_results:
             results.extend(state.faiss_results)
+        
         if state.bm25_results:
+            print(f"BM25 results: {len(state.bm25_results)}")
+        
+            # normalize the score of bm25 results to be between 0 and 1
+            max_score = max(result.score for result in state.bm25_results)
+            min_score = min(result.score for result in state.bm25_results)
+            normalized_scores = [(result.score - min_score) / (max_score - min_score) for result in state.bm25_results]
+    
+            for result, score in zip(state.bm25_results, normalized_scores):
+                result.score = score
+    
             results.extend(state.bm25_results)
+        
         if state.tavily_results:
             results.extend(state.tavily_results)
         if state.pubmed_results:
             results.extend(state.pubmed_results)
 
     # Format each result with the query that produced it (if available)
-    group_by_url = {}
+    group_by_url_content = {}
 
     for result in results:
+        group_by_url_content[result.url + result.content] = result
+
+    group_by_url = {}
+    
+    for url_content, result in group_by_url_content.items():
         if result.url not in group_by_url:
             group_by_url[result.url] = []
+        
         group_by_url[result.url].append(result)
+        
+    documents = []
 
     for i, (url, results) in enumerate(group_by_url.items()):
-        results_text += f"RESULT {i+1}:\n"
+        doc = {}
         
+        doc['PMID'] = get_pmid(url)
+
         date = None
         if results[0].publication_date:
             date = datetime.datetime.strptime(results[0].publication_date, "%Y-%m-%d")
@@ -394,32 +415,31 @@ def format_search_results(state: SearchState) -> str:
             first_author = results[0].authors[0]
             
             if first_author.firstname and first_author.lastname:
-                first_author_name = first_author.firstname + " " + first_author.lastname
+                first_author_name = first_author.firstname or first_author.lastname
 
-                authors = first_author_name \
-                    + (" et al." if len(results[0].authors) > 1 else "")
+                if first_author_name:
+                    authors = first_author_name \
+                        + (" et al." if len(results[0].authors) > 1 else "")
+                else:
+                    authors = "Anonymous"
 
-        results_text += f"Title: {results[0].title}\n"
+        doc['Title'] = results[0].title
         
         if authors:
-            results_text += f"Author: {authors}\n"
+            doc['Author'] = authors
     
         if date:
-            results_text += f"Year: {date.year}\n"
-    
-        results_text += f"PMID: {get_pmid(results[0].url)}\n"
-        results_text += f"Content: \n"
-        score = 0
+            doc['Year'] = date.year
+
+        doc['Content'] = ""
 
         for result in sorted(results, key=lambda x: x.score, reverse=True):
-            results_text += f"- {result.content}\n"
-            results_text += "\n"
-            score = max(score, result.score)
+            doc['Content'] += f"- {result.content}\n"
+            doc['Content'] += "\n"
 
-        results_text += f"Relevance Score: {score:.4f}\n"
-        results_text += "\n"
+        documents.append(doc)
 
-    return results_text
+    return json.dumps(documents, indent=2)
 
 def format_search_details(state: SearchState) -> str:
     """Format the search details for the answer generation."""
@@ -491,7 +511,6 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
         ],
         template=REASONING_TEMPLATE
     )
-
     # Use the newer approach to avoid deprecation warnings
     chain = reasoning_prompt | llm
 
@@ -502,6 +521,16 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     formatted_previous_gaps = "None identified yet." if not state.historical_knowledge_gaps else "\n".join(
         [f"- {gap}" for gap in state.historical_knowledge_gaps]
     )
+    
+    with open("reasoning_prompt.txt", "w") as f:
+        f.write(reasoning_prompt.invoke({
+            "original_query": state.original_query,
+            "iteration": state.current_iteration,
+            "search_results": formatted_results,
+            "previous_knowledge_gaps": formatted_previous_gaps,
+            "max_iterations": max_iterations,
+            "current_date": current_date
+        }).to_string())
 
     # Generate the analysis and reasoning
     response = chain.invoke({
@@ -734,6 +763,13 @@ def generate_final_answer(state: SearchState) -> SearchState:
     )
     direct_answer_chain = direct_answer_prompt | direct_answer_llm
 
+    with open("direct_answer_prompt.txt", "w") as f:
+        f.write(direct_answer_prompt.invoke({
+            "original_query": state.original_query,
+            "key_points": key_points,
+            "search_details": search_details
+        }).to_string())
+
     direct_answer_response = direct_answer_chain.invoke({
         "original_query": state.original_query,
         "key_points": key_points,
@@ -752,6 +788,14 @@ def generate_final_answer(state: SearchState) -> SearchState:
     )
     outline_chain = outline_prompt | outline_llm
 
+    with open("outline_prompt.txt", "w") as f:
+        f.write(outline_prompt.invoke({
+            "original_query": state.original_query,
+            "key_points": key_points,
+            "direct_answer": direct_answer,
+            "search_details": search_details
+        }).to_string())
+    
     outline_response = outline_chain.invoke({
         "original_query": state.original_query,
         "key_points": key_points,
@@ -781,17 +825,17 @@ def generate_final_answer(state: SearchState) -> SearchState:
         input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading"],
         template=SECTION_CONTENT_TEMPLATE
     )
-    
-    for heading in section_headings:
-        with open(f'section_content_{heading}.txt', 'w') as f:
-            f.write(section_prompt.invoke({
-                "original_query": state.original_query,
-                "key_points": key_points,
-                "direct_answer": direct_answer,
-                "search_details": search_details,
-                "section_heading": heading
-            }).to_string())
-    
+
+    # for heading in section_headings:
+    #     with open(f'section_content_{heading}.txt', 'w') as f:
+    #         f.write(section_prompt.invoke({
+    #             "original_query": state.original_query,
+    #             "key_points": key_points,
+    #             "direct_answer": direct_answer,
+    #             "search_details": search_details,
+    #             "section_heading": heading
+    #         }).to_string())
+
     section_chain = section_prompt | section_llm
 
     # Generate content for each section
@@ -896,7 +940,8 @@ def generate_final_answer(state: SearchState) -> SearchState:
             authors = result.authors[0].firstname + " " + result.authors[0].lastname + " et al." if len(result.authors) > 1 else ""
             
             # Format the reference
-            references += f"{i}. [{result.title}]({result.url})"
+            references += f"{i + 1}. [{result.title}]({result.url})"
+
             if year:
                 references += f" ({year})"
             

@@ -61,7 +61,7 @@ def convert_pubmed_results(pubmed_results: List[PubMedArticle]) -> List[SearchRe
                 SearchResult(
                     title=title,
                     url=f"https://pubmed.ncbi.nlm.nih.gov/{pubmed_id}",
-                    content=f"{title}\n\n{label}: {content}",
+                    content=f"{label}: {content}".strip("\t\n ").replace("\n", " "),
                     score=None,
                     publication_date=publication_date,
                     authors=authors
@@ -99,7 +99,7 @@ def pubmed_search_agent(state: SearchState) -> SearchState:
         # Perform the search
         search_response = client.query(
             query=query,
-            max_results=30  # Fetch enough results for good indexing
+            max_results=10  # Fetch enough results for good indexing
         )
 
         # Convert the results to our model
