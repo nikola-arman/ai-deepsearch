@@ -109,7 +109,7 @@ async def run_simple_pipeline(query: str) -> Dict[str, Any]:
             "has_error": True
         }
 
-async def run_deep_search_pipeline(query: str, max_iterations: int = 2) -> Dict[str, Any]:
+async def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, Any]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
         # Initialize state
