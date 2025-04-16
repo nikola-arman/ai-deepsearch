@@ -278,16 +278,16 @@ class GeneratorValue:
         self.value = yield from self.gen
         return self.value
     
-def prompt(messages: list[dict[str, str]], **kwargs) -> str:
+def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, str]:
     assert len(messages) > 0, "received empty messages"
     query = messages[-1]['content']
 
-    gen = GeneratorValue(run_deep_search_pipeline(query))
-    for chunk in gen:
-        print(chunk)
-    res: Dict = gen.value
+    # gen = GeneratorValue(run_deep_search_pipeline(query))
+    # for chunk in gen:
+    #     print(chunk)
+    # res: Dict = gen.value
 
-    # res: Dict = yield from run_deep_search_pipeline(query)
+    res: Dict = yield from run_deep_search_pipeline(query)
 
     sep = "-" * 30
     final_resp = res["answer"]
