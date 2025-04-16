@@ -17,8 +17,8 @@ logger = logging.getLogger("deepsearch.faiss")
 load_dotenv()
 
 # Get the OpenAI-compatible API base URL and API key
-openai_api_base = os.environ.get("OPENAI_API_BASE", "http://localhost:8080/v1")
-openai_api_key = os.environ.get("OPENAI_API_KEY", "not-needed")
+openai_api_base = os.environ.get("EMBEDDING_URL", "http://localhost:8080/v1")
+openai_api_key = os.environ.get("EMBEDDING_API_KEY", "not-needed")
 
 
 def batching(data: Generator, batch_size = 1):
@@ -33,8 +33,8 @@ def init_embedding_model():
         embeddings = OpenAIEmbeddings(
             model=os.getenv("EMBEDDING_MODEL_ID", "text-embedding-ada-002"),  # Default to a known model
             openai_api_key=openai_api_key,
-            openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
-            dimensions=384  # Adjust based on your model
+            openai_api_base=openai_api_base,
+            check_embedding_ctx_length=False,
         )
 
         # Test the embeddings with a simple query to catch any initialization issues
