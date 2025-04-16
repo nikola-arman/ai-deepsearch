@@ -1,10 +1,11 @@
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any, Generator
 import os
 import logging
 from dotenv import load_dotenv
 from tavily import TavilyClient
 
 from deepsearch.models import SearchState, SearchResult
+from deepsearch.utils import to_chunk_data, wrap_thought
 
 # Set up logging
 logger = logging.getLogger("deepsearch.tavily")
@@ -60,8 +61,7 @@ def convert_tavily_results(tavily_results: List[Dict[str, Any]]) -> List[SearchR
 
     return search_results
 
-
-def tavily_search_agent(state: SearchState) -> SearchState:
+def tavily_search_agent(state: SearchState) -> Generator[bytes, None, SearchState]:
     """
     Fetches real-time web search results using the Tavily API.
 
@@ -74,6 +74,13 @@ def tavily_search_agent(state: SearchState) -> SearchState:
     try:
         # Use the original query
         query = state.original_query
+
+        yield to_chunk_data(
+            wrap_thought(
+                "Tavily search agent: Searching Tavily",
+                f"Searching Tavily for: {query}"
+            )
+        )
 
         logger.debug(f"Searching Tavily for: {query}")
 
@@ -92,11 +99,24 @@ def tavily_search_agent(state: SearchState) -> SearchState:
 
         logger.debug(f"Found {len(tavily_results)} results from Tavily")
 
+        yield to_chunk_data(
+            wrap_thought(
+                "Tavily search agent: Search complete",
+                f"Found {len(tavily_results)} results from Tavily search"
+            )
+        )
+
         # Update the state
         state.tavily_results = tavily_results
     except Exception as e:
         logger.error(f"Error in Tavily search: {str(e)}", exc_info=True)
         # Set empty results on error
         state.tavily_results = []
+        yield to_chunk_data(
+            wrap_thought(
+                "Tavily search agent: Error",
+                f"Error occurred during Tavily search: {str(e)}"
+            )
+        )
 
     return state

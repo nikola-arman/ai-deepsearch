@@ -5,7 +5,7 @@ os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 
-from typing import Dict, Any
+from typing import Dict, Any, Generator
 from deepsearch.models import SearchState
 from deepsearch.agents import (
     tavily_search_agent,
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 
-def run_simple_pipeline(query: str) -> Dict[str, Any]:
+def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
     """Run a simple pipeline without graph complexity."""
     try:
         # Initialize state
@@ -32,7 +32,7 @@ def run_simple_pipeline(query: str) -> Dict[str, Any]:
         # Step 1: Tavily Search
         logger.info("Step 1: Performing web search...")
         try:
-            state = tavily_search_agent(state)
+            state = yield from tavily_search_agent(state)
             logger.info(f"  Found {len(state.tavily_results)} results")
         except Exception as e:
             logger.error(f"  Error in web search: {str(e)}", exc_info=True)
@@ -41,7 +41,7 @@ def run_simple_pipeline(query: str) -> Dict[str, Any]:
         # Step 2: FAISS Indexing (semantic search)
         logger.info("Step 2: Performing semantic search...")
         try:
-            state = faiss_indexing_agent(state)
+            state = yield from faiss_indexing_agent(state)
             logger.info(f"  Found {len(state.faiss_results)} semantically relevant results")
         except Exception as e:
             logger.error(f"  Error in semantic search: {str(e)}", exc_info=True)
@@ -50,7 +50,7 @@ def run_simple_pipeline(query: str) -> Dict[str, Any]:
         # Step 3: BM25 Search (keyword search)
         logger.info("Step 3: Performing keyword search...")
         try:
-            state = bm25_search_agent(state)
+            state = yield from bm25_search_agent(state)
             logger.info(f"  Found {len(state.bm25_results)} keyword relevant results")
             logger.info(f"  Combined {len(state.combined_results)} total relevant results")
         except Exception as e:
@@ -63,7 +63,7 @@ def run_simple_pipeline(query: str) -> Dict[str, Any]:
         # Step 4: LLM Reasoning
         logger.info("Step 4: Generating answer...")
         try:
-            state = llama_reasoning_agent(state)
+            state = yield from llama_reasoning_agent(state)
             logger.info(f"  Confidence: {state.confidence_score}")
         except Exception as e:
             logger.error(f"  Error in reasoning: {str(e)}", exc_info=True)
@@ -99,7 +99,7 @@ def run_simple_pipeline(query: str) -> Dict[str, Any]:
             "has_error": True
         }
 
-def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, Any]:
+def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[bytes, None, Dict[str, Any]]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
         # Initialize state
@@ -110,7 +110,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, A
         logger.info("Step 1: Initial reasoning to analyze query and generate search queries...")
         try:
             # Initial call to deep_reasoning_agent will generate the queries
-            state = deep_reasoning_agent(state, max_iterations)
+            state = yield from deep_reasoning_agent(state, max_iterations)
             logger.info(f"  Generated {len(state.generated_queries)} initial search queries")
         except Exception as e:
             logger.error(f"  Error in initial reasoning: {str(e)}", exc_info=True)
@@ -142,7 +142,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, A
                 # Step 2: Tavily Search for this query
                 logger.info(f"    Performing web search...")
                 try:
-                    temp_state = tavily_search_agent(temp_state)
+                    temp_state = yield from tavily_search_agent(temp_state)
                     # Tag results with the query that produced them
                     for result in temp_state.tavily_results:
                         result.query = query
@@ -153,7 +153,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, A
                 # Step 3: FAISS Indexing (semantic search) for this query
                 logger.info(f"    Performing semantic search...")
                 try:
-                    temp_state = faiss_indexing_agent(temp_state)
+                    temp_state = yield from faiss_indexing_agent(temp_state)
                     # Tag results with the query that produced them
                     for result in temp_state.faiss_results:
                         result.query = query
@@ -164,7 +164,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, A
                 # Step 4: BM25 Search (keyword search) for this query
                 logger.info(f"    Performing keyword search...")
                 try:
-                    temp_state = bm25_search_agent(temp_state)
+                    temp_state = yield from bm25_search_agent(temp_state)
                     # Tag results with the query that produced them
                     for result in temp_state.bm25_results:
                         result.query = query
@@ -210,7 +210,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, A
             # Step 5: Deep Reasoning - analyze results and decide whether to continue
             logger.info(f"  Analyzing search results and determining next steps...")
             try:
-                state = deep_reasoning_agent(state, max_iterations)
+                state = yield from deep_reasoning_agent(state, max_iterations)
                 logger.info(f"  Search complete: {state.search_complete}")
                 if not state.search_complete:
                     logger.info(f"  Knowledge gaps identified: {len(state.knowledge_gaps)}")
@@ -228,7 +228,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, A
             logger.info("Maximum iterations reached, generating final answer...")
             try:
                 from deepsearch.agents.deep_reasoning import generate_final_answer
-                state = generate_final_answer(state)
+                state = yield from generate_final_answer(state)
             except Exception as e:
                 logger.error(f"Error generating final answer: {str(e)}", exc_info=True)
                 state.final_answer = "I reached the maximum number of search iterations but couldn't generate a comprehensive answer. Here's what I found: " + "\n".join([f"- {point}" for point in state.key_points])
@@ -270,12 +270,24 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, A
             "has_error": True
         }
 
+class GeneratorValue:
+    def __init__(self, gen):
+        self.gen = gen
 
+    def __iter__(self):
+        self.value = yield from self.gen
+        return self.value
+    
 def prompt(messages: list[dict[str, str]], **kwargs) -> str:
     assert len(messages) > 0, "received empty messages"
     query = messages[-1]['content']
 
-    res: Dict = run_deep_search_pipeline(query)
+    gen = GeneratorValue(run_deep_search_pipeline(query))
+    for chunk in gen:
+        print(chunk)
+    res: Dict = gen.value
+
+    # res: Dict = yield from run_deep_search_pipeline(query)
 
     sep = "-" * 30
     final_resp = res["answer"]

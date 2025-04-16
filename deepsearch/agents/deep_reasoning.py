@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Tuple
+from typing import Generator, List, Dict, Any, Tuple
 import os
 import json
 import logging
@@ -9,6 +9,7 @@ import re
 import datetime  # Add import for datetime module
 
 from deepsearch.models import SearchState, SearchResult
+from deepsearch.utils import to_chunk_data, wrap_thought
 
 # Set up logging
 logger = logging.getLogger("deepsearch.deep_reasoning")
@@ -399,7 +400,7 @@ def format_search_details(state: SearchState) -> str:
 
     return details
 
-def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchState:
+def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generator[bytes, None, SearchState]:
     """
     Uses deep reasoning to analyze results, identify knowledge gaps, and decide if further search is needed.
 
@@ -413,6 +414,12 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     # If this is the first iteration, generate initial search queries
     if state.current_iteration == 0:
         # Generate initial focused queries from the original query
+        yield to_chunk_data(
+            wrap_thought(
+                "Deep reasoning agent: Generating initial search queries",
+                f"Generating initial search queries from the original query: {state.original_query}"
+            )
+        )
         initial_queries = generate_initial_queries(state.original_query)
 
         # Store the generated queries
@@ -427,12 +434,25 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
         not state.faiss_results and
         not state.bm25_results and
         not state.tavily_results):
+        yield to_chunk_data(
+            wrap_thought(
+                "Deep reasoning agent: No results found.",
+                "No relevant search results were found. Ending search."
+            )
+        )
         # No results, set search as complete with appropriate message
         state.search_complete = True
         state.key_points = ["No relevant information found for the query."]
         state.final_answer = "I couldn't find relevant information to answer your query."
         state.confidence_score = 0.1
         return state
+
+    yield to_chunk_data(
+        wrap_thought(
+            "Deep reasoning agent: Analyzing search results",
+            f"Analyzing results from iteration {state.current_iteration}"
+        )
+    )
 
     # Initialize the LLM with a very low temperature for structured output
     llm = init_reasoning_llm(temperature=0.1)
@@ -501,6 +521,12 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
 
         # If we need to continue searching, add new queries
         if not state.search_complete and "new_queries" in analysis and analysis["new_queries"]:
+            yield to_chunk_data(
+                wrap_thought(
+                    "Deep reasoning agent: Identified knowledge gaps",
+                    f"Found {len(filtered_knowledge_gaps)} new knowledge gaps. Generating new search queries."
+                )
+            )
             state.generated_queries = analysis["new_queries"]
             logger.info(f"Generated {len(state.generated_queries)} new queries based on knowledge gaps")
             for i, query in enumerate(state.generated_queries):
@@ -511,6 +537,12 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
             logger.info(f"Reasoning: {analysis['reasoning']}")
 
     except json.JSONDecodeError:
+        yield to_chunk_data(
+            wrap_thought(
+                "Deep reasoning agent: Error parsing analysis",
+                "Encountered error parsing analysis output. Attempting recovery."
+            )
+        )
         logger.error(f"Failed to parse deep reasoning JSON output: {analysis_text[:100]}...")
         # Try to extract JSON-like content using regex
 
@@ -615,18 +647,36 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
 
             # If we need to continue searching, add new queries
             if not state.search_complete and "new_queries" in analysis and analysis["new_queries"]:
+                yield to_chunk_data(
+                    wrap_thought(
+                        "Recovered analysis",
+                        f"Successfully recovered analysis. Generated {len(analysis['new_queries'])} new queries."
+                    )
+                )
                 state.generated_queries = analysis["new_queries"]
                 logger.info(f"Generated {len(state.generated_queries)} new queries based on knowledge gaps")
                 for i, query in enumerate(state.generated_queries):
                     logger.info(f"  New query {i+1}: {query}")
 
         except Exception as e:
+            yield to_chunk_data(
+                wrap_thought(
+                    "Deep reasoning agent: Analysis failed",
+                    f"Failed to analyze search results: {str(e)}"
+                )
+            )
             logger.error(f"Failed to extract JSON data: {str(e)}")
             state.search_complete = True
             state.key_points = ["Error in analyzing search results."]
 
     # If we've reached the maximum iterations, force completion
     if state.current_iteration >= max_iterations:
+        yield to_chunk_data(
+            wrap_thought(
+                "Deep reasoning agent: Maximum iterations reached",
+                f"Reached maximum iterations ({max_iterations}). Concluding search."
+            )
+        )
         state.search_complete = True
         logger.info(f"Reached maximum iterations ({max_iterations}), forcing search completion")
 
@@ -635,11 +685,17 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
 
     # If search is complete, generate the final answer
     if state.search_complete:
-        state = generate_final_answer(state)
+        yield to_chunk_data(
+            wrap_thought(
+                "Deep reasoning agent: Generating final answer",
+                "Search complete. Generating comprehensive final answer."
+            )
+        )
+        state = yield from generate_final_answer(state)
 
     return state
 
-def generate_final_answer(state: SearchState) -> SearchState:
+def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchState]:
     """
     Generates the final, structured answer in a multi-stage process:
     1. Generate concise key points
@@ -660,6 +716,12 @@ def generate_final_answer(state: SearchState) -> SearchState:
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
 
     # Stage 1: Generate refined key points
+    yield to_chunk_data(
+        wrap_thought(
+            "Deep reasoning agent: Refining key points",
+            "Generating refined key points from search results"
+        )
+    )
     key_points_llm = init_reasoning_llm(temperature=0.2)
     key_points_prompt = PromptTemplate(
         input_variables=["original_query", "search_details", "key_points"],
@@ -678,6 +740,12 @@ def generate_final_answer(state: SearchState) -> SearchState:
     logger.info("Generated key points for final answer")
 
     # Stage 2: Generate direct answer
+    yield to_chunk_data(
+        wrap_thought(
+            "Generating final answer: Creating direct answer",
+            "Generating concise direct answer from key points"
+        )
+    )
     direct_answer_llm = init_reasoning_llm(temperature=0.3)
     direct_answer_prompt = PromptTemplate(
         input_variables=["original_query", "key_points", "search_details"],
@@ -696,6 +764,12 @@ def generate_final_answer(state: SearchState) -> SearchState:
     logger.info("Generated direct answer")
 
     # Stage 3: Generate detailed notes outline (section headings only)
+    yield to_chunk_data(
+        wrap_thought(
+            "Generating final answer: Planning detailed notes",
+            "Creating outline for detailed explanation"
+        )
+    )
     outline_llm = init_reasoning_llm(temperature=0.3)
     outline_prompt = PromptTemplate(
         input_variables=["original_query", "key_points", "direct_answer", "search_details"],
@@ -727,6 +801,12 @@ def generate_final_answer(state: SearchState) -> SearchState:
     logger.info(f"Identified {len(section_headings)} sections to expand")
 
     # Stage 4: Generate detailed content for each section
+    yield to_chunk_data(
+        wrap_thought(
+            "Deep reasoning agent: Expanding sections",
+            f"Generating detailed content for {len(section_headings)} sections"
+        )
+    )
     section_llm = init_reasoning_llm(temperature=0.4)
     section_prompt = PromptTemplate(
         input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading"],
