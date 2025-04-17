@@ -18,8 +18,8 @@ logger = logging.getLogger("deepsearch.deep_reasoning")
 load_dotenv()
 
 # Get the OpenAI-compatible API base URL and API key
-openai_api_base = os.environ.get("OPENAI_API_BASE", "http://localhost:8080/v1")
-openai_api_key = os.environ.get("OPENAI_API_KEY", "not-needed")
+openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")
+openai_api_key = os.environ.get("LLM_API_KEY", "not-needed")
 
 # Define the prompt template for analysis and reasoning
 REASONING_TEMPLATE = """You are an expert research analyst and reasoning agent. Your task is to analyze search results,
