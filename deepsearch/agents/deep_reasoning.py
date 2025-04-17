@@ -863,13 +863,18 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
     logger.info("Generated section outline for detailed notes")
 
+    print("Section outline:")
+    print(section_outline)
+
     # Parse the section headings from the outline
     section_headings = []
     for line in section_outline.strip().split('\n'):
         # Match lines that contain section headings (## Something)
         if '##' in line:
-            # Extract just the heading text, removing numbers and other artifacts
+            # Extract just the heading text, removing numbers, source citations and other artifacts
             heading = line.split('##')[1].strip()
+            if '(' in heading:  # Remove source citation if present
+                heading = heading.split('(')[0].strip()
             if heading:  # Skip empty headings
                 section_headings.append(heading)
 

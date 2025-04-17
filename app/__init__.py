@@ -105,8 +105,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         # Initialize state
         state = SearchState(original_query=query)
 
-        print("Initial state:")
-        print(state.model_dump_json(indent=2))
+        # print("Initial state:")
+        # print(state.model_dump_json(indent=2))
 
         # Instead of using query_expansion_agent, let the deep_reasoning_agent handle initial query generation
         # This avoids potential conflicts and allows for better reasoning about query generation
@@ -123,8 +123,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
 
         # Iterative search loop
         while not state.search_complete and state.current_iteration < max_iterations:
-            print("State before iteration {}:".format(state.current_iteration))
-            print(state.model_dump_json(indent=2))
+            # print("State before iteration {}:".format(state.current_iteration))
+            # print(state.model_dump_json(indent=2))
 
             iteration = state.current_iteration
             logger.info(f"Beginning search iteration {iteration}...")
@@ -152,8 +152,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                     # Tag results with the query that produced them
                     for result in temp_state.tavily_results:
                         result.query = query
-                    print("Temp state after web search:")
-                    print(temp_state.model_dump_json(indent=2))
+                    # print("Temp state after web search:")
+                    # print(temp_state.model_dump_json(indent=2))
                     logger.info(f"    Found {len(temp_state.tavily_results)} web results")
                 except Exception as e:
                     logger.error(f"    Error in web search: {str(e)}", exc_info=True)
@@ -165,8 +165,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                     # Tag results with the query that produced them
                     for result in temp_state.faiss_results:
                         result.query = query
-                    print("Temp state after semantic search:")
-                    print(temp_state.model_dump_json(indent=2))
+                    # print("Temp state after semantic search:")
+                    # print(temp_state.model_dump_json(indent=2))
                     logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
                 except Exception as e:
                     logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
@@ -178,8 +178,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                     # Tag results with the query that produced them
                     for result in temp_state.bm25_results:
                         result.query = query
-                    print("Temp state after keyword search:")
-                    print(temp_state.model_dump_json(indent=2))
+                    # print("Temp state after keyword search:")
+                    # print(temp_state.model_dump_json(indent=2))
                     logger.info(f"    Found {len(temp_state.bm25_results)} keyword results")
                 except Exception as e:
                     logger.error(f"    Error in keyword search: {str(e)}", exc_info=True)
@@ -235,8 +235,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 state.final_answer = "I'm sorry, but I couldn't properly analyze the search results due to a technical issue. Please try again with a different query."
                 state.confidence_score = 0.1
 
-        print("State after search complete")
-        print(state.model_dump_json(indent=2))
+        with open(".output/final_state.json", "w") as f:
+            f.write(state.model_dump_json(indent=2))
 
         # Prepare the response
         if not state.search_complete:
@@ -311,7 +311,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> str:
     if len(res["sources"]) > 0:
         unique_results = {}
         for result in res["sources"]:
-            key = result.url
+            key = result["url"]
             if key not in unique_results:
                 unique_results[key] = result
 
@@ -323,13 +323,13 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> str:
         for item in res["sources"]:
             final_resp += "- [{title}]({url})\n".format(**item)
 
-    if not res["has_error"]:
-        if final_resp.strip()[-1] != '\n':
-            final_resp += '\n'
+    # if not res["has_error"]:
+    #     if final_resp.strip()[-1] != '\n':
+    #         final_resp += '\n'
 
-        final_resp += "{sep}\nConfidence score: {confidence}".format(
-            confidence=res["confidence"],
-            sep=sep
-        )
+    #     final_resp += "{sep}\nConfidence score: {confidence}".format(
+    #         confidence=res["confidence"],
+    #         sep=sep
+    #     )
 
     return final_resp
