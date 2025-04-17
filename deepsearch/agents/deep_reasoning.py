@@ -67,8 +67,8 @@ ANSWER_TEMPLATE = """You are an expert research analyst and outline creator. You
 
 ORIGINAL QUERY: {original_query}
 
-KEY POINTS FROM SEARCH RESULTS:
-{key_points}
+SEARCH CONTEXT:
+{search_context}
 
 SEARCH DETAILS:
 {search_details}
@@ -84,6 +84,14 @@ Your task is to formulate an OUTLINE ONLY for a complete answer with three disti
    c. Note any specific technical details, examples, or comparisons that should be included
    d. Suggest logical flow for presenting the information
 
+IMPORTANT RULES:
+1. ONLY include information that is directly supported by the search context
+2. DO NOT make up or infer information not present in the search results
+3. If information is missing or unclear, note it as a limitation rather than making assumptions
+4. Clearly indicate which search results support each point
+5. Use direct quotes from search results when appropriate
+6. Maintain academic rigor and avoid speculation
+
 Format your outline using proper markdown sections. THIS IS ONLY AN OUTLINE - do not write the full content.
 Make the outline detailed enough that a content writer can easily expand it into a complete, informative answer.
 
@@ -92,22 +100,22 @@ The outline should follow this structure:
 # OUTLINE: [Query Title]
 
 ## 1. KEY POINTS
-- [Key point 1]
-- [Key point 2]
+- [Key point 1] (Source: [result title/url])
+- [Key point 2] (Source: [result title/url])
 ...
 
 ## 2. DIRECT ANSWER
-[Brief description of what the direct answer should cover]
+[Brief description of what the direct answer should cover, with source references]
 
 ## 3. DETAILED NOTES
 ### [Section Heading 1]
-- [Subpoint 1]
-- [Subpoint 2]
+- [Subpoint 1] (Source: [result title/url])
+- [Subpoint 2] (Source: [result title/url])
 ...
 
 ### [Section Heading 2]
-- [Subpoint 1]
-- [Subpoint 2]
+- [Subpoint 1] (Source: [result title/url])
+- [Subpoint 2] (Source: [result title/url])
 ...
 ```
 """
@@ -116,6 +124,9 @@ The outline should follow this structure:
 WRITER_TEMPLATE = """You are an expert content writer. Your task is to expand an outline into a comprehensive, detailed answer.
 
 ORIGINAL QUERY: {original_query}
+
+SEARCH CONTEXT:
+{search_context}
 
 OUTLINE:
 {outline}
@@ -131,16 +142,28 @@ For each section:
 3. Include technical details, examples, and comparisons suggested in the outline
 4. Ensure smooth transitions between sections
 5. Use an authoritative, clear writing style
-6. Avoid filler phrases like "based on the search results" or "according to the information provided"
+
+IMPORTANT RULES:
+1. ONLY include information that is directly supported by the search context
+2. DO NOT make up or infer information not present in the search results
+3. If information is missing or unclear, note it as a limitation rather than making assumptions
+4. Clearly cite sources for each piece of information using the format: [Source: title/url]
+5. Use direct quotes from search results when appropriate
+6. Maintain academic rigor and avoid speculation
+7. If the search context is insufficient to answer a point, clearly state this limitation
+8. Do not use phrases like "based on the search results" or "according to the information provided" - instead cite specific sources
 
 Your expanded answer should be thorough, informative, and directly address the original query,
-while carefully following the outline structure.
+while carefully following the outline structure and maintaining strict adherence to the search context.
 """
 
 # Define the prompt template for generating key points
 KEY_POINTS_TEMPLATE = """You are an expert research analyst. Your task is to extract the most important key points from search results.
 
 ORIGINAL QUERY: {original_query}
+
+SEARCH CONTEXT:
+{search_context}
 
 SEARCH DETAILS:
 {search_details}
@@ -152,9 +175,17 @@ INSTRUCTIONS:
 Create a concise list of 5-7 bullet points that represent the most important findings and facts related to the query.
 Each point should be clear, specific, and directly relevant to answering the original query.
 
+IMPORTANT RULES:
+1. ONLY include information that is directly supported by the search context
+2. DO NOT make up or infer information not present in the search results
+3. If information is missing or unclear, note it as a limitation rather than making assumptions
+4. Clearly cite sources for each point using the format: [Source: title/url]
+5. Use direct quotes from search results when appropriate
+6. Maintain academic rigor and avoid speculation
+
 Format your response as a markdown list of bullet points ONLY:
-- Key point 1
-- Key point 2
+- Key point 1 (Source: [result title/url])
+- Key point 2 (Source: [result title/url])
 ...
 
 Do not include any introduction, explanation, or conclusion outside of the bullet points.
@@ -164,6 +195,9 @@ Do not include any introduction, explanation, or conclusion outside of the bulle
 DIRECT_ANSWER_TEMPLATE = """You are an expert content writer. Your task is to formulate a direct answer to the original query.
 
 ORIGINAL QUERY: {original_query}
+
+SEARCH CONTEXT:
+{search_context}
 
 KEY POINTS:
 {key_points}
@@ -177,10 +211,18 @@ Create a well-rounded, complete direct answer to the original query. The answer 
 2. Address the core question directly without tangents
 3. Synthesize the key points into a coherent response
 4. Use an authoritative, clear writing style
-5. Avoid phrases like "based on the search results" or "according to the information provided"
-6. Use line breaks between paragraphs for better readability
-7. Use **bold** for important terms and concepts
-8. Use *italics* for emphasis when appropriate
+5. Use line breaks between paragraphs for better readability
+6. Use **bold** for important terms and concepts
+7. Use *italics* for emphasis when appropriate
+
+IMPORTANT RULES:
+1. ONLY include information that is directly supported by the search context
+2. DO NOT make up or infer information not present in the search results
+3. If information is missing or unclear, note it as a limitation rather than making assumptions
+4. Clearly cite sources for each piece of information using the format: [Source: title/url]
+5. Use direct quotes from search results when appropriate
+6. Maintain academic rigor and avoid speculation
+7. If the search context is insufficient to answer a point, clearly state this limitation
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, or section markers.
@@ -190,6 +232,9 @@ Do not include any headings, bullet points, or section markers.
 DETAILED_NOTES_TEMPLATE = """You are an expert content writer. Your task is to provide an outline of detailed sections for expanding on the direct answer.
 
 ORIGINAL QUERY: {original_query}
+
+SEARCH CONTEXT:
+{search_context}
 
 KEY POINTS:
 {key_points}
@@ -206,10 +251,16 @@ Create an outline for detailed, structured notes that expand on the direct answe
 2. Focus on clear, descriptive section titles that reflect the key aspects of the topic
 3. Keep the outline simple - just the section headings in markdown format
 
+IMPORTANT RULES:
+1. ONLY include sections that can be fully supported by the search context
+2. DO NOT create sections that would require information not present in the search results
+3. Clearly indicate which search results support each section
+4. If certain aspects cannot be covered due to limited search context, note this limitation
+
 Format your response as a numbered list of section headings in markdown format, like this:
-1. ## Section Heading 1
-2. ## Section Heading 2
-3. ## Section Heading 3
+1. ## Section Heading 1 (Source: [result title/url])
+2. ## Section Heading 2 (Source: [result title/url])
+3. ## Section Heading 3 (Source: [result title/url])
 
 DO NOT include any content under these headings - just provide the section headings.
 Each section will be expanded in a separate step. Do not include an introduction or conclusion.
@@ -219,6 +270,9 @@ Each section will be expanded in a separate step. Do not include an introduction
 SECTION_CONTENT_TEMPLATE = """You are an expert content writer. Your task is to write detailed content for a specific section of a comprehensive report.
 
 ORIGINAL QUERY: {original_query}
+
+SEARCH CONTEXT:
+{search_context}
 
 KEY POINTS:
 {key_points}
@@ -246,11 +300,21 @@ Create rich, detailed content for the section "{section_heading}". Your content 
 7. Use *italics* for emphasis when appropriate
 8. Create subsections with ### heading level when needed to organize complex information
 
+IMPORTANT RULES:
+1. ONLY include information that is directly supported by the search context
+2. DO NOT make up or infer information not present in the search results
+3. If information is missing or unclear, note it as a limitation rather than making assumptions
+4. Clearly cite sources for each piece of information using the format: [Source: title/url]
+5. Use direct quotes from search results when appropriate
+6. Maintain academic rigor and avoid speculation
+7. If the search context is insufficient to cover a point, clearly state this limitation
+8. Focus ONLY on this section without repeating information from other sections
+
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
 
-Focus ONLY on this section without repeating information from other sections.
-Provide in-depth, authoritative content with specific facts, figures, and examples where possible.
+Provide in-depth, authoritative content with specific facts, figures, and examples where possible,
+while strictly adhering to the information available in the search context.
 """
 
 # Define the template for initial query generation
@@ -712,6 +776,14 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     # Format the search details
     search_details = format_search_details(state)
 
+    # Format search context from combined results
+    search_context = ""
+    if state.combined_results:
+        search_context = "\n\n".join([
+            f"Source: {result.title}\nURL: {result.url}\nContent: {result.content}"
+            for result in state.combined_results
+        ])
+
     # Format the key points from the deep reasoning
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
 
@@ -724,7 +796,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     )
     key_points_llm = init_reasoning_llm(temperature=0.2)
     key_points_prompt = PromptTemplate(
-        input_variables=["original_query", "search_details", "key_points"],
+        input_variables=["original_query", "search_details", "key_points", "search_context"],
         template=KEY_POINTS_TEMPLATE
     )
     key_points_chain = key_points_prompt | key_points_llm
@@ -732,7 +804,8 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     key_points_response = key_points_chain.invoke({
         "original_query": state.original_query,
         "search_details": search_details,
-        "key_points": initial_key_points
+        "key_points": initial_key_points,
+        "search_context": search_context
     })
 
     # Extract the content if it's a message object
@@ -748,7 +821,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     )
     direct_answer_llm = init_reasoning_llm(temperature=0.3)
     direct_answer_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "search_details"],
+        input_variables=["original_query", "key_points", "search_details", "search_context"],
         template=DIRECT_ANSWER_TEMPLATE
     )
     direct_answer_chain = direct_answer_prompt | direct_answer_llm
@@ -756,7 +829,8 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     direct_answer_response = direct_answer_chain.invoke({
         "original_query": state.original_query,
         "key_points": key_points,
-        "search_details": search_details
+        "search_details": search_details,
+        "search_context": search_context
     })
 
     # Extract the content if it's a message object
@@ -772,7 +846,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     )
     outline_llm = init_reasoning_llm(temperature=0.3)
     outline_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "direct_answer", "search_details"],
+        input_variables=["original_query", "key_points", "direct_answer", "search_details", "search_context"],
         template=DETAILED_NOTES_TEMPLATE
     )
     outline_chain = outline_prompt | outline_llm
@@ -781,7 +855,8 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
         "original_query": state.original_query,
         "key_points": key_points,
         "direct_answer": direct_answer,
-        "search_details": search_details
+        "search_details": search_details,
+        "search_context": search_context
     })
 
     # Extract the content if it's a message object
@@ -809,7 +884,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     )
     section_llm = init_reasoning_llm(temperature=0.4)
     section_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading"],
+        input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading", "search_context"],
         template=SECTION_CONTENT_TEMPLATE
     )
     section_chain = section_prompt | section_llm
@@ -824,7 +899,8 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
             "key_points": key_points,
             "direct_answer": direct_answer,
             "search_details": search_details,
-            "section_heading": heading
+            "section_heading": heading,
+            "search_context": search_context
         })
 
         # Extract the content if it's a message object
@@ -873,7 +949,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     # Update the state with the final answer
     state.final_answer = final_answer.strip()
 
-    # Set a confidence score
-    state.confidence_score = 0.8 if state.key_points else 0.5
+    # Set a confidence score based on search context availability
+    state.confidence_score = 0.8 if state.combined_results and state.key_points else 0.5
 
     return state

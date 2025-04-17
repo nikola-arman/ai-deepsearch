@@ -105,6 +105,9 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         # Initialize state
         state = SearchState(original_query=query)
 
+        print("Initial state:")
+        print(state.model_dump_json(indent=2))
+
         # Instead of using query_expansion_agent, let the deep_reasoning_agent handle initial query generation
         # This avoids potential conflicts and allows for better reasoning about query generation
         logger.info("Step 1: Initial reasoning to analyze query and generate search queries...")
@@ -120,6 +123,9 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
 
         # Iterative search loop
         while not state.search_complete and state.current_iteration < max_iterations:
+            print("State before iteration {}:".format(state.current_iteration))
+            print(state.model_dump_json(indent=2))
+
             iteration = state.current_iteration
             logger.info(f"Beginning search iteration {iteration}...")
 
@@ -146,6 +152,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                     # Tag results with the query that produced them
                     for result in temp_state.tavily_results:
                         result.query = query
+                    print("Temp state after web search:")
+                    print(temp_state.model_dump_json(indent=2))
                     logger.info(f"    Found {len(temp_state.tavily_results)} web results")
                 except Exception as e:
                     logger.error(f"    Error in web search: {str(e)}", exc_info=True)
@@ -157,6 +165,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                     # Tag results with the query that produced them
                     for result in temp_state.faiss_results:
                         result.query = query
+                    print("Temp state after semantic search:")
+                    print(temp_state.model_dump_json(indent=2))
                     logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
                 except Exception as e:
                     logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
@@ -168,6 +178,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                     # Tag results with the query that produced them
                     for result in temp_state.bm25_results:
                         result.query = query
+                    print("Temp state after keyword search:")
+                    print(temp_state.model_dump_json(indent=2))
                     logger.info(f"    Found {len(temp_state.bm25_results)} keyword results")
                 except Exception as e:
                     logger.error(f"    Error in keyword search: {str(e)}", exc_info=True)
@@ -200,9 +212,10 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 unique_results = {}
                 for result in state.combined_results:
                     # Keep the highest scoring result for each URL
-                    if result.url not in unique_results or (result.score is not None and
-                        (unique_results[result.url].score is None or result.score > unique_results[result.url].score)):
-                        unique_results[result.url] = result
+                    key = result.url + "\n" + result.content
+                    if key not in unique_results or (result.score is not None and
+                        (unique_results[key].score is None or result.score > unique_results[key].score)):
+                        unique_results[key] = result
 
                 state.combined_results = list(unique_results.values())
                 logger.info(f"  Deduplicated to {len(state.combined_results)} unique results")
@@ -222,6 +235,9 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 state.final_answer = "I'm sorry, but I couldn't properly analyze the search results due to a technical issue. Please try again with a different query."
                 state.confidence_score = 0.1
 
+        print("State after search complete")
+        print(state.model_dump_json(indent=2))
+
         # Prepare the response
         if not state.search_complete:
             # If we exited the loop due to max iterations, generate the final answer
@@ -237,7 +253,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         # Return the results
         sources = []
         if state.combined_results:
-            for res in state.combined_results[:5]:  # Limit to 5 sources
+            for res in state.combined_results:  # Limit to 5 sources
                 sources.append({
                     "title": res.title,
                     "url": res.url
@@ -278,21 +294,30 @@ class GeneratorValue:
         self.value = yield from self.gen
         return self.value
     
-def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, str]:
+def prompt(messages: list[dict[str, str]], **kwargs) -> str:
     assert len(messages) > 0, "received empty messages"
     query = messages[-1]['content']
 
-    # gen = GeneratorValue(run_deep_search_pipeline(query))
-    # for chunk in gen:
-    #     print(chunk)
-    # res: Dict = gen.value
+    gen = GeneratorValue(run_deep_search_pipeline(query))
+    for chunk in gen:
+        print(chunk)
+    res: Dict = gen.value
 
-    res: Dict = yield from run_deep_search_pipeline(query)
+    # res: Dict = yield from run_deep_search_pipeline(query)
 
     sep = "-" * 30
     final_resp = res["answer"]
 
     if len(res["sources"]) > 0:
+        unique_results = {}
+        for result in res["sources"]:
+            key = result.url
+            if key not in unique_results:
+                unique_results[key] = result
+
+        res["sources"] = list(unique_results.values())
+        logger.info(f"  Deduplicated to {len(res['sources'])} unique sources")
+
         final_resp += "\n## References:\n"
 
         for item in res["sources"]:
