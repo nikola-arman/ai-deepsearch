@@ -88,7 +88,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly indicate which search results support each point
+4. Clearly indicate which search results support each point using markdown hyperlinks
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 
@@ -100,8 +100,8 @@ The outline should follow this structure:
 # OUTLINE: [Query Title]
 
 ## 1. KEY POINTS
-- [Key point 1] (Source: [result title/url])
-- [Key point 2] (Source: [result title/url])
+- [Key point 1] ([Source Title](source_url))
+- [Key point 2] ([Source Title](source_url))
 ...
 
 ## 2. DIRECT ANSWER
@@ -109,13 +109,13 @@ The outline should follow this structure:
 
 ## 3. DETAILED NOTES
 ### [Section Heading 1]
-- [Subpoint 1] (Source: [result title/url])
-- [Subpoint 2] (Source: [result title/url])
+- [Subpoint 1] ([Source Title](source_url))
+- [Subpoint 2] ([Source Title](source_url))
 ...
 
 ### [Section Heading 2]
-- [Subpoint 1] (Source: [result title/url])
-- [Subpoint 2] (Source: [result title/url])
+- [Subpoint 1] ([Source Title](source_url))
+- [Subpoint 2] ([Source Title](source_url))
 ...
 ```
 """
@@ -147,7 +147,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly cite sources for each piece of information using the format: [Source: title/url]
+4. Clearly cite sources for each piece of information using markdown hyperlinks: ([Source Title](source_url))
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to answer a point, clearly state this limitation
@@ -179,13 +179,13 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly cite sources for each point using the format: [Source: title/url]
+4. Clearly cite sources for each point using markdown hyperlinks: ([Source Title](source_url))
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 
 Format your response as a markdown list of bullet points ONLY:
-- Key point 1 (Source: [result title/url])
-- Key point 2 (Source: [result title/url])
+- Key point 1 ([Source Title](source_url))
+- Key point 2 ([Source Title](source_url))
 ...
 
 Do not include any introduction, explanation, or conclusion outside of the bullet points.
@@ -219,7 +219,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly cite sources for each piece of information using the format: [Source: title/url]
+4. Clearly cite sources for each piece of information using markdown hyperlinks: ([Source Title](source_url))
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to answer a point, clearly state this limitation
@@ -254,13 +254,13 @@ Create an outline for detailed, structured notes that expand on the direct answe
 IMPORTANT RULES:
 1. ONLY include sections that can be fully supported by the search context
 2. DO NOT create sections that would require information not present in the search results
-3. Clearly indicate which search results support each section
+3. Clearly indicate which search results support each section using markdown hyperlinks
 4. If certain aspects cannot be covered due to limited search context, note this limitation
 
 Format your response as a numbered list of section headings in markdown format, like this:
-1. ## Section Heading 1 (Source: [result title/url])
-2. ## Section Heading 2 (Source: [result title/url])
-3. ## Section Heading 3 (Source: [result title/url])
+1. ## Section Heading 1 ([Source Title](source_url))
+2. ## Section Heading 2 ([Source Title](source_url))
+3. ## Section Heading 3 ([Source Title](source_url))
 
 DO NOT include any content under these headings - just provide the section headings.
 Each section will be expanded in a separate step. Do not include an introduction or conclusion.
@@ -304,7 +304,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly cite sources for each piece of information using the format: [Source: title/url]
+4. Clearly cite sources for each piece of information using markdown hyperlinks: ([Source Title](source_url))
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to cover a point, clearly state this limitation

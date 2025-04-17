@@ -1,6 +1,7 @@
 import eai_http_middleware # do not remove this
 
 import os
+
 os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
@@ -15,10 +16,18 @@ from deepsearch.agents import (
     query_expansion_agent,
     deep_reasoning_agent
 )
+from deepsearch.agents.deep_reasoning import init_reasoning_llm
 
 import logging
 logger = logging.getLogger(__name__)
 
+from langchain.prompts import PromptTemplate
+from deepsearch.utils import to_chunk_data, wrap_thought
+
+def write_state_to_file(state: SearchState):
+    os.makedirs("output", exist_ok=True)
+    with open("output/final_state.json", "w") as f:
+        f.write(state.model_dump_json(indent=2))
 
 
 def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
@@ -28,48 +37,61 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
         state = SearchState(original_query=query)
 
         logger.info(f"Using query: {state.original_query}")
+        yield to_chunk_data(wrap_thought("Initializing simple search pipeline"))
 
         # Step 1: Tavily Search
         logger.info("Step 1: Performing web search...")
+        yield to_chunk_data(wrap_thought("Performing web search..."))
         try:
             state = yield from tavily_search_agent(state)
             logger.info(f"  Found {len(state.tavily_results)} results")
+            yield to_chunk_data(wrap_thought("Web search complete", f"Found {len(state.tavily_results)} results"))
         except Exception as e:
             logger.error(f"  Error in web search: {str(e)}", exc_info=True)
             state.tavily_results = []
+            yield to_chunk_data(wrap_thought("Web search error", str(e)))
 
         # Step 2: FAISS Indexing (semantic search)
         logger.info("Step 2: Performing semantic search...")
+        yield to_chunk_data(wrap_thought("Performing semantic search..."))
         try:
             state = yield from faiss_indexing_agent(state)
             logger.info(f"  Found {len(state.faiss_results)} semantically relevant results")
+            yield to_chunk_data(wrap_thought("Semantic search complete", f"Found {len(state.faiss_results)} semantically relevant results"))
         except Exception as e:
             logger.error(f"  Error in semantic search: {str(e)}", exc_info=True)
             state.faiss_results = []
+            yield to_chunk_data(wrap_thought("Semantic search error", str(e)))
 
         # Step 3: BM25 Search (keyword search)
         logger.info("Step 3: Performing keyword search...")
+        yield to_chunk_data(wrap_thought("Performing keyword search..."))
         try:
             state = yield from bm25_search_agent(state)
             logger.info(f"  Found {len(state.bm25_results)} keyword relevant results")
             logger.info(f"  Combined {len(state.combined_results)} total relevant results")
+            yield to_chunk_data(wrap_thought("Keyword search complete", f"Found {len(state.bm25_results)} keyword relevant results and {len(state.combined_results)} total results"))
         except Exception as e:
             logger.error(f"  Error in keyword search: {str(e)}", exc_info=True)
             state.bm25_results = []
             # Ensure we have combined results even if BM25 fails
             if not state.combined_results:
                 state.combined_results = state.faiss_results + state.tavily_results
+            yield to_chunk_data(wrap_thought("Keyword search error", str(e)))
 
         # Step 4: LLM Reasoning
         logger.info("Step 4: Generating answer...")
+        yield to_chunk_data(wrap_thought("Generating answer..."))
         try:
             state = yield from llama_reasoning_agent(state)
             logger.info(f"  Confidence: {state.confidence_score}")
+            yield to_chunk_data(wrap_thought("Answer generation complete", f"Generated answer with confidence: {state.confidence_score}"))
         except Exception as e:
             logger.error(f"  Error in reasoning: {str(e)}", exc_info=True)
             # Provide a fallback answer
             state.final_answer = "I'm sorry, but I couldn't generate a proper answer for your query due to a technical issue. Please try again with a different query."
             state.confidence_score = 0.1
+            yield to_chunk_data(wrap_thought("Reasoning error", str(e)))
 
         # Return the results
         sources = []
@@ -80,6 +102,8 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
                     "url": res.url
                 })
 
+        write_state_to_file(state)
+
         return {
             "original_query": state.original_query,
             "answer": state.final_answer,
@@ -89,8 +113,11 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
         }
 
     except Exception as e:
+        write_state_to_file(state)
+
         # Handle any unexpected errors
         logger.error(f"Unexpected error in pipeline: {str(e)}", exc_info=True)
+        yield to_chunk_data(wrap_thought("Pipeline error", f"Unexpected error: {str(e)}"))
         return {
             "original_query": query,
             "answer": "An unexpected error occurred while processing your query. Please try again later.",
@@ -235,9 +262,6 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 state.final_answer = "I'm sorry, but I couldn't properly analyze the search results due to a technical issue. Please try again with a different query."
                 state.confidence_score = 0.1
 
-        with open(".output/final_state.json", "w") as f:
-            f.write(state.model_dump_json(indent=2))
-
         # Prepare the response
         if not state.search_complete:
             # If we exited the loop due to max iterations, generate the final answer
@@ -263,6 +287,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         answer = state.final_answer
         key_points = state.key_points if state.key_points else []
         detailed_notes = state.detailed_notes if state.detailed_notes else None
+        
+        write_state_to_file(state)
 
         return {
             "original_query": state.original_query,
@@ -276,6 +302,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
             "has_error": False
         }
     except Exception as e:
+        write_state_to_file(state)
+
         # Handle any unexpected errors
         logger.error(f"Unexpected error in deep search pipeline: {str(e)}", exc_info=True)
         return {
@@ -294,16 +322,78 @@ class GeneratorValue:
         self.value = yield from self.gen
         return self.value
     
+def detect_query_complexity(query: str) -> bool:
+    """
+    Analyze the query to determine if it requires a simple or complex search pipeline.
+    
+    Args:
+        query: The user's query string
+        
+    Returns:
+        bool: True if the query is complex and requires deep search, False if it's simple
+    """
+    # Initialize LLM for complexity analysis
+    llm = init_reasoning_llm()
+
+    # Create prompt for complexity analysis
+    complexity_prompt = """Analyze the following query and determine if it requires a simple or complex search approach.
+
+QUERY: {query}
+
+Consider the following factors:
+1. Does the query ask for a simple fact or definition that can be answered in a few sentences?
+2. Does the query require gathering and synthesizing information from multiple sources?
+3. Is the query open-ended or exploratory in nature?
+4. Does the query require comparing different perspectives or analyzing trends?
+5. Would answering the query benefit from multiple search iterations?
+
+Respond with ONLY "simple" or "complex" based on your analysis.
+"""
+
+    # Create the prompt template
+    prompt_template = PromptTemplate(
+        input_variables=["query"],
+        template=complexity_prompt
+    )
+
+    # Create the chain
+    chain = prompt_template | llm
+
+    # Get the response
+    response = chain.invoke({"query": query})
+    
+    # Extract the content if it's a message object
+    complexity = response.content if hasattr(response, 'content') else response
+    
+    # Clean up the response
+    complexity = complexity.strip().lower()
+
+    print(f"Query complexity: {complexity}")
+    
+    # Return False for simple queries, True for complex ones
+    return complexity != "simple"
+
 def prompt(messages: list[dict[str, str]], **kwargs) -> str:
     assert len(messages) > 0, "received empty messages"
     query = messages[-1]['content']
 
-    gen = GeneratorValue(run_deep_search_pipeline(query))
+    # Detect query complexity
+    logger.info("Analyzing query complexity...")
+    is_complex = detect_query_complexity(query)
+    logger.info(f"Query complexity: {'complex' if is_complex else 'simple'}")
+
+    # Choose appropriate pipeline based on complexity
+    if is_complex:
+        logger.info("Using deep search pipeline for complex query")
+        gen = GeneratorValue(run_deep_search_pipeline(query))
+    else:
+        logger.info("Using simple pipeline for straightforward query")
+        gen = GeneratorValue(run_simple_pipeline(query))
+
+    # Process the pipeline
     for chunk in gen:
         print(chunk)
     res: Dict = gen.value
-
-    # res: Dict = yield from run_deep_search_pipeline(query)
 
     sep = "-" * 30
     final_resp = res["answer"]
@@ -322,14 +412,5 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> str:
 
         for item in res["sources"]:
             final_resp += "- [{title}]({url})\n".format(**item)
-
-    # if not res["has_error"]:
-    #     if final_resp.strip()[-1] != '\n':
-    #         final_resp += '\n'
-
-    #     final_resp += "{sep}\nConfidence score: {confidence}".format(
-    #         confidence=res["confidence"],
-    #         sep=sep
-    #     )
 
     return final_resp

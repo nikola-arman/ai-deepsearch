@@ -1,5 +1,5 @@
 docker run --rm -it --network=agent -p 7000:80 \
-    --volume $(pwd)/.output:/workspace/.output \
+    --volume $(pwd)/output:/workspace/output \
     -e LLM_BASE_URL="$LLM_BASE_URL" \
     -e LLM_API_KEY="$LLM_API_KEY" \
     -e LLM_MODEL_ID="$LLM_MODEL_ID" \

@@ -31,7 +31,7 @@ def init_embedding_model():
     try:
         # Use OpenAI-compatible embeddings from the server
         embeddings = OpenAIEmbeddings(
-            model=os.getenv("EMBEDDING_MODEL_ID", "text-embedding-ada-002"),  # Default to a known model
+            model=os.getenv("EMBEDDING_MODEL_ID", "text-embedding-3-small"),  # Default to a known model
             openai_api_key=openai_api_key,
             openai_api_base=openai_api_base,
             check_embedding_ctx_length=False,
