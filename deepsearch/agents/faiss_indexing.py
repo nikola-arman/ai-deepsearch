@@ -285,22 +285,22 @@ def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indi
 
 def faiss_indexing_agent(state: SearchState) -> Generator[bytes, None, SearchState]:
     """
-    Builds a FAISS index on-the-fly from Tavily search results and performs vector search.
+    Builds a FAISS index on-the-fly from search results and performs vector search.
 
     Args:
-        state: The current search state with Tavily search results
+        state: The current search state with search results
 
     Returns:
         Updated state with FAISS search results
     """
-    # Check if we have Tavily results to work with
-    if not state.tavily_results or len(state.tavily_results) == 0:
+    # Check if we have search results to work with
+    if not state.search_results or len(state.search_results) == 0:
         # If no results, skip this agent
-        logger.info("No Tavily results available for FAISS indexing")
+        logger.info("No search results available for FAISS indexing")
         yield to_chunk_data(
             wrap_thought(
                 "FAISS indexing agent: No results",
-                "No Tavily results available for FAISS indexing"
+                "No search results available for FAISS indexing"
             )
         )
         state.faiss_results = []
@@ -308,16 +308,16 @@ def faiss_indexing_agent(state: SearchState) -> Generator[bytes, None, SearchSta
 
     # Ensure we have at least some content to work with
     valid_results = [
-        r for r in state.tavily_results if r.content and isinstance(r.content, str) and len(r.content.strip()) > 0
+        r for r in state.search_results if r.content and isinstance(r.content, str) and len(r.content.strip()) > 0
     ]
 
     if not valid_results:
         # If no valid content in results, skip FAISS
-        logger.info("No valid content in Tavily results for FAISS indexing")
+        logger.info("No valid content in search results for FAISS indexing")
         yield to_chunk_data(
             wrap_thought(
                 "FAISS indexing agent: No valid content",
-                "No valid content in Tavily results for FAISS indexing"
+                "No valid content in search results for FAISS indexing"
             )
         )
         state.faiss_results = []

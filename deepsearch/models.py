@@ -37,19 +37,21 @@ class SearchResult(BaseModel):
 
 
 class SearchState(BaseModel):
-    """Represents the state of the search process."""
+    """State for the search process."""
     original_query: str
-    generated_queries: List[str] = Field(default_factory=list)  # List of generated queries
-    current_iteration: int = 0  # Track the iteration count for recursive search
-    tavily_results: List[SearchResult] = Field(default_factory=list)
-    faiss_results: List[SearchResult] = Field(default_factory=list)
-    bm25_results: List[SearchResult] = Field(default_factory=list)
-    combined_results: List[SearchResult] = Field(default_factory=list)
-    final_answer: Optional[str] = None
-    key_points: List[str] = Field(default_factory=list)  # Key points for the answer
-    detailed_notes: Optional[str] = None  # Detailed notes for the answer
-    confidence_score: Optional[float] = None
-    knowledge_gaps: List[str] = Field(default_factory=list)  # Track knowledge gaps for further search
-    historical_knowledge_gaps: List[str] = Field(default_factory=list)  # Track all previously identified knowledge gaps
-    search_complete: bool = False  # Flag to indicate if search is complete
+    generated_queries: List[str] = []
+    current_iteration: int = 0
+    search_complete: bool = False
+    knowledge_gaps: List[str] = []
+    historical_knowledge_gaps: List[str] = []
+    tavily_results: List[SearchResult] = []
+    brave_results: List[SearchResult] = []
+    search_results: List[SearchResult] = []  # Combined results from all search engines
+    faiss_results: List[SearchResult] = []
+    bm25_results: List[SearchResult] = []
+    combined_results: List[SearchResult] = []
+    key_points: List[str] = []
+    detailed_notes: Optional[str] = None
+    final_answer: str = ""
+    confidence_score: float = 0.0
     metadata: Dict[str, Any] = Field(default_factory=dict)

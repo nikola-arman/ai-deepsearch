@@ -91,10 +91,10 @@ def bm25_search(query: str, bm25, valid_indices: List[int], search_results: List
 
 def bm25_search_agent(state: SearchState) -> Generator[bytes, None, SearchState]:
     """
-    Uses BM25 for on-the-fly keyword-based retrieval from Tavily search results.
+    Uses BM25 for on-the-fly keyword-based retrieval from search results.
 
     Args:
-        state: The current search state with Tavily search results
+        state: The current search state with search results
 
     Returns:
         Updated state with BM25 search results and combined results
@@ -102,28 +102,28 @@ def bm25_search_agent(state: SearchState) -> Generator[bytes, None, SearchState]
     # Initialize combined results as an empty list
     state.combined_results = []
 
-    # Check if we have Tavily results to work with
-    if not state.tavily_results or len(state.tavily_results) == 0:
-        logger.info("No Tavily results available for BM25 search")
+    # Check if we have search results to work with
+    if not state.search_results or len(state.search_results) == 0:
+        logger.info("No search results available for BM25 search")
         yield to_chunk_data(
             wrap_thought(
                 "BM25 search agent: No results",
-                "No Tavily results available for BM25 search"
+                "No search results available for BM25 search"
             )
         )
-        # If no Tavily results, just use the FAISS results
+        # If no search results, just use the FAISS results
         state.bm25_results = []
         state.combined_results = state.faiss_results if state.faiss_results else []
         return state
 
     # Ensure we have at least some content to work with
-    valid_results = [r for r in state.tavily_results if r.content and len(r.content.strip()) > 0]
+    valid_results = [r for r in state.search_results if r.content and len(r.content.strip()) > 0]
     if not valid_results:
-        logger.info("No valid content in Tavily results for BM25 search")
+        logger.info("No valid content in search results for BM25 search")
         yield to_chunk_data(
             wrap_thought(
                 "BM25 search agent: No valid content",
-                "No valid content in Tavily results for BM25 search"
+                "No valid content in search results for BM25 search"
             )
         )
         # If no valid content in results, skip BM25
@@ -208,9 +208,9 @@ def bm25_search_agent(state: SearchState) -> Generator[bytes, None, SearchState]
             if result not in all_results:
                 all_results.append(result)
 
-    # Add any remaining Tavily results
-    if state.tavily_results:
-        for result in state.tavily_results:
+    # Add any remaining search results
+    if state.search_results:
+        for result in state.search_results:
             if result not in all_results:
                 all_results.append(result)
 
