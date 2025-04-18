@@ -1,4 +1,7 @@
-docker run --rm -it --network=agent -p 7000:80 \
+docker run --rm -it \
+    --network=network-agent-external  \
+    -p 7000:80 \
+    --add-host=localmodel:host-gateway \
     --volume $(pwd)/output:/workspace/output \
     -e LLM_BASE_URL="$LLM_BASE_URL" \
     -e LLM_API_KEY="$LLM_API_KEY" \
@@ -8,5 +11,5 @@ docker run --rm -it --network=agent -p 7000:80 \
     -e EMBEDDING_API_KEY="$EMBEDDING_API_KEY" \
     -e DEBUG_MODE="true" \
     -e LOCAL_TEST=1 \
-    -e ETERNALAI_MCP_PROXY_URL=http://proxy-agent:4000/prompt \
+    -e ETERNALAI_MCP_PROXY_URL=http://localmodel:4001/prompt \
     ai_deepsearch 

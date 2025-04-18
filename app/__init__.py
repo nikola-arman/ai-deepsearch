@@ -1,3 +1,4 @@
+from enum import Enum
 import eai_http_middleware # do not remove this
 
 import os
@@ -6,7 +7,7 @@ os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 
-from typing import Dict, Any, Generator
+from typing import Dict, Any, Generator, List
 from deepsearch.models import SearchState
 from deepsearch.agents import (
     tavily_search_agent,
@@ -19,16 +20,37 @@ from deepsearch.agents import (
 )
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
 
+from json_repair import repair_json
+import json
 import logging
 logger = logging.getLogger(__name__)
 
 from langchain.prompts import PromptTemplate
 from deepsearch.utils import to_chunk_data, wrap_thought
 
+class Retriever(Enum):
+    TAVILY = "tavily"
+    BRAVE = "brave"
+
+
 def write_state_to_file(state: SearchState):
     os.makedirs("output", exist_ok=True)
     with open("output/final_state.json", "w") as f:
         f.write(state.model_dump_json(indent=2))
+
+
+def get_retriever_from_env() -> List[Retriever]:
+    retriever_str = os.getenv("RETRIEVER", "tavily")
+    retriever_list = retriever_str.split(",")
+    retrievers = []
+    for retriever in retriever_list:
+        if retriever == Retriever.TAVILY.value:
+            retrievers.append(Retriever.TAVILY)
+        elif retriever == Retriever.BRAVE.value:
+            retrievers.append(Retriever.BRAVE)
+        else:
+            raise ValueError(f"Invalid retriever: {retriever}")
+    return retrievers
 
 
 def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
@@ -40,29 +62,39 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
         logger.info(f"Using query: {state.original_query}")
         yield to_chunk_data(wrap_thought("Initializing simple search pipeline"))
 
+        retrievers = get_retriever_from_env()
+
         # Step 1: Tavily Search
-        logger.info("Step 1: Performing Tavily web search... (SKIPPED)")
-        # yield to_chunk_data(wrap_thought("Performing Tavily web search..."))
-        # try:
-        #     state = yield from tavily_search_agent(state)
-        #     logger.info(f"  Found {len(state.tavily_results)} results")
-        #     yield to_chunk_data(wrap_thought("Tavily search complete", f"Found {len(state.tavily_results)} results"))
-        # except Exception as e:
-        #     logger.error(f"  Error in Tavily search: {str(e)}", exc_info=True)
-        #     state.tavily_results = []
-        #     yield to_chunk_data(wrap_thought("Tavily search error", str(e)))
+        if Retriever.TAVILY in retrievers:
+            logger.info("Step 1: Performing Tavily web search...")
+            yield to_chunk_data(wrap_thought("Performing Tavily web search..."))
+            try:
+                state = yield from tavily_search_agent(state)
+                logger.info(f"  Found {len(state.tavily_results)} results")
+                yield to_chunk_data(wrap_thought("Tavily search complete", f"Found {len(state.tavily_results)} results"))
+            except Exception as e:
+                logger.error(f"  Error in Tavily search: {str(e)}", exc_info=True)
+                state.tavily_results = []
+                yield to_chunk_data(wrap_thought("Tavily search error", str(e)))
+        else:
+            logger.info("Step 1: Tavily search skipped")
+            yield to_chunk_data(wrap_thought("Tavily search skipped"))
 
         # Step 2: Brave Search
-        logger.info("Step 2: Performing Brave web search...")
-        yield to_chunk_data(wrap_thought("Performing Brave web search..."))
-        try:
-            state = yield from brave_search_agent(state)
-            logger.info(f"  Found {len(state.brave_results)} results")
-            yield to_chunk_data(wrap_thought("Brave search complete", f"Found {len(state.brave_results)} results"))
-        except Exception as e:
-            logger.error(f"  Error in Brave search: {str(e)}", exc_info=True)
-            state.brave_results = []
-            yield to_chunk_data(wrap_thought("Brave search error", str(e)))
+        if Retriever.BRAVE in retrievers:
+            logger.info("Step 2: Performing Brave web search...")
+            yield to_chunk_data(wrap_thought("Performing Brave web search..."))
+            try:
+                state = yield from brave_search_agent(state)
+                logger.info(f"  Found {len(state.brave_results)} results")
+                yield to_chunk_data(wrap_thought("Brave search complete", f"Found {len(state.brave_results)} results"))
+            except Exception as e:
+                logger.error(f"  Error in Brave search: {str(e)}", exc_info=True)
+                state.brave_results = []
+                yield to_chunk_data(wrap_thought("Brave search error", str(e)))
+        else:
+            logger.info("Step 2: Brave search skipped")
+            yield to_chunk_data(wrap_thought("Brave search skipped"))
 
         # Combine search results
         state.search_results = state.tavily_results + state.brave_results
@@ -185,26 +217,33 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 )
 
                 # Step 2: Tavily Search for this query
-                logger.info(f"    Performing Tavily web search... (SKIPPED)")
-                # try:
-                #     temp_state = yield from tavily_search_agent(temp_state)
-                #     # Tag results with the query that produced them
-                #     for result in temp_state.tavily_results:
-                #         result.query = query
-                #     logger.info(f"    Found {len(temp_state.tavily_results)} web results")
-                # except Exception as e:
-                #     logger.error(f"    Error in Tavily search: {str(e)}", exc_info=True)
+                retrievers = get_retriever_from_env()
+                if Retriever.TAVILY in retrievers:
+                    logger.info(f"    Performing Tavily web search...")
+                    try:
+                        temp_state = yield from tavily_search_agent(temp_state)
+                        # Tag results with the query that produced them
+                        for result in temp_state.tavily_results:
+                            result.query = query
+                        logger.info(f"    Found {len(temp_state.tavily_results)} web results")
+                    except Exception as e:
+                        logger.error(f"    Error in Tavily search: {str(e)}", exc_info=True)
+                else:
+                    logger.info(f"    Tavily web search skipped")
 
                 # Step 3: Brave Search for this query
-                logger.info(f"    Performing Brave web search...")
-                try:
-                    temp_state = yield from brave_search_agent(temp_state)
-                    # Tag results with the query that produced them
-                    for result in temp_state.brave_results:
-                        result.query = query
-                    logger.info(f"    Found {len(temp_state.brave_results)} web results")
-                except Exception as e:
-                    logger.error(f"    Error in Brave search: {str(e)}", exc_info=True)
+                if Retriever.BRAVE in retrievers:
+                    logger.info(f"    Performing Brave web search...")
+                    try:
+                        temp_state = yield from brave_search_agent(temp_state)
+                        # Tag results with the query that produced them
+                        for result in temp_state.brave_results:
+                            result.query = query
+                        logger.info(f"    Found {len(temp_state.brave_results)} web results")
+                    except Exception as e:
+                        logger.error(f"    Error in Brave search: {str(e)}", exc_info=True)
+                else:
+                    logger.info(f"    Brave web search skipped")
 
                 # Combine search results
                 temp_state.search_results = temp_state.tavily_results + temp_state.brave_results
@@ -368,8 +407,16 @@ Consider the following factors:
 3. Is the query open-ended or exploratory in nature?
 4. Does the query require comparing different perspectives or analyzing trends?
 5. Would answering the query benefit from multiple search iterations?
+6. Does the query involve temporal aspects or need recent/current information?
+7. Does it require domain expertise or technical knowledge?
+8. Are there multiple sub-questions within the main query?
 
-Respond with ONLY "simple" or "complex" based on your analysis.
+Respond with a JSON object in this format:
+{{
+    "complexity": "simple" or "complex",
+    "reasoning": ["reason1", "reason2", ...],
+    "confidence": 0.0 to 1.0
+}}
 """
 
     # Create the prompt template
@@ -385,15 +432,20 @@ Respond with ONLY "simple" or "complex" based on your analysis.
     response = chain.invoke({"query": query})
     
     # Extract the content if it's a message object
-    complexity = response.content if hasattr(response, 'content') else response
+    response_text = response.content if hasattr(response, 'content') else response
     
-    # Clean up the response
-    complexity = complexity.strip().lower()
-
-    print(f"Query complexity: {complexity}")
-    
-    # Return False for simple queries, True for complex ones
-    return complexity != "simple"
+    try:
+        analysis = json.loads(repair_json(response_text))
+        
+        logger.info(f"Query complexity analysis: {analysis}")
+        
+        # Return False for simple queries, True for complex ones
+        return analysis["complexity"].strip().lower() == "complex"
+        
+    except Exception as e:
+        logger.error(f"Error parsing complexity analysis: {str(e)}")
+        # Default to treating as complex if parsing fails
+        return True
 
 def prompt(messages: list[dict[str, str]], **kwargs) -> str:
     assert len(messages) > 0, "received empty messages"
