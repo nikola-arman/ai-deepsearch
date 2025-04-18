@@ -62,20 +62,45 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
         logger.info(f"Using query: {state.original_query}")
         yield to_chunk_data(wrap_thought("Initializing simple search pipeline"))
 
+        # Step 0: Generate search query for Brave
+        logger.info("Step 0: Generating Brave search query...")
+        yield to_chunk_data(wrap_thought("Generating Brave search query..."))
+        try:
+            llm = init_reasoning_llm()
+            # Use a simple prompt to rewrite query in search engine format
+            prompt = PromptTemplate.from_template(
+                "Rewrite this query into a search engine friendly format"
+                "Query: {query}\n"
+                "Rewritten query:"
+            )
+            chain = prompt | llm
+            response = chain.invoke({"query": query})
+            search_query = response.content
+            logger.info(f"  Generated search query: {search_query}")
+            yield to_chunk_data(wrap_thought("Search query generation complete", f"Generated query: {search_query}"))
+        except Exception as e:
+            logger.error(f"  Error generating search query: {str(e)}", exc_info=True)
+            search_query = query
+            yield to_chunk_data(wrap_thought("Search query generation error", f"Using original query: {query}"))
+
         retrievers = get_retriever_from_env()
 
         # Step 1: Tavily Search
         if Retriever.TAVILY in retrievers:
             logger.info("Step 1: Performing Tavily web search...")
             yield to_chunk_data(wrap_thought("Performing Tavily web search..."))
+            temp_state = SearchState(
+                original_query=search_query  # Use the current query as the original query for this temp state
+            )
             try:
-                state = yield from tavily_search_agent(state)
-                logger.info(f"  Found {len(state.tavily_results)} results")
-                yield to_chunk_data(wrap_thought("Tavily search complete", f"Found {len(state.tavily_results)} results"))
+                temp_state = yield from tavily_search_agent(temp_state)
+                logger.info(f"  Found {len(temp_state.tavily_results)} results")
+                yield to_chunk_data(wrap_thought("Tavily search complete", f"Found {len(temp_state.tavily_results)} results"))
             except Exception as e:
                 logger.error(f"  Error in Tavily search: {str(e)}", exc_info=True)
-                state.tavily_results = []
+                temp_state.tavily_results = []
                 yield to_chunk_data(wrap_thought("Tavily search error", str(e)))
+            state.tavily_results = temp_state.tavily_results
         else:
             logger.info("Step 1: Tavily search skipped")
             yield to_chunk_data(wrap_thought("Tavily search skipped"))
@@ -84,14 +109,18 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
         if Retriever.BRAVE in retrievers:
             logger.info("Step 2: Performing Brave web search...")
             yield to_chunk_data(wrap_thought("Performing Brave web search..."))
+            temp_state = SearchState(
+                original_query=search_query  # Use the current query as the original query for this temp state
+            )
             try:
-                state = yield from brave_search_agent(state)
-                logger.info(f"  Found {len(state.brave_results)} results")
-                yield to_chunk_data(wrap_thought("Brave search complete", f"Found {len(state.brave_results)} results"))
+                temp_state = yield from brave_search_agent(temp_state, max_results=5, use_ai_snippets=False)
+                logger.info(f"  Found {len(temp_state.brave_results)} results")
+                yield to_chunk_data(wrap_thought("Brave search complete", f"Found {len(temp_state.brave_results)} results"))
             except Exception as e:
                 logger.error(f"  Error in Brave search: {str(e)}", exc_info=True)
-                state.brave_results = []
+                temp_state.brave_results = []
                 yield to_chunk_data(wrap_thought("Brave search error", str(e)))
+            state.brave_results = temp_state.brave_results
         else:
             logger.info("Step 2: Brave search skipped")
             yield to_chunk_data(wrap_thought("Brave search skipped"))
@@ -235,7 +264,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 if Retriever.BRAVE in retrievers:
                     logger.info(f"    Performing Brave web search...")
                     try:
-                        temp_state = yield from brave_search_agent(temp_state)
+                        temp_state = yield from brave_search_agent(temp_state, use_ai_snippets=True)
                         # Tag results with the query that produced them
                         for result in temp_state.brave_results:
                             result.query = query
