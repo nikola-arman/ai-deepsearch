@@ -15,6 +15,7 @@ def wrap_thought(thought: str, thought_details: str = None, uuid_str: str = None
 
     template = f'''
 Thought: <b>{thought}</b>
+
 '''
 
     if thought_details:
@@ -27,6 +28,7 @@ Thought: <b>{thought}</b>
     {thought_details}
     </p>
 </details>
+
 '''
 
     return ChatCompletionStreamResponse(
