@@ -95,7 +95,7 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
                 original_query=search_query  # Use the current query as the original query for this temp state
             )
             try:
-                temp_state = yield from tavily_search_agent(temp_state)
+                temp_state = tavily_search_agent(temp_state)
                 logger.info(f"  Found {len(temp_state.tavily_results)} results")
                 yield to_chunk_data(wrap_step_finish(tavily_search_uuid, f"Found {len(temp_state.tavily_results)} results"))
             except Exception as e:
@@ -115,7 +115,7 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
                 original_query=search_query  # Use the current query as the original query for this temp state
             )
             try:
-                temp_state = yield from brave_search_agent(temp_state, max_results=5, use_ai_snippets=False)
+                temp_state = brave_search_agent(temp_state, max_results=5, use_ai_snippets=False)
                 logger.info(f"  Found {len(temp_state.brave_results)} results")
                 yield to_chunk_data(wrap_step_finish(brave_search_uuid, f"Found {len(temp_state.brave_results)} results"))
             except Exception as e:
@@ -137,7 +137,7 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
         faiss_indexing_uuid = str(uuid.uuid4())
         yield to_chunk_data(wrap_step_start(faiss_indexing_uuid, "Performing semantic search"))
         try:
-            state = yield from faiss_indexing_agent(state)
+            state = faiss_indexing_agent(state)
             logger.info(f"  Found {len(state.faiss_results)} semantically relevant results")
             yield to_chunk_data(wrap_step_finish(faiss_indexing_uuid, f"Found {len(state.faiss_results)} semantically relevant results"))
         except Exception as e:
@@ -150,7 +150,7 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
         bm25_search_uuid = str(uuid.uuid4())
         yield to_chunk_data(wrap_step_start(bm25_search_uuid, "Performing keyword search"))
         try:
-            state = yield from bm25_search_agent(state)
+            state = bm25_search_agent(state)
             logger.info(f"  Found {len(state.bm25_results)} keyword relevant results")
             logger.info(f"  Combined {len(state.combined_results)} total relevant results")
             yield to_chunk_data(wrap_step_finish(bm25_search_uuid, f"Found {len(state.bm25_results)} keyword relevant results and {len(state.combined_results)} total results"))
@@ -167,7 +167,7 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
         reasoning_uuid = str(uuid.uuid4())
         yield to_chunk_data(wrap_step_start(reasoning_uuid, "Generating answer"))
         try:
-            state = yield from llama_reasoning_agent(state)
+            state = llama_reasoning_agent(state)
             logger.info(f"  Confidence: {state.confidence_score}")
             yield to_chunk_data(wrap_step_finish(reasoning_uuid, f"Generated answer"))
         except Exception as e:
@@ -255,7 +255,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 if Retriever.TAVILY in retrievers:
                     logger.info(f"    Performing Tavily web search...")
                     try:
-                        temp_state = yield from tavily_search_agent(temp_state)
+                        temp_state = tavily_search_agent(temp_state)
                         # Tag results with the query that produced them
                         for result in temp_state.tavily_results:
                             result.query = query
@@ -269,7 +269,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 if Retriever.BRAVE in retrievers:
                     logger.info(f"    Performing Brave web search...")
                     try:
-                        temp_state = yield from brave_search_agent(temp_state, use_ai_snippets=True)
+                        temp_state = brave_search_agent(temp_state, use_ai_snippets=True)
                         # Tag results with the query that produced them
                         for result in temp_state.brave_results:
                             result.query = query
@@ -286,7 +286,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 # Step 4: FAISS Indexing (semantic search) for this query
                 logger.info(f"    Performing semantic search...")
                 try:
-                    temp_state = yield from faiss_indexing_agent(temp_state)
+                    temp_state = faiss_indexing_agent(temp_state)
                     # Tag results with the query that produced them
                     for result in temp_state.faiss_results:
                         result.query = query
@@ -297,7 +297,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 # Step 5: BM25 Search (keyword search) for this query
                 logger.info(f"    Performing keyword search...")
                 try:
-                    temp_state = yield from bm25_search_agent(temp_state)
+                    temp_state = bm25_search_agent(temp_state)
                     # Tag results with the query that produced them
                     for result in temp_state.bm25_results:
                         result.query = query
@@ -346,7 +346,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
             # Step 6: Deep Reasoning - analyze results and decide whether to continue
             logger.info(f"  Analyzing search results and determining next steps...")
             try:
-                state = yield from deep_reasoning_agent(state, max_iterations)
+                state = deep_reasoning_agent(state, max_iterations)
                 logger.info(f"  Search complete: {state.search_complete}")
                 if not state.search_complete:
                     logger.info(f"  Knowledge gaps identified: {len(state.knowledge_gaps)}")
@@ -364,7 +364,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
             logger.info("Maximum iterations reached, generating final answer...")
             try:
                 from deepsearch.agents.deep_reasoning import generate_final_answer
-                state = yield from generate_final_answer(state)
+                state = generate_final_answer(state)
             except Exception as e:
                 logger.error(f"Error generating final answer: {str(e)}", exc_info=True)
                 state.final_answer = "I reached the maximum number of search iterations but couldn't generate a comprehensive answer. Here's what I found: " + "\n".join([f"- {point}" for point in state.key_points])

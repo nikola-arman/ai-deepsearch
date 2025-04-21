@@ -283,7 +283,7 @@ def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indi
         logger.error(f"Error in FAISS search: {str(e)}", exc_info=True)
         return []
 
-def faiss_indexing_agent(state: SearchState) -> Generator[bytes, None, SearchState]:
+def faiss_indexing_agent(state: SearchState) -> SearchState:
     """
     Builds a FAISS index on-the-fly from search results and performs vector search.
 
@@ -297,12 +297,6 @@ def faiss_indexing_agent(state: SearchState) -> Generator[bytes, None, SearchSta
     if not state.search_results or len(state.search_results) == 0:
         # If no results, skip this agent
         logger.info("No search results available for FAISS indexing")
-        yield to_chunk_data(
-            wrap_thought(
-                "FAISS indexing agent: No results",
-                "No search results available for FAISS indexing"
-            )
-        )
         state.faiss_results = []
         return state
 
@@ -314,54 +308,23 @@ def faiss_indexing_agent(state: SearchState) -> Generator[bytes, None, SearchSta
     if not valid_results:
         # If no valid content in results, skip FAISS
         logger.info("No valid content in search results for FAISS indexing")
-        yield to_chunk_data(
-            wrap_thought(
-                "FAISS indexing agent: No valid content",
-                "No valid content in search results for FAISS indexing"
-            )
-        )
         state.faiss_results = []
         return state
 
     try:
-        yield to_chunk_data(
-            wrap_thought(
-                "FAISS indexing agent: Initializing embedding model",
-                "Initializing embedding model and creating FAISS index"
-            )
-        )
-
         # Initialize the embedding model
         try:
             embeddings = init_embedding_model()
         except Exception as e:
             logger.error(f"Failed to initialize embedding model. Skipping FAISS search: {str(e)}")
-            yield to_chunk_data(
-                wrap_thought(
-                    "FAISS indexing agent: Error",
-                    f"Failed to initialize embedding model: {str(e)}"
-                )
-            )
             state.faiss_results = []
             return state
 
-        yield to_chunk_data(
-            wrap_thought(
-                "FAISS indexing agent: Creating FAISS index",
-                "Creating FAISS index from search results"
-            )
-        )
         # Create a FAISS index from the search results
         index, embedded_texts, valid_indices, chunk_to_original_map = create_faiss_index(embeddings, valid_results)
 
         if not index or not embedded_texts or not valid_indices:
             logger.warning("Failed to create FAISS index")
-            yield to_chunk_data(
-                wrap_thought(
-                    "FAISS indexing agent: Error",
-                    "Failed to create FAISS index"
-                )
-            )
             state.faiss_results = []
             return state
 
@@ -374,21 +337,8 @@ def faiss_indexing_agent(state: SearchState) -> Generator[bytes, None, SearchSta
         # Validate query
         if not query or not isinstance(query, str) or not query.strip():
             logger.warning("Invalid query for FAISS search")
-            yield to_chunk_data(
-                wrap_thought(
-                    "FAISS indexing agent: Error",
-                    "Invalid query for FAISS search"
-                )
-            )
             state.faiss_results = []
             return state
-
-        yield to_chunk_data(
-            wrap_thought(
-                "FAISS indexing agent: Searching",
-                f"Performing semantic search for query: {query}"
-            )
-        )
 
         # Search the index with the query
         faiss_results = faiss_search(
@@ -405,22 +355,9 @@ def faiss_indexing_agent(state: SearchState) -> Generator[bytes, None, SearchSta
         # Update the state
         state.faiss_results = faiss_results
         logger.info(f"FAISS search found {len(faiss_results)} relevant results")
-        yield to_chunk_data(
-            wrap_thought(
-                "FAISS indexing agent: Complete",
-                f"Found {len(faiss_results)} semantically relevant results"
-            )
-        )
-
     except Exception as e:
         # If any error occurs, log it and return empty results
         logger.error(f"Error in FAISS search: {str(e)}", exc_info=True)
-        yield to_chunk_data(
-            wrap_thought(
-                "FAISS indexing agent: Error",
-                f"Error occurred during FAISS search: {str(e)}"
-            )
-        )
         state.faiss_results = []
 
     return state

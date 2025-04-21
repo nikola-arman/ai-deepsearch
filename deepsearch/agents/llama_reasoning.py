@@ -107,7 +107,7 @@ def calculate_confidence(answer: str) -> float:
     # Cap confidence between 0 and 1
     return max(0.0, min(1.0, confidence))
 
-def llama_reasoning_agent(state: SearchState) -> Generator[bytes, None, SearchState]:
+def llama_reasoning_agent(state: SearchState) -> SearchState:
     """
     Uses Llama.cpp to analyze results and generate a cohesive answer.
 
@@ -125,11 +125,9 @@ def llama_reasoning_agent(state: SearchState) -> Generator[bytes, None, SearchSt
         # No results, set a low confidence and an appropriate message
         state.final_answer = "I couldn't find relevant information to answer your query."
         state.confidence_score = 0.1
-        yield to_chunk_data(wrap_thought("No search results found"))
         return state
 
     # Initialize the LLM
-    yield to_chunk_data(wrap_thought("Initializing language model"))
     llm = init_reasoning_llm()
 
     # Create the prompt
@@ -142,14 +140,12 @@ def llama_reasoning_agent(state: SearchState) -> Generator[bytes, None, SearchSt
     chain = reasoning_prompt | llm
 
     # Format the search results
-    yield to_chunk_data(wrap_thought("Formatting search results"))
     formatted_results = format_search_results(state)
 
     # Use refined query if available, otherwise use original query
     query = state.original_query
 
     # Generate the answer
-    yield to_chunk_data(wrap_thought("Generating comprehensive answer from search results"))
     response = chain.invoke({
         "query": query,
         "search_results": formatted_results
@@ -162,7 +158,6 @@ def llama_reasoning_agent(state: SearchState) -> Generator[bytes, None, SearchSt
         answer = response
 
     # Calculate confidence score
-    yield to_chunk_data(wrap_thought("Calculating confidence score"))
     confidence = calculate_confidence(answer)
 
     # Update the state

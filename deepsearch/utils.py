@@ -71,7 +71,9 @@ def wrap_step_start(uuid_str: str, step: str) -> ChatCompletionStreamResponse:
 
 def wrap_step_finish(uuid_str: str, result_summary: str, result_details: str = None, is_error: bool = False) -> ChatCompletionStreamResponse:
     icon = "❌" if is_error else "✅"
-    template = f'''
+
+    if result_details:
+        template = f'''
 {icon} <details>
 <summary>
 <b>{result_summary}</b>
@@ -80,6 +82,12 @@ def wrap_step_finish(uuid_str: str, result_summary: str, result_details: str = N
 {result_details}
 </p>
 </details>
+<br>
+'''
+    else:
+        template = f'''
+{icon} <b>{result_summary}</b>
+<br>
 '''
 
     return ChatCompletionStreamResponse(
