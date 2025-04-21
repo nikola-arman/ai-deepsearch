@@ -16,7 +16,9 @@ from deepsearch.agents import (
     llama_reasoning_agent,
     query_expansion_agent,
     deep_reasoning_agent,
-    brave_search_agent
+    brave_search_agent,
+    information_extraction_agent,
+    fact_checking_agent
 )
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
 
@@ -158,8 +160,34 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
                 state.combined_results = state.faiss_results + state.search_results
             yield to_chunk_data(wrap_thought("Keyword search error", str(e)))
 
-        # Step 5: LLM Reasoning
-        logger.info("Step 5: Generating answer...")
+        # Step 5: Information Extraction
+        logger.info("Step 5: Extracting information from results...")
+        yield to_chunk_data(wrap_thought("Extracting information from results..."))
+        try:
+            state = yield from information_extraction_agent(state)
+            logger.info(f"  Extracted information from {len(state.combined_results)} results")
+            yield to_chunk_data(wrap_thought("Information extraction complete", f"Extracted information from {len(state.combined_results)} results"))
+        except Exception as e:
+            logger.error(f"  Error in information extraction: {str(e)}", exc_info=True)
+            yield to_chunk_data(wrap_thought("Information extraction error", str(e)))
+
+        # Step 6: Fact Checking
+        logger.info("Step 6: Verifying extracted information...")
+        yield to_chunk_data(wrap_thought("Verifying extracted information..."))
+        try:
+            state = yield from fact_checking_agent(state)
+            logger.info(f"  Verified {len(state.verified_information['verified'])} statements")
+            yield to_chunk_data(wrap_thought("Fact checking complete", 
+                f"Verified {len(state.verified_information['verified'])} statements, "
+                f"found {len(state.verified_information['contradicted'])} contradictions, "
+                f"and {len(state.verified_information['unverified'])} unverified statements"
+            ))
+        except Exception as e:
+            logger.error(f"  Error in fact checking: {str(e)}", exc_info=True)
+            yield to_chunk_data(wrap_thought("Fact checking error", str(e)))
+
+        # Step 7: LLM Reasoning
+        logger.info("Step 7: Generating answer...")
         yield to_chunk_data(wrap_thought("Generating answer..."))
         try:
             state = yield from llama_reasoning_agent(state)
@@ -300,6 +328,22 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 except Exception as e:
                     logger.error(f"    Error in keyword search: {str(e)}", exc_info=True)
 
+                # Step 6: Information Extraction for this query
+                logger.info(f"    Extracting information from results...")
+                try:
+                    temp_state = yield from information_extraction_agent(temp_state)
+                    logger.info(f"    Extracted information from {len(temp_state.combined_results)} results")
+                except Exception as e:
+                    logger.error(f"    Error in information extraction: {str(e)}", exc_info=True)
+
+                # Step 7: Fact Checking for this query
+                logger.info(f"    Verifying extracted information...")
+                try:
+                    temp_state = yield from fact_checking_agent(temp_state)
+                    logger.info(f"    Verified {len(temp_state.verified_information['verified'])} statements")
+                except Exception as e:
+                    logger.error(f"    Error in fact checking: {str(e)}", exc_info=True)
+
                 # Collect results from this query
                 state.tavily_results.extend(temp_state.tavily_results)
                 state.brave_results.extend(temp_state.brave_results)
@@ -308,6 +352,9 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 state.bm25_results.extend(temp_state.bm25_results)
                 if temp_state.combined_results:
                     state.combined_results.extend(temp_state.combined_results)
+                # Merge verified information
+                for category in ["verified", "contradicted", "unverified"]:
+                    state.verified_information[category].extend(temp_state.verified_information[category])
 
             # Add back previous results to ensure continuity
             if state.combined_results:
@@ -338,7 +385,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 state.combined_results = list(unique_results.values())
                 logger.info(f"  Deduplicated to {len(state.combined_results)} unique results")
 
-            # Step 6: Deep Reasoning - analyze results and decide whether to continue
+            # Step 8: Deep Reasoning - analyze results and decide whether to continue
             logger.info(f"  Analyzing search results and determining next steps...")
             try:
                 state = yield from deep_reasoning_agent(state, max_iterations)

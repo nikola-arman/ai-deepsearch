@@ -9,4 +9,4 @@ copy deepsearch deepsearch
 
 env ETERNALAI_MCP_PROXY_URL="http://84532-proxy/prompt"
 env PROXY_SCOPE="*api.tavily.com*,*api.search.brave.com*"
-env RETRIEVER="brave"
+env RETRIEVER="tavily,brave"

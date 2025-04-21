@@ -26,7 +26,8 @@ class SearchResult(BaseModel):
     content: str
     score: Optional[float] = None
     query: Optional[str] = None  # Track which query generated this result
-
+    extracted_information: Optional[List[str]] = None
+    
     @model_validator(mode='before')
     @classmethod
     def validate_content(cls, data):
@@ -50,6 +51,11 @@ class SearchState(BaseModel):
     faiss_results: List[SearchResult] = []
     bm25_results: List[SearchResult] = []
     combined_results: List[SearchResult] = []
+    verified_information: Dict[str, List[Dict[str, Any]]] = Field(default_factory=lambda: {
+        "verified": [],
+        "contradicted": [],
+        "unverified": []
+    })
     key_points: List[str] = []
     detailed_notes: Optional[str] = None
     final_answer: str = ""
