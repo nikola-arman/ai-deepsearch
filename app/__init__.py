@@ -78,7 +78,7 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
             response = chain.invoke({"query": query})
             search_query = response.content
             logger.info(f"  Generated search query: {search_query}")
-            yield to_chunk_data(wrap_step_finish(generate_search_query_uuid, f"Generated search query", search_query))
+            yield to_chunk_data(wrap_step_finish(generate_search_query_uuid, "Finished"))
         except Exception as e:
             logger.error(f"  Error generating search query: {str(e)}", exc_info=True)
             yield to_chunk_data(wrap_step_finish(generate_search_query_uuid, f"An error occurred", str(e), is_error=True))
@@ -127,15 +127,13 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
             logger.info("Step 2: Brave search skipped")
 
         # Combine search results
-        combine_search_results_uuid = str(uuid.uuid4())
         state.search_results = state.tavily_results + state.brave_results
         logger.info(f"  Combined {len(state.search_results)} total search results")
-        yield to_chunk_data(wrap_step_finish(combine_search_results_uuid, f"Filtering from {len(state.search_results)} total search results"))
 
         # Step 3: FAISS Indexing (semantic search)
         logger.info("Step 3: Performing semantic search...")
         faiss_indexing_uuid = str(uuid.uuid4())
-        yield to_chunk_data(wrap_step_start(faiss_indexing_uuid, "Performing semantic search"))
+        yield to_chunk_data(wrap_step_start(faiss_indexing_uuid, "Retrieving semantically relevant results"))
         try:
             state = faiss_indexing_agent(state)
             logger.info(f"  Found {len(state.faiss_results)} semantically relevant results")
@@ -148,7 +146,7 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
         # Step 4: BM25 Search (keyword search)
         logger.info("Step 4: Performing keyword search...")
         bm25_search_uuid = str(uuid.uuid4())
-        yield to_chunk_data(wrap_step_start(bm25_search_uuid, "Performing keyword search"))
+        yield to_chunk_data(wrap_step_start(bm25_search_uuid, "Retrieving keyword relevant results"))
         try:
             state = bm25_search_agent(state)
             logger.info(f"  Found {len(state.bm25_results)} keyword relevant results")
@@ -218,11 +216,17 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         # Instead of using query_expansion_agent, let the deep_reasoning_agent handle initial query generation
         logger.info("Step 1: Initial reasoning to analyze query and generate search queries...")
         try:
+            generate_initial_queries_uuid = str(uuid.uuid4())
+            yield to_chunk_data(wrap_step_start(generate_initial_queries_uuid, "Generating initial search queries"))
             # Initial call to deep_reasoning_agent will generate the queries
             state = yield from deep_reasoning_agent(state, max_iterations)
+
             logger.info(f"  Generated {len(state.generated_queries)} initial search queries")
+            queries_markdown = "\n".join([f"- {query}" for query in state.generated_queries])
+            yield to_chunk_data(wrap_step_finish(generate_initial_queries_uuid, f"Generated {len(state.generated_queries)} initial search queries", queries_markdown))
         except Exception as e:
             logger.error(f"  Error in initial reasoning: {str(e)}", exc_info=True)
+            yield to_chunk_data(wrap_step_finish(generate_initial_queries_uuid, f"An error occurred", str(e), is_error=True))
             # If reasoning fails, use just the original query
             state.generated_queries = [state.original_query]
             state.current_iteration = 1  # Ensure we don't skip the first iteration
@@ -231,6 +235,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         while not state.search_complete and state.current_iteration < max_iterations:
             iteration = state.current_iteration
             logger.info(f"Beginning search iteration {iteration}...")
+
+            yield to_chunk_data(wrap_thought(f"Beginning search iteration {iteration}..."))
 
             # Reset results for this iteration but keep accumulated results
             previous_results = state.combined_results.copy() if state.combined_results else []
@@ -245,6 +251,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
             for i, query in enumerate(state.generated_queries):
                 logger.info(f"  Processing query {i+1}/{len(state.generated_queries)}: {query}")
 
+                yield to_chunk_data(wrap_thought(f"Processing query {i+1}/{len(state.generated_queries)}: {query}"))
+
                 # Create a temporary state for this query
                 temp_state = SearchState(
                     original_query=query  # Use the current query as the original query for this temp state
@@ -255,13 +263,17 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 if Retriever.TAVILY in retrievers:
                     logger.info(f"    Performing Tavily web search...")
                     try:
+                        tavily_search_uuid = str(uuid.uuid4())
+                        yield to_chunk_data(wrap_step_start(tavily_search_uuid, "Performing Tavily web search"))
                         temp_state = tavily_search_agent(temp_state)
                         # Tag results with the query that produced them
                         for result in temp_state.tavily_results:
                             result.query = query
                         logger.info(f"    Found {len(temp_state.tavily_results)} web results")
+                        yield to_chunk_data(wrap_step_finish(tavily_search_uuid, f"Found {len(temp_state.tavily_results)} web results"))
                     except Exception as e:
                         logger.error(f"    Error in Tavily search: {str(e)}", exc_info=True)
+                        yield to_chunk_data(wrap_step_finish(tavily_search_uuid, f"An error occurred", str(e), is_error=True))
                 else:
                     logger.info(f"    Tavily web search skipped")
 
@@ -269,13 +281,17 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 if Retriever.BRAVE in retrievers:
                     logger.info(f"    Performing Brave web search...")
                     try:
+                        brave_search_uuid = str(uuid.uuid4())
+                        yield to_chunk_data(wrap_step_start(brave_search_uuid, "Performing Brave web search"))
                         temp_state = brave_search_agent(temp_state, use_ai_snippets=True)
                         # Tag results with the query that produced them
                         for result in temp_state.brave_results:
                             result.query = query
                         logger.info(f"    Found {len(temp_state.brave_results)} web results")
+                        yield to_chunk_data(wrap_step_finish(brave_search_uuid, f"Found {len(temp_state.brave_results)} web results"))
                     except Exception as e:
                         logger.error(f"    Error in Brave search: {str(e)}", exc_info=True)
+                        yield to_chunk_data(wrap_step_finish(brave_search_uuid, f"An error occurred", str(e), is_error=True))
                 else:
                     logger.info(f"    Brave web search skipped")
 
@@ -286,24 +302,31 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 # Step 4: FAISS Indexing (semantic search) for this query
                 logger.info(f"    Performing semantic search...")
                 try:
+                    faiss_indexing_uuid = str(uuid.uuid4())
+                    yield to_chunk_data(wrap_step_start(faiss_indexing_uuid, "Retrieving semantically relevant results"))
                     temp_state = faiss_indexing_agent(temp_state)
                     # Tag results with the query that produced them
                     for result in temp_state.faiss_results:
                         result.query = query
                     logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
+                    yield to_chunk_data(wrap_step_finish(faiss_indexing_uuid, f"Found {len(temp_state.faiss_results)} semantic results"))
                 except Exception as e:
                     logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
-
+                    yield to_chunk_data(wrap_step_finish(faiss_indexing_uuid, f"An error occurred", str(e), is_error=True))
                 # Step 5: BM25 Search (keyword search) for this query
                 logger.info(f"    Performing keyword search...")
                 try:
+                    bm25_search_uuid = str(uuid.uuid4())
+                    yield to_chunk_data(wrap_step_start(bm25_search_uuid, "Retrieving keyword relevant results"))
                     temp_state = bm25_search_agent(temp_state)
                     # Tag results with the query that produced them
                     for result in temp_state.bm25_results:
                         result.query = query
                     logger.info(f"    Found {len(temp_state.bm25_results)} keyword results")
+                    yield to_chunk_data(wrap_step_finish(bm25_search_uuid, f"Found {len(temp_state.bm25_results)} keyword results"))
                 except Exception as e:
                     logger.error(f"    Error in keyword search: {str(e)}", exc_info=True)
+                    yield to_chunk_data(wrap_step_finish(bm25_search_uuid, f"An error occurred", str(e), is_error=True))
 
                 # Collect results from this query
                 state.tavily_results.extend(temp_state.tavily_results)
@@ -345,14 +368,20 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
 
             # Step 6: Deep Reasoning - analyze results and decide whether to continue
             logger.info(f"  Analyzing search results and determining next steps...")
+            analyze_results_uuid = str(uuid.uuid4())
+            yield to_chunk_data(wrap_step_start(analyze_results_uuid, "Analyzing search results and determining next steps"))
             try:
-                state = deep_reasoning_agent(state, max_iterations)
+                state = yield from deep_reasoning_agent(state, max_iterations)
                 logger.info(f"  Search complete: {state.search_complete}")
                 if not state.search_complete:
                     logger.info(f"  Knowledge gaps identified: {len(state.knowledge_gaps)}")
                     logger.info(f"  New queries generated: {len(state.generated_queries)}")
+                    yield to_chunk_data(wrap_step_finish(analyze_results_uuid, f"Identified {len(state.knowledge_gaps)} knowledge gaps. Generated {len(state.generated_queries)} new queries"))
+                else:
+                    yield to_chunk_data(wrap_step_finish(analyze_results_uuid, "No knowledge gaps identified. Search completed."))
             except Exception as e:
                 logger.error(f"  Error in deep reasoning: {str(e)}", exc_info=True)
+                yield to_chunk_data(wrap_step_finish(analyze_results_uuid, f"An error occurred", str(e), is_error=True))
                 # If reasoning fails, stop the search to avoid infinite loops
                 state.search_complete = True
                 state.final_answer = "I'm sorry, but I couldn't properly analyze the search results due to a technical issue. Please try again with a different query."
@@ -362,9 +391,10 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         if not state.search_complete:
             # If we exited the loop due to max iterations, generate the final answer
             logger.info("Maximum iterations reached, generating final answer...")
+            yield to_chunk_data(wrap_thought("Maximum iterations reached. Search completed."))
             try:
                 from deepsearch.agents.deep_reasoning import generate_final_answer
-                state = generate_final_answer(state)
+                state = yield from generate_final_answer(state)
             except Exception as e:
                 logger.error(f"Error generating final answer: {str(e)}", exc_info=True)
                 state.final_answer = "I reached the maximum number of search iterations but couldn't generate a comprehensive answer. Here's what I found: " + "\n".join([f"- {point}" for point in state.key_points])

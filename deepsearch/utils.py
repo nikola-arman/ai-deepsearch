@@ -13,13 +13,9 @@ def wrap_thought(thought: str, thought_details: str = None, uuid_str: str = None
     if uuid_str is None:
         uuid_str = str(uuid.uuid4())
 
-    template = f'''
-Thought: <b>{thought}</b>
-
-'''
-
     if thought_details:
-        template += f'''
+        template = f'''
+<i>{thought}</i>
 <details>
     <summary>
     Details:
@@ -28,7 +24,10 @@ Thought: <b>{thought}</b>
     {thought_details}
     </p>
 </details>
-
+'''
+    else:
+        template = f'''
+<i>{thought}</i>
 '''
 
     return ChatCompletionStreamResponse(
@@ -48,8 +47,7 @@ Thought: <b>{thought}</b>
     )
 
 def wrap_step_start(uuid_str: str, step: str) -> ChatCompletionStreamResponse:
-    template = f'''
-<b>{step}</b>
+    template = f'''<b>{step}</b>
 '''
 
     return ChatCompletionStreamResponse(
@@ -74,20 +72,18 @@ def wrap_step_finish(uuid_str: str, result_summary: str, result_details: str = N
 
     if result_details:
         template = f'''
-{icon} <details>
+<details>
 <summary>
-<b>{result_summary}</b>
+{icon} {result_summary}
 </summary>
 <p>
 {result_details}
 </p>
 </details>
-<br>
 '''
     else:
         template = f'''
-{icon} <b>{result_summary}</b>
-<br>
+{icon} {result_summary}
 '''
 
     return ChatCompletionStreamResponse(
