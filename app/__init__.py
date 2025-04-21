@@ -411,14 +411,14 @@ class GeneratorValue:
     def __iter__(self):
         self.value = yield from self.gen
         return self.value
-    
+
 def detect_query_complexity(query: str) -> bool:
     """
     Analyze the query to determine if it requires a simple or complex search pipeline.
-    
+
     Args:
         query: The user's query string
-        
+
     Returns:
         bool: True if the query is complex and requires deep search, False if it's simple
     """
@@ -459,18 +459,18 @@ Respond with a JSON object in this format:
 
     # Get the response
     response = chain.invoke({"query": query})
-    
+
     # Extract the content if it's a message object
     response_text = response.content if hasattr(response, 'content') else response
-    
+
     try:
         analysis = json.loads(repair_json(response_text))
-        
+
         logger.info(f"Query complexity analysis: {analysis}")
-        
+
         # Return False for simple queries, True for complex ones
         return analysis["complexity"].strip().lower() == "complex"
-        
+
     except Exception as e:
         logger.error(f"Error parsing complexity analysis: {str(e)}")
         # Default to treating as complex if parsing fails

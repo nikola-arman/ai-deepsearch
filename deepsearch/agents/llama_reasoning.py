@@ -40,6 +40,11 @@ IMPORTANT INSTRUCTIONS:
 3. DO NOT end your response with phrases like "Do you want me to explain more?" or similar.
 4. Provide a complete, self-contained answer that stands on its own.
 5. Be confident and definitive in your response.
+6. If there are different results, for example, if some results say "ETC price is $1000" and some other results say
+"ETC price is $2000", carefully consider all search results and provide a final answer that reflects the most accurate information.
+7. If the search results are contradictory, acknowledge the uncertainty and provide a balanced view.
+8. If the search results are not relevant to the query, state that you cannot provide an answer based on the search results.
+9. If the search results are too vague or unclear, state that you cannot provide a definitive answer.
 
 Answer:
 """

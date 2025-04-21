@@ -7,16 +7,16 @@ from typing import Any
 
 def to_chunk_data(chunk: ChatCompletionStreamResponse) -> bytes:
     return ("data: " + json.dumps(chunk.model_dump()) + "\n\n").encode()
-    
+
 
 def wrap_thought(thought: str, thought_details: str = None, uuid_str: str = None) -> ChatCompletionStreamResponse:
     if uuid_str is None:
         uuid_str = str(uuid.uuid4())
-        
+
     template = f'''
 Thought: <b>{thought}</b>
 '''
-    
+
     if thought_details:
         template += f'''
 <details>

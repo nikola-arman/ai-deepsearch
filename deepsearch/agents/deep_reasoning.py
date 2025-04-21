@@ -182,6 +182,11 @@ IMPORTANT RULES:
 4. Clearly cite sources for each point using markdown hyperlinks: ([Source Title](source_url))
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
+7. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
+8. If the search results are contradictory, acknowledge the uncertainty and provide a balanced view.
+9. If the search results are not relevant to the query, state that you cannot provide an answer based on the search results.
+10. If the search results are too vague or unclear, state that you cannot provide a definitive answer.
+
 
 Format your response as a markdown list of bullet points ONLY:
 - Key point 1 ([Source Title](source_url))
@@ -223,6 +228,7 @@ IMPORTANT RULES:
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to answer a point, clearly state this limitation
+8. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, or section markers.
@@ -309,6 +315,7 @@ IMPORTANT RULES:
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to cover a point, clearly state this limitation
 8. Focus ONLY on this section without repeating information from other sections
+9. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
