@@ -47,6 +47,58 @@ Thought: <b>{thought}</b>
         ]
     )
 
+def wrap_step_start(uuid_str: str, step: str) -> ChatCompletionStreamResponse:
+    template = f'''
+<b>{step}</b>
+'''
+
+    return ChatCompletionStreamResponse(
+        id=uuid_str,
+        object='chat.completion.chunk',
+        created=int(time.time()),
+        model='unspecified',
+        choices=[
+            dict(
+                index=0,
+                delta=dict(
+                    content=template,
+                    role='tool'
+                ),
+            )
+        ]
+    )
+
+
+def wrap_step_finish(uuid_str: str, result_summary: str, result_details: str = None, is_error: bool = False) -> ChatCompletionStreamResponse:
+    icon = "❌" if is_error else "✅"
+    template = f'''
+{icon} <details>
+<summary>
+<b>{result_summary}</b>
+</summary>
+<p>
+{result_details}
+</p>
+</details>
+'''
+
+    return ChatCompletionStreamResponse(
+        id=uuid_str,
+        object='chat.completion.chunk',
+        created=int(time.time()),
+        model='unspecified',
+        choices=[
+            dict(
+                index=0,
+                delta=dict(
+                    content=template,
+                    role='tool'
+                ),
+            )
+        ]
+    )
+
+
 class Generator:
     def __init__(self, gen):
         self.gen = gen
