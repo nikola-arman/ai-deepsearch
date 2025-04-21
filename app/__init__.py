@@ -368,7 +368,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         # Return the results
         sources = []
         if state.combined_results:
-            for res in state.combined_results:  # Limit to 5 sources
+            for res in state.combined_results:
                 sources.append({
                     "title": res.title,
                     "url": res.url
