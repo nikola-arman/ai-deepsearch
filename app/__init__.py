@@ -16,7 +16,8 @@ from deepsearch.agents import (
     llama_reasoning_agent,
     query_expansion_agent,
     deep_reasoning_agent,
-    brave_search_agent
+    brave_search_agent,
+    google_search_agent
 )
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
 
@@ -31,6 +32,7 @@ from deepsearch.utils import to_chunk_data, wrap_thought
 class Retriever(Enum):
     TAVILY = "tavily"
     BRAVE = "brave"
+    GOOGLE = "google"
 
 
 def write_state_to_file(state: SearchState):
@@ -48,6 +50,8 @@ def get_retriever_from_env() -> List[Retriever]:
             retrievers.append(Retriever.TAVILY)
         elif retriever == Retriever.BRAVE.value:
             retrievers.append(Retriever.BRAVE)
+        elif retriever == Retriever.GOOGLE.value:
+            retrievers.append(Retriever.GOOGLE)
         else:
             raise ValueError(f"Invalid retriever: {retriever}")
     return retrievers
@@ -125,13 +129,33 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
             logger.info("Step 2: Brave search skipped")
             yield to_chunk_data(wrap_thought("Brave search skipped"))
 
+        # Step 3: Google Search
+        if Retriever.GOOGLE in retrievers:
+            logger.info("Step 3: Performing Google web search...")
+            yield to_chunk_data(wrap_thought("Performing Google web search..."))
+            temp_state = SearchState(
+                original_query=search_query  # Use the current query as the original query for this temp state
+            )
+            try:
+                temp_state = yield from google_search_agent(temp_state, max_results=5)
+                logger.info(f"  Found {len(temp_state.google_results)} results")
+                yield to_chunk_data(wrap_thought("Google search complete", f"Found {len(temp_state.google_results)} results"))
+            except Exception as e:
+                logger.error(f"  Error in Google search: {str(e)}", exc_info=True)
+                temp_state.google_results = []
+                yield to_chunk_data(wrap_thought("Google search error", str(e)))
+            state.google_results = temp_state.google_results
+        else:
+            logger.info("Step 3: Google search skipped")
+            yield to_chunk_data(wrap_thought("Google search skipped"))
+
         # Combine search results
-        state.search_results = state.tavily_results + state.brave_results
+        state.search_results = state.tavily_results + state.brave_results + state.google_results
         logger.info(f"  Combined {len(state.search_results)} total search results")
         yield to_chunk_data(wrap_thought("Search results combined", f"Combined {len(state.search_results)} total search results"))
 
-        # Step 3: FAISS Indexing (semantic search)
-        logger.info("Step 3: Performing semantic search...")
+        # Step 4: FAISS Indexing (semantic search)
+        logger.info("Step 4: Performing semantic search...")
         yield to_chunk_data(wrap_thought("Performing semantic search..."))
         try:
             state = yield from faiss_indexing_agent(state)
@@ -142,8 +166,8 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
             state.faiss_results = []
             yield to_chunk_data(wrap_thought("Semantic search error", str(e)))
 
-        # Step 4: BM25 Search (keyword search)
-        logger.info("Step 4: Performing keyword search...")
+        # Step 5: BM25 Search (keyword search)
+        logger.info("Step 5: Performing keyword search...")
         yield to_chunk_data(wrap_thought("Performing keyword search..."))
         try:
             state = yield from bm25_search_agent(state)
@@ -158,8 +182,8 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
                 state.combined_results = state.faiss_results + state.search_results
             yield to_chunk_data(wrap_thought("Keyword search error", str(e)))
 
-        # Step 5: LLM Reasoning
-        logger.info("Step 5: Generating answer...")
+        # Step 6: LLM Reasoning
+        logger.info("Step 6: Generating answer...")
         yield to_chunk_data(wrap_thought("Generating answer..."))
         try:
             state = yield from llama_reasoning_agent(state)
@@ -274,11 +298,25 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 else:
                     logger.info(f"    Brave web search skipped")
 
+                # Step 4: Google Search for this query
+                if Retriever.GOOGLE in retrievers:
+                    logger.info(f"    Performing Google web search...")
+                    try:
+                        temp_state = yield from google_search_agent(temp_state, max_results=5)
+                        # Tag results with the query that produced them
+                        for result in temp_state.google_results:
+                            result.query = query
+                        logger.info(f"    Found {len(temp_state.google_results)} web results")
+                    except Exception as e:
+                        logger.error(f"    Error in Google search: {str(e)}", exc_info=True)
+                else:
+                    logger.info(f"    Google web search skipped")
+
                 # Combine search results
-                temp_state.search_results = temp_state.tavily_results + temp_state.brave_results
+                temp_state.search_results = temp_state.tavily_results + temp_state.brave_results + temp_state.google_results
                 logger.info(f"    Combined {len(temp_state.search_results)} total search results")
 
-                # Step 4: FAISS Indexing (semantic search) for this query
+                # Step 5: FAISS Indexing (semantic search) for this query
                 logger.info(f"    Performing semantic search...")
                 try:
                     temp_state = yield from faiss_indexing_agent(temp_state)
@@ -289,7 +327,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 except Exception as e:
                     logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
 
-                # Step 5: BM25 Search (keyword search) for this query
+                # Step 6: BM25 Search (keyword search) for this query
                 logger.info(f"    Performing keyword search...")
                 try:
                     temp_state = yield from bm25_search_agent(temp_state)
@@ -338,7 +376,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 state.combined_results = list(unique_results.values())
                 logger.info(f"  Deduplicated to {len(state.combined_results)} unique results")
 
-            # Step 6: Deep Reasoning - analyze results and decide whether to continue
+            # Step 7: Deep Reasoning - analyze results and decide whether to continue
             logger.info(f"  Analyzing search results and determining next steps...")
             try:
                 state = yield from deep_reasoning_agent(state, max_iterations)
