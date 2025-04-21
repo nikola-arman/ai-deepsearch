@@ -476,7 +476,7 @@ Respond with a JSON object in this format:
         # Default to treating as complex if parsing fails
         return True
 
-def prompt(messages: list[dict[str, str]], **kwargs) -> str:
+def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, None]:
     assert len(messages) > 0, "received empty messages"
     query = messages[-1]['content']
 
@@ -488,17 +488,11 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> str:
     # Choose appropriate pipeline based on complexity
     if is_complex:
         logger.info("Using deep search pipeline for complex query")
-        gen = GeneratorValue(run_deep_search_pipeline(query))
+        res = yield from run_deep_search_pipeline(query)
     else:
         logger.info("Using simple pipeline for straightforward query")
-        gen = GeneratorValue(run_simple_pipeline(query))
+        res = yield from run_simple_pipeline(query)
 
-    # Process the pipeline
-    for chunk in gen:
-        print(chunk)
-    res: Dict = gen.value
-
-    sep = "-" * 30
     final_resp = res["answer"]
 
     if len(res["sources"]) > 0:
@@ -516,4 +510,4 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> str:
         for item in res["sources"]:
             final_resp += "- [{title}]({url})\n".format(**item)
 
-    return final_resp
+    yield final_resp
