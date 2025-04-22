@@ -94,22 +94,23 @@ JSON response:
 
         retrievers = get_retriever_from_env()
 
+        web_search_uuid = str(uuid.uuid4())
+
         # Step 1: Tavily Search
         if Retriever.TAVILY in retrievers:
             logger.info("Step 1: Performing Tavily web search...")
-            tavily_search_uuid = str(uuid.uuid4())
-            yield to_chunk_data(wrap_step_start(tavily_search_uuid, "Performing Tavily web search"))
+            yield to_chunk_data(wrap_step_start(web_search_uuid, "Performing web search"))
             temp_state = SearchState(
                 original_query=search_query  # Use the current query as the original query for this temp state
             )
             try:
                 temp_state = tavily_search_agent(temp_state)
                 logger.info(f"  Found {len(temp_state.tavily_results)} results")
-                yield to_chunk_data(wrap_step_finish(tavily_search_uuid, f"Found {len(temp_state.tavily_results)} results"))
+                yield to_chunk_data(wrap_step_finish(web_search_uuid, f"Found {len(temp_state.tavily_results)} results from Tavily search"))
             except Exception as e:
                 logger.error(f"  Error in Tavily search: {str(e)}", exc_info=True)
                 temp_state.tavily_results = []
-                yield to_chunk_data(wrap_step_finish(tavily_search_uuid, f"An error occurred", str(e), is_error=True))
+                yield to_chunk_data(wrap_step_finish(web_search_uuid, f"Tavily search failed", str(e), is_error=True))
             state.tavily_results = temp_state.tavily_results
         else:
             logger.info("Step 1: Tavily search skipped")
@@ -117,19 +118,18 @@ JSON response:
         # Step 2: Brave Search
         if Retriever.BRAVE in retrievers:
             logger.info("Step 2: Performing Brave web search...")
-            brave_search_uuid = str(uuid.uuid4())
-            yield to_chunk_data(wrap_step_start(brave_search_uuid, "Performing Brave web search"))
+
             temp_state = SearchState(
                 original_query=search_query  # Use the current query as the original query for this temp state
             )
             try:
                 temp_state = brave_search_agent(temp_state, max_results=5, use_ai_snippets=False)
                 logger.info(f"  Found {len(temp_state.brave_results)} results")
-                yield to_chunk_data(wrap_step_finish(brave_search_uuid, f"Found {len(temp_state.brave_results)} results"))
+                yield to_chunk_data(wrap_step_finish(web_search_uuid, f"Found {len(temp_state.brave_results)} results from Brave search"))
             except Exception as e:
                 logger.error(f"  Error in Brave search: {str(e)}", exc_info=True)
                 temp_state.brave_results = []
-                yield to_chunk_data(wrap_step_finish(brave_search_uuid, f"An error occurred", str(e), is_error=True))
+                yield to_chunk_data(wrap_step_finish(web_search_uuid, f"Brave search failed", str(e), is_error=True))
             state.brave_results = temp_state.brave_results
         else:
             logger.info("Step 2: Brave search skipped")
@@ -140,33 +140,32 @@ JSON response:
 
         # Step 3: FAISS Indexing (semantic search)
         logger.info("Step 3: Performing semantic search...")
-        faiss_indexing_uuid = str(uuid.uuid4())
-        yield to_chunk_data(wrap_step_start(faiss_indexing_uuid, "Retrieving semantically relevant results"))
+        retrieving_search_result_uuid = str(uuid.uuid4())
+        yield to_chunk_data(wrap_step_start(retrieving_search_result_uuid, "Retrieving relevant web search results"))
         try:
             state = faiss_indexing_agent(state)
             logger.info(f"  Found {len(state.faiss_results)} semantically relevant results")
-            yield to_chunk_data(wrap_step_finish(faiss_indexing_uuid, f"Found {len(state.faiss_results)} semantically relevant results"))
+            yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Found {len(state.faiss_results)} semantically relevant results"))
         except Exception as e:
             logger.error(f"  Error in semantic search: {str(e)}", exc_info=True)
             state.faiss_results = []
-            yield to_chunk_data(wrap_step_finish(faiss_indexing_uuid, f"An error occurred", str(e), is_error=True))
+            yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Retrieving semantically relevant results failed", str(e), is_error=True))
 
         # Step 4: BM25 Search (keyword search)
         logger.info("Step 4: Performing keyword search...")
-        bm25_search_uuid = str(uuid.uuid4())
-        yield to_chunk_data(wrap_step_start(bm25_search_uuid, "Retrieving keyword relevant results"))
+
         try:
             state = bm25_search_agent(state)
             logger.info(f"  Found {len(state.bm25_results)} keyword relevant results")
             logger.info(f"  Combined {len(state.combined_results)} total relevant results")
-            yield to_chunk_data(wrap_step_finish(bm25_search_uuid, f"Found {len(state.bm25_results)} keyword relevant results and {len(state.combined_results)} total results"))
+            yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Found {len(state.bm25_results)} keyword relevant results"))
         except Exception as e:
             logger.error(f"  Error in keyword search: {str(e)}", exc_info=True)
             state.bm25_results = []
             # Ensure we have combined results even if BM25 fails
             if not state.combined_results:
                 state.combined_results = state.faiss_results + state.search_results
-            yield to_chunk_data(wrap_step_finish(bm25_search_uuid, f"An error occurred", str(e), is_error=True))
+            yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Retrieving keyword relevant results failed", str(e), is_error=True))
 
         # Step 5: LLM Reasoning
         logger.info("Step 5: Generating answer...")
@@ -267,21 +266,23 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 )
 
                 # Step 2: Tavily Search for this query
+
+                web_search_uuid = str(uuid.uuid4())
+                yield to_chunk_data(wrap_step_start(web_search_uuid, "Performing web search"))
+                
                 retrievers = get_retriever_from_env()
                 if Retriever.TAVILY in retrievers:
                     logger.info(f"    Performing Tavily web search...")
                     try:
-                        tavily_search_uuid = str(uuid.uuid4())
-                        yield to_chunk_data(wrap_step_start(tavily_search_uuid, "Performing Tavily web search"))
                         temp_state = tavily_search_agent(temp_state)
                         # Tag results with the query that produced them
                         for result in temp_state.tavily_results:
                             result.query = query
                         logger.info(f"    Found {len(temp_state.tavily_results)} web results")
-                        yield to_chunk_data(wrap_step_finish(tavily_search_uuid, f"Found {len(temp_state.tavily_results)} web results"))
+                        yield to_chunk_data(wrap_step_finish(web_search_uuid, f"Found {len(temp_state.tavily_results)} results from Tavily search"))
                     except Exception as e:
                         logger.error(f"    Error in Tavily search: {str(e)}", exc_info=True)
-                        yield to_chunk_data(wrap_step_finish(tavily_search_uuid, f"An error occurred", str(e), is_error=True))
+                        yield to_chunk_data(wrap_step_finish(web_search_uuid, f"Tavily search failed", str(e), is_error=True))
                 else:
                     logger.info(f"    Tavily web search skipped")
 
@@ -289,17 +290,15 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 if Retriever.BRAVE in retrievers:
                     logger.info(f"    Performing Brave web search...")
                     try:
-                        brave_search_uuid = str(uuid.uuid4())
-                        yield to_chunk_data(wrap_step_start(brave_search_uuid, "Performing Brave web search"))
                         temp_state = brave_search_agent(temp_state, use_ai_snippets=True)
                         # Tag results with the query that produced them
                         for result in temp_state.brave_results:
                             result.query = query
                         logger.info(f"    Found {len(temp_state.brave_results)} web results")
-                        yield to_chunk_data(wrap_step_finish(brave_search_uuid, f"Found {len(temp_state.brave_results)} web results"))
+                        yield to_chunk_data(wrap_step_finish(web_search_uuid, f"Found {len(temp_state.brave_results)} results from Brave search"))
                     except Exception as e:
                         logger.error(f"    Error in Brave search: {str(e)}", exc_info=True)
-                        yield to_chunk_data(wrap_step_finish(brave_search_uuid, f"An error occurred", str(e), is_error=True))
+                        yield to_chunk_data(wrap_step_finish(web_search_uuid, f"Brave search failed", str(e), is_error=True))
                 else:
                     logger.info(f"    Brave web search skipped")
 
@@ -307,34 +306,34 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 temp_state.search_results = temp_state.tavily_results + temp_state.brave_results
                 logger.info(f"    Combined {len(temp_state.search_results)} total search results")
 
+                retrieving_search_result_uuid = str(uuid.uuid4())
+                yield to_chunk_data(wrap_step_start(retrieving_search_result_uuid, "Retrieving relevant web search results"))
+
                 # Step 4: FAISS Indexing (semantic search) for this query
                 logger.info(f"    Performing semantic search...")
                 try:
-                    faiss_indexing_uuid = str(uuid.uuid4())
-                    yield to_chunk_data(wrap_step_start(faiss_indexing_uuid, "Retrieving semantically relevant results"))
                     temp_state = faiss_indexing_agent(temp_state)
                     # Tag results with the query that produced them
                     for result in temp_state.faiss_results:
                         result.query = query
                     logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
-                    yield to_chunk_data(wrap_step_finish(faiss_indexing_uuid, f"Found {len(temp_state.faiss_results)} semantic results"))
+                    yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Found {len(temp_state.faiss_results)} semantically relevant results"))
                 except Exception as e:
                     logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
-                    yield to_chunk_data(wrap_step_finish(faiss_indexing_uuid, f"An error occurred", str(e), is_error=True))
+                    yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Retrieving semantically relevant results failed", str(e), is_error=True))
+
                 # Step 5: BM25 Search (keyword search) for this query
                 logger.info(f"    Performing keyword search...")
                 try:
-                    bm25_search_uuid = str(uuid.uuid4())
-                    yield to_chunk_data(wrap_step_start(bm25_search_uuid, "Retrieving keyword relevant results"))
                     temp_state = bm25_search_agent(temp_state)
                     # Tag results with the query that produced them
                     for result in temp_state.bm25_results:
                         result.query = query
                     logger.info(f"    Found {len(temp_state.bm25_results)} keyword results")
-                    yield to_chunk_data(wrap_step_finish(bm25_search_uuid, f"Found {len(temp_state.bm25_results)} keyword results"))
+                    yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Found {len(temp_state.bm25_results)} keyword relevant results"))
                 except Exception as e:
                     logger.error(f"    Error in keyword search: {str(e)}", exc_info=True)
-                    yield to_chunk_data(wrap_step_finish(bm25_search_uuid, f"An error occurred", str(e), is_error=True))
+                    yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Retrieving keyword relevant results failed", str(e), is_error=True))
 
                 # Collect results from this query
                 state.tavily_results.extend(temp_state.tavily_results)

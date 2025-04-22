@@ -766,7 +766,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     logger.info("Generated key points for final answer")
     logger.info(f"Key points: {key_points}")
 
-    yield to_chunk_data(wrap_step_finish(refine_key_points_uuid, f"Generated {len(key_points)} key points"))
+    yield to_chunk_data(wrap_step_finish(refine_key_points_uuid, f"Finished"))
 
     # Stage 2: Generate direct answer
     generate_direct_answer_uuid = str(uuid.uuid4())
