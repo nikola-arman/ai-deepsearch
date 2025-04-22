@@ -762,6 +762,8 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     # Extract the content if it's a message object
     key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
     logger.info("Generated key points for final answer")
+    logger.info(f"Key points: {key_points}")
+    
     yield to_chunk_data(wrap_step_finish(refine_key_points_uuid, f"Generated {len(key_points)} key points"))
 
     # Stage 2: Generate direct answer
