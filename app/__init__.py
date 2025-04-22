@@ -21,9 +21,12 @@ from deepsearch.agents import (
 )
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
 
+
 from json_repair import repair_json
 import json
 import logging
+from langchain_core.tools import tool
+
 logger = logging.getLogger(__name__)
 
 from langchain.prompts import PromptTemplate
@@ -513,7 +516,24 @@ Respond with a JSON object in this format:
 
 def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, None]:
     assert len(messages) > 0, "received empty messages"
-    query = messages[-1]['content']
+
+    llm = init_reasoning_llm()
+    llm = llm.bind_tools([answer_query, perform_research])
+
+    messages_with_system_prompt = [{
+        "role": "system",
+        "content": "You are Vibe Deepsearch, an helpful and friendly AI assistant that can perform thorough research, answer user's inquiry, and write detailed report that explores any topic in depth."
+    }] + messages
+
+    response = llm.invoke(messages_with_system_prompt)
+
+    if not response.tool_calls or len(response.tool_calls) == 0:
+        yield response.content
+        return
+
+    tool_call = response.tool_calls[-1]
+    logger.info(f"Tool call: {tool_call}")
+    query = tool_call["args"]["query"]
 
     # Detect query complexity
     logger.info("Analyzing query complexity...")
@@ -546,3 +566,14 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
             final_resp += "- [{title}]({url})\n".format(**item)
 
     yield final_resp
+
+
+@tool
+def answer_query(query: str) -> str:
+    """Answer the user's inquiry."""
+    return ""
+
+@tool
+def perform_research(query: str) -> str:
+    """Write detailed report in depth about a topic query"""
+    return ""
