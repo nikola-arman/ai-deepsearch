@@ -78,7 +78,7 @@ def brave_search(query: str, max_results: int = 10, use_ai_snippets: bool = Fals
         logger.error(f"Error in Brave search: {str(e)}", exc_info=True)
         return []
 
-def brave_search_agent(state: SearchState, max_results: int = 10, use_ai_snippets: bool = False) -> Generator[bytes, None, SearchState]:
+def brave_search_agent(state: SearchState, max_results: int = 10, use_ai_snippets: bool = False) -> SearchState:
     """
     Uses Brave Search API to perform web searches.
 
@@ -93,22 +93,9 @@ def brave_search_agent(state: SearchState, max_results: int = 10, use_ai_snippet
 
     # Check if we have a query to search
     if not state.original_query:
-        yield to_chunk_data(
-            wrap_thought(
-                "Brave search agent: No query",
-                "No query provided for Brave search"
-            )
-        )
         return state
 
     try:
-        yield to_chunk_data(
-            wrap_thought(
-                "Brave search agent: Starting search",
-                f"Searching for: {state.original_query}"
-            )
-        )
-
         # Perform the search
         results = brave_search(
             state.original_query,
@@ -118,20 +105,8 @@ def brave_search_agent(state: SearchState, max_results: int = 10, use_ai_snippet
 
         # Update the state
         state.brave_results = results
-        yield to_chunk_data(
-            wrap_thought(
-                "Brave search agent: Complete",
-                f"Found {len(results)} results"
-            )
-        )
 
     except Exception as e:
         logger.error(f"Error in Brave search agent: {str(e)}", exc_info=True)
-        yield to_chunk_data(
-            wrap_thought(
-                "Brave search agent: Error",
-                f"Error occurred during Brave search: {str(e)}"
-            )
-        )
 
     return state 

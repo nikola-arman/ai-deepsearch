@@ -40,6 +40,12 @@ IMPORTANT INSTRUCTIONS:
 3. DO NOT end your response with phrases like "Do you want me to explain more?" or similar.
 4. Provide a complete, self-contained answer that stands on its own.
 5. Be confident and definitive in your response.
+6. If there are different results, for example, if some results say "ETC price is $1000" and some other results say
+"ETC price is $2000", carefully consider all search results and provide a final answer that reflects the most accurate information.
+7. If the search results are contradictory, acknowledge the uncertainty and provide a balanced view.
+8. If the search results are not relevant to the query, state that you cannot provide an answer based on the search results.
+9. If the search results are too vague or unclear, state that you cannot provide a definitive answer.
+10. Do not include the references section at the end of your answer.
 
 Answer:
 """
@@ -102,7 +108,7 @@ def calculate_confidence(answer: str) -> float:
     # Cap confidence between 0 and 1
     return max(0.0, min(1.0, confidence))
 
-def llama_reasoning_agent(state: SearchState) -> Generator[bytes, None, SearchState]:
+def llama_reasoning_agent(state: SearchState) -> SearchState:
     """
     Uses Llama.cpp to analyze results and generate a cohesive answer.
 
@@ -120,11 +126,9 @@ def llama_reasoning_agent(state: SearchState) -> Generator[bytes, None, SearchSt
         # No results, set a low confidence and an appropriate message
         state.final_answer = "I couldn't find relevant information to answer your query."
         state.confidence_score = 0.1
-        yield to_chunk_data(wrap_thought("No search results found"))
         return state
 
     # Initialize the LLM
-    yield to_chunk_data(wrap_thought("Initializing language model"))
     llm = init_reasoning_llm()
 
     # Create the prompt
@@ -137,14 +141,12 @@ def llama_reasoning_agent(state: SearchState) -> Generator[bytes, None, SearchSt
     chain = reasoning_prompt | llm
 
     # Format the search results
-    yield to_chunk_data(wrap_thought("Formatting search results"))
     formatted_results = format_search_results(state)
 
     # Use refined query if available, otherwise use original query
     query = state.original_query
 
     # Generate the answer
-    yield to_chunk_data(wrap_thought("Generating comprehensive answer from search results"))
     response = chain.invoke({
         "query": query,
         "search_results": formatted_results
@@ -157,7 +159,6 @@ def llama_reasoning_agent(state: SearchState) -> Generator[bytes, None, SearchSt
         answer = response
 
     # Calculate confidence score
-    yield to_chunk_data(wrap_thought("Calculating confidence score"))
     confidence = calculate_confidence(answer)
 
     # Update the state
