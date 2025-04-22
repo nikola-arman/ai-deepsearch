@@ -45,6 +45,7 @@ IMPORTANT INSTRUCTIONS:
 7. If the search results are contradictory, acknowledge the uncertainty and provide a balanced view.
 8. If the search results are not relevant to the query, state that you cannot provide an answer based on the search results.
 9. If the search results are too vague or unclear, state that you cannot provide a definitive answer.
+10. Do not include the references section at the end of your answer.
 
 Answer:
 """
