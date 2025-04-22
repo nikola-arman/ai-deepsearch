@@ -36,7 +36,10 @@ Extract the following information:
 3. Main arguments or points made
 4. Any quoted statements
 
-Pharse each information in each category as a sentence.
+Instructions:
+- Phrase each item as a complete, standalone sentence that clearly conveys the information without requiring additional context.
+- Do not include duplicate or overly similar statements.
+- Only include information that appears explicitly in the content.
 
 Format the response as a JSON object with these fields:
 {{

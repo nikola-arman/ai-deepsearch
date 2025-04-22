@@ -123,6 +123,11 @@ Format the response as a JSON object with these fields:
             template=verification_prompt
         )
 
+        print("verification_prompt:", prompt_template.invoke({
+            "representative": representative,
+            "sources": "\n".join(formatted_sources)    
+        }))
+
         # Create the chain
         chain = prompt_template | llm
 
@@ -162,12 +167,6 @@ def fact_checking_agent(state: SearchState) -> Generator[bytes, None, SearchStat
     """
     # Check if we have results to analyze
     if not state.combined_results:
-        yield to_chunk_data(
-            wrap_thought(
-                "Fact checking agent: No results",
-                "No search results available for fact checking"
-            )
-        )
         return state
 
     try:
@@ -178,20 +177,7 @@ def fact_checking_agent(state: SearchState) -> Generator[bytes, None, SearchStat
                 all_statements.extend(result.extracted_information)
 
         if not all_statements:
-            yield to_chunk_data(
-                wrap_thought(
-                    "Fact checking agent: No information",
-                    "No extracted information available for fact checking"
-                )
-            )
             return state
-
-        yield to_chunk_data(
-            wrap_thought(
-                "Fact checking agent: Starting verification",
-                f"Analyzing {len(all_statements)} statements"
-            )
-        )
 
         # Group similar statements
         statement_groups = group_similar_statements(all_statements)
@@ -204,10 +190,10 @@ def fact_checking_agent(state: SearchState) -> Generator[bytes, None, SearchStat
             "unverified": []
         }
 
+        print("statement_groups:", statement_groups)
+
         # Verify each group
         for i, (representative, statements) in enumerate(statement_groups.items()):
-            print("statement_groups:", statement_groups)
-
             yield to_chunk_data(
                 wrap_thought(
                     "Fact checking agent: Verifying group",
