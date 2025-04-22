@@ -317,6 +317,7 @@ IMPORTANT RULES:
 7. If the search context is insufficient to cover a point, clearly state this limitation
 8. Focus ONLY on this section without repeating information from other sections
 9. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
+10. Do not include the references section at the end of your answer.
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
@@ -788,7 +789,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
     logger.info("Generated direct answer")
     yield to_chunk_data(wrap_step_finish(generate_direct_answer_uuid, f"Finished"))
-    
+
     # Stage 3: Generate detailed notes outline (section headings only)
     generate_detailed_notes_outline_uuid = str(uuid.uuid4())
     yield to_chunk_data(wrap_step_start(generate_detailed_notes_outline_uuid, "Generating detailed notes outline"))
