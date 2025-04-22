@@ -50,3 +50,4 @@ output/
 scripts/run_docker_with_env.sh
 .tmp/
 scripts/build_and_run_docker.sh
+ai-deepsearch.zip
