@@ -51,9 +51,6 @@ def brave_search(query: str, max_results: int = 10, use_ai_snippets: bool = Fals
         # Parse the response
         data = response.json()
 
-        print("Brave search results:")
-        print(json.dumps(data, indent=2))
-        
         # Extract results
         results = []
         if "web" in data and "results" in data["web"]:

@@ -72,14 +72,19 @@ def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
         try:
             llm = init_reasoning_llm()
             # Use a simple prompt to rewrite query in search engine format
-            prompt = PromptTemplate.from_template(
-                "Rewrite this query into a search engine friendly format"
-                "Query: {query}\n"
-                "Rewritten query:"
-            )
+            prompt = PromptTemplate.from_template("""
+Rewrite this query into a search engine friendly format and return as JSON with format:
+{{
+    "search_query": "<rewritten query>"
+}}
+
+Query: {query}
+JSON response:
+""")
             chain = prompt | llm
             response = chain.invoke({"query": query})
-            search_query = response.content
+            data = repair_json(response.content, return_objects=True)
+            search_query = data["search_query"]
             logger.info(f"  Generated search query: {search_query}")
             yield to_chunk_data(wrap_step_finish(generate_search_query_uuid, "Finished"))
         except Exception as e:
@@ -524,6 +529,8 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
         "role": "system",
         "content": "You are Vibe Deepsearch, an helpful and friendly AI assistant that can perform thorough research, answer user's inquiry, and write detailed report that explores any topic in depth."
     }] + messages
+
+    print("messages_with_system_prompt:", messages_with_system_prompt)
 
     response = llm.invoke(messages_with_system_prompt)
 

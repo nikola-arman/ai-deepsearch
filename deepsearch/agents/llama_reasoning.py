@@ -46,7 +46,7 @@ IMPORTANT INSTRUCTIONS:
 8. If the search results are not relevant to the query, state that you cannot provide an answer based on the search results.
 9. If the search results are too vague or unclear, state that you cannot provide a definitive answer.
 10. Do not include the references section at the end of your answer.
-11. Please be aware that you are outputting a Markdown-formatted answer. So, with the dollar sign ($) in the answer which does not indicate the mathematical formula, please use the backslash  to escape it, to be properly displayed on the Markdown.
+11. Please be aware that you are outputting a Markdown-formatted answer. So, with the dollar sign ($) in the answer which does not indicate the mathematical formula, please use the backslash to escape it, to be properly displayed on the Markdown.
 
 Answer:
 """
