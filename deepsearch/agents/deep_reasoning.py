@@ -318,7 +318,7 @@ IMPORTANT RULES:
 8. Focus ONLY on this section without repeating information from other sections
 9. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
 10. Do not include the references section at the end of your answer.
-11. Please be aware that you are outputting a Markdown-formatted answer. So, with the dollar sign ($) in the answer, please use the backslash  to escape it. For example, if the answer is "The price is $100", please output "The price is \$100" instead.
+11. Please be aware that you are outputting a Markdown-formatted answer. So, with the dollar sign ($) in the answer which does not indicate the mathematical formula, please use the backslash to escape it, to be properly displayed on the Markdown.
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
