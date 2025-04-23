@@ -34,13 +34,9 @@ QUERY: {query}
 
 Consider the following factors:
 1. Does the query ask for a simple fact or definition that can be answered in a few sentences?
-2. Does the query require gathering and synthesizing information from multiple sources?
-3. Is the query open-ended or exploratory in nature?
-4. Does the query require comparing different perspectives or analyzing trends?
-5. Would answering the query benefit from multiple search iterations?
-6. Does the query involve temporal aspects or need recent/current information?
-7. Does it require domain expertise or technical knowledge?
-8. Are there multiple sub-questions within the main query?
+2. Is the query open-ended or exploratory in nature?
+3. Does the query require comparing different perspectives or analyzing trends?
+4. Are there multiple sub-questions within the main query?
 
 Respond with a JSON object in this format:
 {{
