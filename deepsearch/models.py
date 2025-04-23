@@ -46,6 +46,7 @@ class SearchState(BaseModel):
     historical_knowledge_gaps: List[str] = []
     tavily_results: List[SearchResult] = []
     brave_results: List[SearchResult] = []
+    exa_results: list[SearchResult] = []
     search_results: List[SearchResult] = []  # Combined results from all search engines
     faiss_results: List[SearchResult] = []
     bm25_results: List[SearchResult] = []

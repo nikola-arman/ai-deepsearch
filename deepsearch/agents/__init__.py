@@ -9,6 +9,7 @@ from deepsearch.agents.llama_reasoning import llama_reasoning_agent
 from deepsearch.agents.query_expansion import query_expansion_agent
 from deepsearch.agents.deep_reasoning import deep_reasoning_agent, generate_final_answer
 from deepsearch.agents.brave_search import brave_search_agent
+from deepsearch.agents.exa_search import exa_search_agent
 
 __all__ = [
     "tavily_search_agent",
@@ -18,5 +19,6 @@ __all__ = [
     "query_expansion_agent",
     "deep_reasoning_agent",
     "generate_final_answer",
-    "brave_search_agent"
+    "brave_search_agent",
+    "exa_search_agent",
 ]
