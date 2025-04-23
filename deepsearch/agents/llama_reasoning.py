@@ -6,7 +6,7 @@ from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
 from deepsearch.models import SearchState
-from deepsearch.utils import to_chunk_data, wrap_thought
+from deepsearch.utils import escape_dollar_signs, to_chunk_data, wrap_thought
 
 # Set up logging
 logger = logging.getLogger("deepsearch.reasoning")
@@ -158,6 +158,8 @@ def llama_reasoning_agent(state: SearchState) -> SearchState:
     else:
         answer = response
 
+    answer = escape_dollar_signs(answer)
+   
     # Calculate confidence score
     confidence = calculate_confidence(answer)
 

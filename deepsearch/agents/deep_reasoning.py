@@ -12,6 +12,7 @@ import datetime  # Add import for datetime module
 
 from deepsearch.models import SearchState, SearchResult
 from deepsearch.utils import to_chunk_data, wrap_step_finish, wrap_step_start, wrap_thought
+from deepsearch.utils import escape_dollar_signs
 
 # Set up logging
 logger = logging.getLogger("deepsearch.deep_reasoning")
@@ -741,19 +742,6 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generat
         state = yield from generate_final_answer(state)
 
     return state
-
-def escape_dollar_signs(text: str) -> str:
-    """
-    Escapes all dollar signs in the text by replacing them with backslash-dollar.
-    This prevents markdown from interpreting them as math formula delimiters.
-    
-    Args:
-        text: The text to process
-        
-    Returns:
-        Text with all dollar signs escaped
-    """
-    return text.replace('$', '\\$')
 
 def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchState]:
     """
