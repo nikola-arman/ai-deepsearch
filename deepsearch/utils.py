@@ -39,7 +39,7 @@ def wrap_thought(thought: str, thought_details: str = None, uuid_str: str = None
             dict(
                 index=0,
                 delta=dict(
-                    content=template,
+                    reasoning_content=template,
                     role='tool'
                 ),
             )
@@ -59,7 +59,7 @@ def wrap_step_start(uuid_str: str, step: str) -> ChatCompletionStreamResponse:
             dict(
                 index=0,
                 delta=dict(
-                    content=template,
+                    reasoning_content=template,
                     role='tool'
                 ),
             )
@@ -95,7 +95,7 @@ def wrap_step_finish(uuid_str: str, result_summary: str, result_details: str = N
             dict(
                 index=0,
                 delta=dict(
-                    content=template,
+                    reasoning_content=template,
                     role='tool'
                 ),
             )
