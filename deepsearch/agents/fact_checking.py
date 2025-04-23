@@ -54,6 +54,10 @@ Example format:
         # Create the chain
         chain = prompt_template | llm
 
+        print("grouping_prompt:", prompt_template.invoke({
+            "statements": "\n".join(f"- {s}" for s in statements)
+        }))
+
         # Get the response
         response = chain.invoke({"statements": "\n".join(f"- {s}" for s in statements)})
         
