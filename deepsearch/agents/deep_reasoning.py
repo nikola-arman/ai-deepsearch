@@ -63,6 +63,63 @@ and set "search_complete" to true.
 IMPORTANT: If this is already iteration {max_iterations} or higher, set "search_complete" to true regardless of knowledge gaps.
 """
 
+# Define the prompt template for final answer formulation
+ANSWER_TEMPLATE = """You are an expert research analyst and outline creator. Your task is to create a well-structured outline for answering a query based on search results.
+
+ORIGINAL QUERY: {original_query}
+
+SEARCH CONTEXT:
+{search_context}
+
+SEARCH DETAILS:
+{search_details}
+
+INSTRUCTIONS:
+Your task is to formulate an OUTLINE ONLY for a complete answer with three distinct sections:
+
+1. KEY POINTS: List 5-7 bullet points that would be the most important findings and facts
+2. DIRECT ANSWER: Provide a brief description of what should be covered in the direct answer section (2-3 paragraphs)
+3. DETAILED NOTES: Create a comprehensive outline with:
+   a. Main section headings (3-5 sections)
+   b. For each section, provide 2-3 sub-points that should be covered
+   c. Note any specific technical details, examples, or comparisons that should be included
+   d. Suggest logical flow for presenting the information
+
+IMPORTANT RULES:
+1. ONLY include information that is directly supported by the search context
+2. DO NOT make up or infer information not present in the search results
+3. If information is missing or unclear, note it as a limitation rather than making assumptions
+4. Clearly indicate which search results support each point using markdown hyperlinks
+5. Use direct quotes from search results when appropriate
+6. Maintain academic rigor and avoid speculation
+
+Format your outline using proper markdown sections. THIS IS ONLY AN OUTLINE - do not write the full content.
+Make the outline detailed enough that a content writer can easily expand it into a complete, informative answer.
+
+The outline should follow this structure:
+```
+# OUTLINE: [Query Title]
+
+## 1. KEY POINTS
+- [Key point 1] ([Source Title](source_url))
+- [Key point 2] ([Source Title](source_url))
+...
+
+## 2. DIRECT ANSWER
+[Brief description of what the direct answer should cover, with source references]
+
+## 3. DETAILED NOTES
+### [Section Heading 1]
+- [Subpoint 1] ([Source Title](source_url))
+- [Subpoint 2] ([Source Title](source_url))
+...
+
+### [Section Heading 2]
+- [Subpoint 1] ([Source Title](source_url))
+- [Subpoint 2] ([Source Title](source_url))
+...
+```
+"""
 
 # Define the template for the writer agent that will expand the outline into full content
 WRITER_TEMPLATE = """You are an expert content writer. Your task is to expand an outline into a comprehensive, detailed answer.
@@ -179,7 +236,7 @@ Do not include any headings, bullet points, or section markers.
 """
 
 # Define the template for detailed notes generation
-DETAILED_NOTES_TEMPLATE = """You are an expert content writer. Your task is to provide an outline of detailed sections for expanding on the direct answer.
+DETAILED_NOTES_TEMPLATE = """You are an expert content writer. Your task is to provide a comprehensive outline for detailed sections that expand on the direct answer.
 
 ORIGINAL QUERY: {original_query}
 
@@ -196,23 +253,46 @@ SEARCH DETAILS:
 {search_details}
 
 INSTRUCTIONS:
-Create an outline for detailed, structured notes that expand on the direct answer with more in-depth information. Your outline should:
-1. Include logical sections with clear headings (up to 5 sections for thorough coverage)
-2. Focus on clear, descriptive section titles that reflect the key aspects of the topic
-3. Keep the outline simple - just the section headings in markdown format
+Create a detailed outline for structured notes that expand on the direct answer. Your outline should:
+1. Include 3-5 main sections with clear, descriptive headings
+2. For each section, provide 2-3 specific sub-points that should be covered
+3. For each sub-point, include:
+   - A clear description of what should be covered
+   - Any specific technical details, examples, or comparisons to include
+   - References to relevant search results that support this point
+4. Ensure there is no overlap between sections - each section should cover distinct aspects
+5. Maintain a logical flow between sections
 
 IMPORTANT RULES:
-1. ONLY include sections that can be fully supported by the search context
+1. ONLY include sections and sub-points that can be fully supported by the search context
 2. DO NOT create sections that would require information not present in the search results
-3. Clearly indicate which search results support each section using markdown hyperlinks
+3. Clearly indicate which search results support each point using markdown hyperlinks
 4. If certain aspects cannot be covered due to limited search context, note this limitation
 
-Format your response as a numbered list of section headings in markdown format, like this:
-1. ## Section Heading 1 ([Source Title](source_url))
-2. ## Section Heading 2 ([Source Title](source_url))
-3. ## Section Heading 3 ([Source Title](source_url))
+Format your response as a structured outline in markdown format, like this:
+```
+## [Section Heading 1]
+- [Subpoint 1]
+  - Description: [What should be covered]
+  - Details: [Specific technical details, examples, or comparisons]
+  - Sources: [Relevant search results]
+- [Subpoint 2]
+  - Description: [What should be covered]
+  - Details: [Specific technical details, examples, or comparisons]
+  - Sources: [Relevant search results]
 
-DO NOT include any content under these headings - just provide the section headings.
+## [Section Heading 2]
+- [Subpoint 1]
+  - Description: [What should be covered]
+  - Details: [Specific technical details, examples, or comparisons]
+  - Sources: [Relevant search results]
+- [Subpoint 2]
+  - Description: [What should be covered]
+  - Details: [Specific technical details, examples, or comparisons]
+  - Sources: [Relevant search results]
+```
+
+DO NOT include any content under these headings - just provide the structured outline.
 Each section will be expanded in a separate step. Do not include an introduction or conclusion.
 """
 
@@ -235,20 +315,24 @@ SEARCH DETAILS:
 
 SECTION TO EXPAND: {section_heading}
 
+SECTION OUTLINE:
+{section_outline}
+
 INSTRUCTIONS:
-Create rich, detailed content for the section "{section_heading}". Your content should:
-1. Be thorough and comprehensive (at least 2-4 paragraphs plus additional elements as needed)
-2. Include technical details, examples, and comparisons where relevant
-3. Elaborate on all important aspects related to this specific section
-4. Use proper markdown formatting for subsections and formatting
-5. Where relevant, include:
+Create rich, detailed content for the section "{section_heading}" following the provided outline exactly. Your content should:
+1. Cover each sub-point in the outline in the specified order
+2. Include all technical details, examples, and comparisons mentioned in the outline
+3. Use the sources referenced in the outline to support your points
+4. Be thorough and comprehensive (at least 2-4 paragraphs per sub-point)
+5. Use proper markdown formatting for subsections and formatting
+6. Where relevant, include:
    - Tables for comparing options or features
    - Bulleted lists for steps or features
    - Numbered lists for sequential processes
    - Mathematical formulas if applicable
-6. Use **bold** for important terms and concepts
-7. Use *italics* for emphasis when appropriate
-8. Create subsections with ### heading level when needed to organize complex information
+7. Use **bold** for important terms and concepts
+8. Use *italics* for emphasis when appropriate
+9. Create subsections with ### heading level when needed to organize complex information
 
 IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
@@ -267,7 +351,7 @@ IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
 
 Provide in-depth, authoritative content with specific facts, figures, and examples where possible,
-while strictly adhering to the information available in the search context.
+while strictly adhering to the information available in the search context and following the outline exactly.
 """
 
 # Define the template for initial query generation
@@ -663,8 +747,8 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     Generates the final, structured answer in a multi-stage process:
     1. Generate concise key points
     2. Create a direct answer based on key points
-    3. Generate an outline for detailed notes sections
-    4. Expand each section with dedicated LLM calls
+    3. Generate a comprehensive outline for detailed notes sections
+    4. Expand each section with dedicated LLM calls, following the outline strictly
 
     Args:
         state: The current search state with key points and other information
@@ -687,7 +771,6 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
 
     # Stage 1: Generate refined key points
-
     refine_key_points_uuid = str(uuid.uuid4())
     yield to_chunk_data(wrap_step_start(refine_key_points_uuid, "Generating key points"))
     key_points_llm = init_reasoning_llm(temperature=0.2)
@@ -734,7 +817,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     logger.info("Generated direct answer")
     yield to_chunk_data(wrap_step_finish(generate_direct_answer_uuid, f"Finished"))
 
-    # Stage 3: Generate detailed notes outline (section headings only)
+    # Stage 3: Generate comprehensive outline for detailed notes
     generate_detailed_notes_outline_uuid = str(uuid.uuid4())
     yield to_chunk_data(wrap_step_start(generate_detailed_notes_outline_uuid, "Generating detailed notes outline"))
 
@@ -757,37 +840,62 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
     logger.info("Generated section outline for detailed notes")
 
-    print("Section outline:")
-    print(section_outline)
+    # Parse the section headings and their sub-points from the outline
+    sections = []
+    current_section = None
+    current_subpoints = []
 
-    # Parse the section headings from the outline
-    section_headings = []
     for line in section_outline.strip().split('\n'):
-        # Match lines that contain section headings (## Something)
-        if '##' in line:
-            # Extract just the heading text, removing numbers, source citations and other artifacts
-            heading = line.split('##')[1].strip()
-            if '(' in heading:  # Remove source citation if present
-                heading = heading.split('(')[0].strip()
-            if heading:  # Skip empty headings
-                section_headings.append(heading)
+        line = line.strip()
+        if not line:
+            continue
 
-    logger.info(f"Identified {len(section_headings)} sections to expand")
-    yield to_chunk_data(wrap_step_finish(generate_detailed_notes_outline_uuid, f"Generated {len(section_headings)} sections to expand"))
+        if line.startswith('## '):
+            # Save previous section if exists
+            if current_section is not None:
+                sections.append({
+                    'heading': current_section,
+                    'subpoints': current_subpoints
+                })
+            # Start new section
+            current_section = line[3:].strip()  # Remove '## '
+            current_subpoints = []
+        elif line.startswith('- '):
+            # Add subpoint
+            subpoint = line[2:].strip()  # Remove '- '
+            current_subpoints.append(subpoint)
+
+    # Add the last section
+    if current_section is not None:
+        sections.append({
+            'heading': current_section,
+            'subpoints': current_subpoints
+        })
+
+    logger.info("Sections outline:", json.dumps(sections, indent=2))
+
+    logger.info(f"Identified {len(sections)} sections to expand")
+    yield to_chunk_data(wrap_step_finish(generate_detailed_notes_outline_uuid, f"Generated {len(sections)} sections to expand"))
 
     # Stage 4: Generate detailed content for each section
-
     section_llm = init_reasoning_llm(temperature=0.4)
     section_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading", "search_context"],
+        input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading", "section_outline", "search_context"],
         template=SECTION_CONTENT_TEMPLATE
     )
     section_chain = section_prompt | section_llm
 
     # Generate content for each section
     detailed_notes = "## Detailed Notes\n\n"
-    for idx, heading in enumerate(section_headings):
+    for idx, section in enumerate(sections):
+        heading = section['heading']
+        subpoints = section['subpoints']
         logger.info(f"Generating content for section: {heading}")
+
+        # Format the section outline for the prompt
+        section_outline_text = f"## {heading}\n"
+        for subpoint in subpoints:
+            section_outline_text += f"- {subpoint}\n"
 
         generate_section_content_uuid = str(uuid.uuid4())
         yield to_chunk_data(wrap_step_start(generate_section_content_uuid, f"Generating detailed content for section {idx+1}: {heading}"))
@@ -798,6 +906,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
             "direct_answer": direct_answer,
             "search_details": search_details,
             "section_heading": heading,
+            "section_outline": section_outline_text,
             "search_context": search_context
         })
 
@@ -805,7 +914,6 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
         section_content = section_response.content if hasattr(section_response, 'content') else section_response
 
         # Process the content to remove any headings that match the current heading
-        # This prevents duplication of the heading we're about to add
         content_lines = section_content.split('\n')
         cleaned_lines = []
         skip_next_line = False
