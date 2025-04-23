@@ -63,63 +63,6 @@ and set "search_complete" to true.
 IMPORTANT: If this is already iteration {max_iterations} or higher, set "search_complete" to true regardless of knowledge gaps.
 """
 
-# Define the prompt template for final answer formulation
-ANSWER_TEMPLATE = """You are an expert research analyst and outline creator. Your task is to create a well-structured outline for answering a query based on search results.
-
-ORIGINAL QUERY: {original_query}
-
-SEARCH CONTEXT:
-{search_context}
-
-SEARCH DETAILS:
-{search_details}
-
-INSTRUCTIONS:
-Your task is to formulate an OUTLINE ONLY for a complete answer with three distinct sections:
-
-1. KEY POINTS: List 5-7 bullet points that would be the most important findings and facts
-2. DIRECT ANSWER: Provide a brief description of what should be covered in the direct answer section (2-3 paragraphs)
-3. DETAILED NOTES: Create a comprehensive outline with:
-   a. Main section headings (3-5 sections)
-   b. For each section, provide 2-3 sub-points that should be covered
-   c. Note any specific technical details, examples, or comparisons that should be included
-   d. Suggest logical flow for presenting the information
-
-IMPORTANT RULES:
-1. ONLY include information that is directly supported by the search context
-2. DO NOT make up or infer information not present in the search results
-3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly indicate which search results support each point using markdown hyperlinks
-5. Use direct quotes from search results when appropriate
-6. Maintain academic rigor and avoid speculation
-
-Format your outline using proper markdown sections. THIS IS ONLY AN OUTLINE - do not write the full content.
-Make the outline detailed enough that a content writer can easily expand it into a complete, informative answer.
-
-The outline should follow this structure:
-```
-# OUTLINE: [Query Title]
-
-## 1. KEY POINTS
-- [Key point 1] ([Source Title](source_url))
-- [Key point 2] ([Source Title](source_url))
-...
-
-## 2. DIRECT ANSWER
-[Brief description of what the direct answer should cover, with source references]
-
-## 3. DETAILED NOTES
-### [Section Heading 1]
-- [Subpoint 1] ([Source Title](source_url))
-- [Subpoint 2] ([Source Title](source_url))
-...
-
-### [Section Heading 2]
-- [Subpoint 1] ([Source Title](source_url))
-- [Subpoint 2] ([Source Title](source_url))
-...
-```
-"""
 
 # Define the template for the writer agent that will expand the outline into full content
 WRITER_TEMPLATE = """You are an expert content writer. Your task is to expand an outline into a comprehensive, detailed answer.
