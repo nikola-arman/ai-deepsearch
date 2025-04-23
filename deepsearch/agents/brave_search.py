@@ -15,11 +15,11 @@ BRAVE_API_KEY = os.getenv("BRAVE_API_KEY", "no-need")
 def brave_search(query: str, max_results: int = 10, use_ai_snippets: bool = False) -> List[SearchResult]:
     """
     Perform a web search using Brave Search API.
-    
+
     Args:
         query: The search query
         max_results: Maximum number of results to return
-        
+
     Returns:
         List of SearchResult objects
     """
@@ -32,7 +32,7 @@ def brave_search(query: str, max_results: int = 10, use_ai_snippets: bool = Fals
             "Accept": "application/json",
             "X-Subscription-Token": BRAVE_API_KEY
         }
-        
+
         params = {
             "q": query,
             "count": max_results,
@@ -44,10 +44,10 @@ def brave_search(query: str, max_results: int = 10, use_ai_snippets: bool = Fals
             headers=headers,
             params=params
         )
-        
+
         # Check if the request was successful
         response.raise_for_status()
-        
+
         # Parse the response
         data = response.json()
 
@@ -68,7 +68,7 @@ def brave_search(query: str, max_results: int = 10, use_ai_snippets: bool = Fals
                     score=None  # Brave doesn't provide relevance scores
                 )
                 results.append(result)
-        
+
         return results
 
     except Exception as e:
@@ -106,4 +106,4 @@ def brave_search_agent(state: SearchState, max_results: int = 10, use_ai_snippet
     except Exception as e:
         logger.error(f"Error in Brave search agent: {str(e)}", exc_info=True)
 
-    return state 
+    return state
