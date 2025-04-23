@@ -261,7 +261,6 @@ IMPORTANT RULES:
 8. Focus ONLY on this section without repeating information from other sections
 9. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
 10. Do not include the references section at the end of your answer.
-11. Please be aware that you are outputting a Markdown-formatted answer. So, with the dollar sign ($) in the answer which does not indicate the mathematical formula, please use the backslash to escape it, to be properly displayed on the Markdown.
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
@@ -658,6 +657,19 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generat
 
     return state
 
+def escape_dollar_signs(text: str) -> str:
+    """
+    Escapes all dollar signs in the text by replacing them with backslash-dollar.
+    This prevents markdown from interpreting them as math formula delimiters.
+    
+    Args:
+        text: The text to process
+        
+    Returns:
+        Text with all dollar signs escaped
+    """
+    return text.replace('$', '\\$')
+
 def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchState]:
     """
     Generates the final, structured answer in a multi-stage process:
@@ -845,6 +857,9 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
 
 {detailed_notes.replace('# DETAILED NOTES', '## Detailed Notes')}
 """
+
+    # Escape dollar signs in the final answer
+    final_answer = escape_dollar_signs(final_answer)
 
     # Update the state with the final answer
     state.final_answer = final_answer.strip()
