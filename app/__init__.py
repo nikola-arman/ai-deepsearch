@@ -57,6 +57,28 @@ def get_retriever_from_env() -> List[Retriever]:
     return retrievers
 
 
+def extract_urls_from_report(report: str) -> set[str]:
+    """
+    Extract all URLs from a markdown report that appear in markdown links.
+    
+    Args:
+        report: The markdown report text
+        
+    Returns:
+        Set of URLs found in the report
+    """
+    import re
+    # Match markdown links with nested square brackets: [text with [nested] brackets](url)
+    url_pattern = r'\[(?:[^\[\]]|\[[^\[\]]*\])*\]\((https?://[^)]+)\)'
+    urls = set()
+    
+    for match in re.finditer(url_pattern, report):
+        url = match.group(1)
+        urls.add(url)
+    
+    return urls
+
+
 def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
     """Run a simple pipeline without graph complexity."""
     try:
@@ -185,6 +207,7 @@ JSON response:
         # Return the results
         sources = []
         if state.combined_results:
+            # Only include sources whose URLs appear in the report
             for res in state.combined_results:
                 sources.append({
                     "title": res.title,
@@ -381,7 +404,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 state = yield from deep_reasoning_agent(state, max_iterations)
                 logger.info(f"  Search complete: {state.search_complete}")
                 if not state.search_complete:
-                    logger.info(f"  Knowledge gaps identified: {len(state.knowledge_gaps)}")
+                    logger.info(f"  Knowledge gaps identified:\n{'\n'.join([f'- {gap}' for gap in state.knowledge_gaps])}")
                     logger.info(f"  New queries generated: {len(state.generated_queries)}")
                     yield to_chunk_data(wrap_step_finish(analyze_results_uuid, f"Identified {len(state.knowledge_gaps)} knowledge gaps. Generated {len(state.generated_queries)} new queries"))
                 else:
@@ -410,11 +433,16 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         # Return the results
         sources = []
         if state.combined_results:
+            # Extract URLs from the final answer
+            report_urls = extract_urls_from_report(state.final_answer)
+            
+            # Only include sources whose URLs appear in the report
             for res in state.combined_results:
-                sources.append({
-                    "title": res.title,
-                    "url": res.url
-                })
+                if res.url in report_urls:
+                    sources.append({
+                        "title": res.title,
+                        "url": res.url
+                    })
 
         # Extract components from the final answer if available
         answer = state.final_answer
