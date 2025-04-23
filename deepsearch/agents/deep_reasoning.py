@@ -4,6 +4,7 @@ import json
 import logging
 import uuid
 from dotenv import load_dotenv
+from json_repair import repair_json
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 import re
@@ -432,7 +433,7 @@ def generate_initial_queries(original_query: str) -> List[str]:
 
     try:
         # Parse the JSON response
-        queries = json.loads(query_text)
+        queries = json.loads(repair_json(query_text))
 
         # Ensure we have a list of strings
         if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
@@ -583,7 +584,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generat
 
     # Parse the JSON response
     try:
-        analysis = json.loads(analysis_text)
+        analysis = json.loads(repair_json(analysis_text))
 
         # Update the state with the analysis results
         state.key_points = analysis.get("key_points", [])
@@ -622,7 +623,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generat
             if json_match:
                 json_string = json_match.group(1)
                 # Try to parse it again
-                analysis = json.loads(json_string)
+                analysis = json.loads(repair_json(json_string))
                 logger.info("Successfully extracted JSON using regex pattern 1")
             else:
                 # Second attempt: Try to fix common JSON formatting issues
@@ -639,7 +640,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generat
                 fixed_text = re.sub(r':\s*False\b', r':false', fixed_text)
 
                 try:
-                    analysis = json.loads(fixed_text)
+                    analysis = json.loads(repair_json(fixed_text))
                     logger.info("Successfully parsed JSON after fixing formatting")
                 except json.JSONDecodeError:
                     # If we still can't parse JSON, try to build a minimal valid structure
@@ -851,6 +852,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     # Extract the content if it's a message object
     section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
     logger.info("Generated section outline for detailed notes")
+    logger.info(f"Section outline: {section_outline}")
 
     # Parse the section headings and their sub-points from the outline
     sections = []
@@ -884,7 +886,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
             'subpoints': current_subpoints
         })
 
-    logger.info("Sections outline:", json.dumps(sections, indent=2))
+    logger.info(f"Sections outline: {json.dumps(sections, indent=2)}")
 
     logger.info(f"Identified {len(sections)} sections to expand")
     yield to_chunk_data(wrap_step_finish(generate_detailed_notes_outline_uuid, f"Generated {len(sections)} sections to expand"))
