@@ -9,7 +9,7 @@ os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 os.environ["EXA_API_KEY"] = "no-need"
 
-from typing import Dict, Any, Generator, List
+from typing import Annotated, Dict, Any, Generator, List
 from deepsearch.models import SearchState
 from deepsearch.agents import (
     tavily_search_agent,
@@ -573,12 +573,10 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
     assert len(messages) > 0, "received empty messages"
 
     llm = init_reasoning_llm()
-    llm = llm.bind_tools([answer_query, perform_research])
+    llm = llm.bind_tools([perform_research])
 
     SYSTEM_PROMPT = """
-You are Vibe Deepsearch, an helpful and friendly AI assistant that can perform thorough research, answer user's inquiry, and write detailed report that explores any topic in depth.
-
-When using tools, make sure that the query passed to the tool is the semantically the same as the query that the user asked.
+You are Vibe Deepsearch, an helpful and friendly AI assistant that can perform thorough research and write detailed report that explores any topic in depth.
 """
 
     messages_with_system_prompt = [{
@@ -597,6 +595,7 @@ When using tools, make sure that the query passed to the tool is the semanticall
     tool_call = response.tool_calls[-1]
     logger.info(f"Tool call: {tool_call}")
     query = tool_call["args"]["query"]
+    twitter_search_needed = tool_call["args"]["twitter_search_needed"]
 
     logger.info("Always using deep search pipeline")
     res = yield from run_deep_search_pipeline(query)
@@ -622,11 +621,9 @@ When using tools, make sure that the query passed to the tool is the semanticall
 
 
 @tool
-def answer_query(query: str) -> str:
-    """Answer the user's inquiry."""
-    return ""
-
-@tool
-def perform_research(query: str) -> str:
-    """Write detailed report in depth about a topic query"""
+def perform_research(
+    query: Annotated[str, "Research query"],
+    twitter_search_needed: Annotated[bool, "Whether twitter search is required to answer the query"] = False
+) -> str:
+    """Research and write detailed report in depth about a topic query"""
     return ""
