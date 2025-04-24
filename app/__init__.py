@@ -65,10 +65,10 @@ def get_retriever_from_env() -> List[Retriever]:
 def extract_urls_from_report(report: str) -> set[str]:
     """
     Extract all URLs from a markdown report that appear in markdown links.
-    
+
     Args:
         report: The markdown report text
-        
+
     Returns:
         Set of URLs found in the report
     """
@@ -76,11 +76,11 @@ def extract_urls_from_report(report: str) -> set[str]:
     # Match markdown links with nested square brackets: [text with [nested] brackets](url)
     url_pattern = r'\[(?:[^\[\]]|\[[^\[\]]*\])*\]\((https?://[^)]+)\)'
     urls = set()
-    
+
     for match in re.finditer(url_pattern, report):
         url = match.group(1)
         urls.add(url)
-    
+
     return urls
 
 
@@ -283,7 +283,12 @@ JSON response:
             "has_error": True
         }
 
-def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[bytes, None, Dict[str, Any]]:
+
+def run_deep_search_pipeline(
+    query: str,
+    twitter_search_needed: bool = False,
+    max_iterations: int = 3,
+) -> Generator[bytes, None, dict[str, Any]]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
         # Initialize state
@@ -404,9 +409,48 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                                 is_error=True,
                             ),
                         )
-                    else:
-                        logger.info("Exa web search skipped")
-                        temp_state.exa_results = []
+                else:
+                    logger.info("Exa web search skipped")
+                    temp_state.exa_results = []
+
+                # Step 5: Perform Twitter search if needed
+                if twitter_search_needed:
+                    logger.info("Performing Twitter search...")
+                    try:
+                        temp_state = exa_search_agent(
+                            temp_state,
+                            max_results=20,
+                            field_to_update="exa_twitter_results",
+                            domains=["x.com", "twitter.com"],
+                        )
+                        # Tag results with the query that produced them
+                        for result in temp_state.exa_twitter_results:
+                            result.query = query
+                        logger.info(
+                            f"Found {len(temp_state.exa_twitter_results)} Twitter results",  # noqa
+                        )
+                        yield to_chunk_data(
+                            wrap_step_finish(
+                                web_search_uuid,
+                                f"Found {len(temp_state.exa_twitter_results)} from Twitter search",  # noqa
+                            ),
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Error in Twitter search: {str(e)}",
+                            exc_info=True,
+                        )
+                        yield to_chunk_data(
+                            wrap_step_finish(
+                                web_search_uuid,
+                                "Twitter search failed",
+                                str(e),
+                                is_error=True,
+                            ),
+                        )
+                else:
+                    logger.info("Twitter web search skipped")
+                    temp_state.exa_results = []
 
                 # Combine search results
                 temp_state.search_results = (
@@ -414,7 +458,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                     + temp_state.brave_results
                     + temp_state.exa_results
                 )
-                logger.info(f"    Combined {len(temp_state.search_results)} total search results")
+                logger.info(f"Combined {len(temp_state.search_results)} total search results")
 
                 retrieving_search_result_uuid = str(uuid.uuid4())
                 yield to_chunk_data(wrap_step_start(retrieving_search_result_uuid, "Retrieving relevant web search results"))
@@ -484,14 +528,17 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 logger.info(f"  Deduplicated to {len(state.combined_results)} unique results")
 
             # Step 6: Deep Reasoning - analyze results and decide whether to continue
-            logger.info(f"  Analyzing search results and determining next steps...")
+            logger.info(
+                "Analyzing search results and determining next steps...",
+            )
             analyze_results_uuid = str(uuid.uuid4())
             yield to_chunk_data(wrap_step_start(analyze_results_uuid, "Analyzing search results and determining next steps"))
             try:
                 state = yield from deep_reasoning_agent(state, max_iterations)
                 logger.info(f"  Search complete: {state.search_complete}")
                 if not state.search_complete:
-                    logger.info(f"  Knowledge gaps identified:\n{'\n'.join([f'- {gap}' for gap in state.knowledge_gaps])}")
+                    joined_gaps = '\n'.join([f'- {gap}' for gap in state.knowledge_gaps])
+                    logger.info(f"  Knowledge gaps identified:\n{joined_gaps}")
                     logger.info(f"  New queries generated: {len(state.generated_queries)}")
                     yield to_chunk_data(wrap_step_finish(analyze_results_uuid, f"Identified {len(state.knowledge_gaps)} knowledge gaps. Generated {len(state.generated_queries)} new queries"))
                 else:
@@ -522,7 +569,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         if state.combined_results:
             # Extract URLs from the final answer
             report_urls = extract_urls_from_report(state.final_answer)
-            
+
             # Only include sources whose URLs appear in the report
             for res in state.combined_results:
                 if res.url in report_urls:
@@ -569,6 +616,7 @@ class GeneratorValue:
         self.value = yield from self.gen
         return self.value
 
+
 def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, None]:
     assert len(messages) > 0, "received empty messages"
 
@@ -595,10 +643,13 @@ You are Vibe Deepsearch, an helpful and friendly AI assistant that can perform t
     tool_call = response.tool_calls[-1]
     logger.info(f"Tool call: {tool_call}")
     query = tool_call["args"]["query"]
-    twitter_search_needed = tool_call["args"]["twitter_search_needed"]
+    twitter_search_needed = True
 
     logger.info("Always using deep search pipeline")
-    res = yield from run_deep_search_pipeline(query)
+    res = yield from run_deep_search_pipeline(
+        query,
+        twitter_search_needed=twitter_search_needed,
+    )
 
     final_resp = res["answer"]
 

@@ -28,14 +28,23 @@ def init_exa_client():
 def perform_exa_search(
     query: str,
     max_results: int = 10,
+    domains: list[str] | None = None,
 ) -> list[SearchResult]:
     """Perform search and get content using Exa API."""
     exa_client = init_exa_client()
-    response = exa_client.search_and_contents(
-        query,
-        num_results=max_results,
-        summary=True,
-    )
+    if not domains:
+        response = exa_client.search_and_contents(
+            query,
+            num_results=max_results,
+            summary=True,
+        )
+    else:
+        response = exa_client.search_and_contents(
+            query,
+            num_results=max_results,
+            summary=True,
+            include_domains=domains,
+        )
     results = getattr(response, "results", [])
     return [
         SearchResult(
@@ -48,7 +57,12 @@ def perform_exa_search(
     ]
 
 
-def exa_search_agent(state: SearchState, max_results: int = 10) -> SearchState:
+def exa_search_agent(
+    state: SearchState,
+    max_results: int = 10,
+    field_to_update: str = "exa_results",
+    domains: list[str] | None = None,
+) -> SearchState:
     """Define an agent to perform Exa search.
 
     Args:
@@ -59,7 +73,7 @@ def exa_search_agent(state: SearchState, max_results: int = 10) -> SearchState:
         Updated state with Exa search results
 
     """
-    state.exa_results = []
+    setattr(state, field_to_update, [])
 
     # Check if we have a query to search
     if not state.original_query:
@@ -69,8 +83,9 @@ def exa_search_agent(state: SearchState, max_results: int = 10) -> SearchState:
         results = perform_exa_search(
             query=state.original_query,
             max_results=max_results,
+            domains=domains,
         )
-        state.exa_results = results
+        setattr(state, field_to_update, results)
     except Exception as e:
         logger.error(f"Error in Exa search agent: {str(e)}", exc_info=True)
 
