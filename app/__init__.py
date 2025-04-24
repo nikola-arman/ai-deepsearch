@@ -598,18 +598,8 @@ When using tools, make sure that the query passed to the tool is the semanticall
     logger.info(f"Tool call: {tool_call}")
     query = tool_call["args"]["query"]
 
-    # Detect query complexity
-    logger.info("Analyzing query complexity...")
-    is_complex = detect_query_complexity(query)
-    logger.info(f"Query complexity: {'complex' if is_complex else 'simple'}")
-
-    # Choose appropriate pipeline based on complexity
-    if is_complex:
-        logger.info("Using deep search pipeline for complex query")
-        res = yield from run_deep_search_pipeline(query)
-    else:
-        logger.info("Using simple pipeline for straightforward query")
-        res = yield from run_simple_pipeline(query)
+    logger.info("Always using deep search pipeline")
+    res = yield from run_deep_search_pipeline(query)
 
     final_resp = res["answer"]
 
