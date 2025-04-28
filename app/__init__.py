@@ -674,7 +674,6 @@ You are Vibe Deepsearch, an helpful and friendly AI assistant that can perform t
 @tool
 def perform_research(
     query: Annotated[str, "Research query"],
-    twitter_search_needed: Annotated[bool, "Whether twitter search is required to answer the query"] = False
 ) -> str:
     """Research and write detailed report in depth about a topic query"""
     return ""
