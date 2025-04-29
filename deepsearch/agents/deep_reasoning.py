@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 import re
 import datetime  # Add import for datetime module
 
+from deepsearch.magic import retry
 from deepsearch.models import SearchState, SearchResult
 from deepsearch.utils import to_chunk_data, wrap_step_finish, wrap_step_start, wrap_thought
 from deepsearch.utils import escape_dollar_signs
@@ -388,7 +389,8 @@ def init_reasoning_llm(temperature: float = 0.3):
         openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
         temperature=temperature,
         max_tokens=1024,
-        streaming=True
+        streaming=True,
+        seed=123,
     )
     return llm
 
@@ -575,16 +577,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generat
     else:
         analysis_text = response
 
-    # Clean up the response text to improve JSON parsing chances
-    analysis_text = analysis_text.strip()
-    # Remove any markdown code block markers
-    analysis_text = re.sub(r'^```json\s*', '', analysis_text)
-    analysis_text = re.sub(r'\s*```$', '', analysis_text)
-    # Remove any stray markdown characters
-    analysis_text = re.sub(r'^#+\s*', '', analysis_text)
-
-    # Parse the JSON response
-    try:
+    def run_llm():
         analysis = json.loads(repair_json(analysis_text))
 
         # Update the state with the analysis results
@@ -613,121 +606,13 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generat
         # Log the reasoning
         if "reasoning" in analysis:
             logger.info(f"Reasoning: {analysis['reasoning']}")
-
-    except json.JSONDecodeError:
-        logger.error(f"Failed to parse deep reasoning JSON output: {analysis_text[:100]}...")
-        # Try to extract JSON-like content using regex
-
-        try:
-            # First attempt: Look for complete JSON object in the text
-            json_match = re.search(r'(\{.*\})', analysis_text, re.DOTALL)
-            if json_match:
-                json_string = json_match.group(1)
-                # Try to parse it again
-                analysis = json.loads(repair_json(json_string))
-                logger.info("Successfully extracted JSON using regex pattern 1")
-            else:
-                # Second attempt: Try to fix common JSON formatting issues
-                fixed_text = analysis_text
-                # Replace single quotes with double quotes if they're being used for JSON
-                if "'" in fixed_text and '"' not in fixed_text:
-                    fixed_text = fixed_text.replace("'", '"')
-
-                # Try to add missing quotes around property names
-                fixed_text = re.sub(r'(\{|\,)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', fixed_text)
-
-                # Fix boolean values that might be capitalized
-                fixed_text = re.sub(r':\s*True\b', r':true', fixed_text)
-                fixed_text = re.sub(r':\s*False\b', r':false', fixed_text)
-
-                try:
-                    analysis = json.loads(repair_json(fixed_text))
-                    logger.info("Successfully parsed JSON after fixing formatting")
-                except json.JSONDecodeError:
-                    # If we still can't parse JSON, try to build a minimal valid structure
-                    logger.warning("Attempting to build a minimal valid structure from response")
-
-                    # Try to extract key points from the response
-                    key_points = []
-                    knowledge_gaps = []
-                    new_queries = []
-                    search_complete = True  # Default to true to avoid infinite loops
-
-                    # Extract any content that looks like lists
-                    key_points_match = re.search(r'"key_points"\s*:\s*\[(.*?)\]', fixed_text, re.DOTALL)
-                    if key_points_match:
-                        # Split by commas, but only those followed by a quote to avoid splitting content with commas
-                        points_text = key_points_match.group(1)
-                        points = re.findall(r'"([^"]*)"', points_text)
-                        if points:
-                            key_points = points
-
-                    # Extract knowledge gaps similarly
-                    gaps_match = re.search(r'"knowledge_gaps"\s*:\s*\[(.*?)\]', fixed_text, re.DOTALL)
-                    if gaps_match:
-                        gaps_text = gaps_match.group(1)
-                        gaps = re.findall(r'"([^"]*)"', gaps_text)
-                        if gaps:
-                            knowledge_gaps = gaps
-                            search_complete = False
-
-                    # Extract new queries
-                    queries_match = re.search(r'"new_queries"\s*:\s*\[(.*?)\]', fixed_text, re.DOTALL)
-                    if queries_match:
-                        queries_text = queries_match.group(1)
-                        queries = re.findall(r'"([^"]*)"', queries_text)
-                        if queries:
-                            new_queries = queries
-
-                    # Check for search_complete value
-                    complete_match = re.search(r'"search_complete"\s*:\s*(true|false)', fixed_text, re.IGNORECASE)
-                    if complete_match:
-                        search_complete = complete_match.group(1).lower() == 'true'
-
-                    # Build our analysis dictionary
-                    analysis = {
-                        "key_points": key_points,
-                        "knowledge_gaps": knowledge_gaps,
-                        "new_queries": new_queries,
-                        "search_complete": search_complete
-                    }
-
-                    logger.info("Successfully built analysis from extracted components")
-
-                    # If we couldn't extract anything useful, try to get key points from bullet points
-                    if not key_points:
-                        lines = analysis_text.split('\n')
-                        for line in lines:
-                            line = line.strip()
-                            # Look for bullet points or numbered lists that might be key points
-                            if re.match(r'^[\*\-\d\.]\s+', line) and len(line) > 5:
-                                # Remove the bullet or number
-                                point = re.sub(r'^[\*\-\d\.]+\s+', '', line)
-                                key_points.append(point)
-
-                        if key_points:
-                            analysis["key_points"] = key_points
-                            logger.info(f"Extracted {len(key_points)} key points from bullet points")
-
-            # Update the state with the analysis results
-            state.key_points = analysis.get("key_points", [])
-            new_knowledge_gaps = analysis.get("knowledge_gaps", [])
-            filtered_knowledge_gaps = [gap for gap in new_knowledge_gaps if gap not in state.historical_knowledge_gaps]
-            state.knowledge_gaps = filtered_knowledge_gaps
-            state.historical_knowledge_gaps.extend(filtered_knowledge_gaps)
-            state.search_complete = analysis.get("search_complete", False)
-
-            # If we need to continue searching, add new queries
-            if not state.search_complete and "new_queries" in analysis and analysis["new_queries"]:
-                state.generated_queries = analysis["new_queries"]
-                logger.info(f"Generated {len(state.generated_queries)} new queries based on knowledge gaps")
-                for i, query in enumerate(state.generated_queries):
-                    logger.info(f"  New query {i+1}: {query}")
-
-        except Exception as e:
-            logger.error(f"Failed to extract JSON data: {str(e)}")
-            state.search_complete = True
-            state.key_points = ["Error in analyzing search results."]
+    
+    try:
+        retry(run_llm(), max_retry=3, first_interval=1, interval_multiply=1)
+    except Exception as e:
+        logger.error(f"Error analyzing search results: {e}")
+        state.search_complete = True
+        state.key_points = ["Error in analyzing search results."]
 
     # If we've reached the maximum iterations, force completion
     if state.current_iteration >= max_iterations:
