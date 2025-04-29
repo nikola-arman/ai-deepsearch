@@ -21,7 +21,7 @@ from deepsearch.agents import (
     exa_search_agent,
 )
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
-from app.utils import detect_query_complexity
+from app.utils import detect_query_complexity, detect_research_intent, get_conversation_summary, reply_conversation
 
 from json_repair import repair_json
 import json
@@ -620,29 +620,16 @@ class GeneratorValue:
 def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, None]:
     assert len(messages) > 0, "received empty messages"
 
-    llm = init_reasoning_llm()
-    llm = llm.bind_tools([perform_research])
+    conversation_summary = get_conversation_summary(messages)
+    research_intent = detect_research_intent(conversation_summary, messages[-1]["content"])
 
-    SYSTEM_PROMPT = """
-You are Vibe Deepsearch, an helpful and friendly AI assistant that can perform thorough research and write detailed report that explores any topic in depth.
-"""
+    logger.info(f"Research intent: {research_intent.model_dump_json()}")
 
-    messages_with_system_prompt = [{
-        "role": "system",
-        "content": SYSTEM_PROMPT
-    }] + messages
-
-    print("messages_with_system_prompt:", messages_with_system_prompt)
-
-    response = llm.invoke(messages_with_system_prompt)
-
-    if not response.tool_calls or len(response.tool_calls) == 0:
-        yield response.content
+    if not research_intent.is_research_request:
+        yield reply_conversation(conversation_summary, messages[-1]["content"])
         return
 
-    tool_call = response.tool_calls[-1]
-    logger.info(f"Tool call: {tool_call}")
-    query = tool_call["args"]["query"]
+    query = research_intent.research_query
     twitter_search_needed = True
 
     logger.info("Always using deep search pipeline")
@@ -669,11 +656,3 @@ You are Vibe Deepsearch, an helpful and friendly AI assistant that can perform t
             final_resp += "- [{title}]({url})\n".format(**item)
 
     yield final_resp
-
-
-@tool
-def perform_research(
-    query: Annotated[str, "Research query"],
-) -> str:
-    """Research and write detailed report in depth about a topic query"""
-    return ""
