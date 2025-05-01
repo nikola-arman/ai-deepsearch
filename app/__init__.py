@@ -4,6 +4,8 @@ import eai_http_middleware # do not remove this
 
 import os
 
+from deepsearch.magic import retry
+
 os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
@@ -620,13 +622,13 @@ class GeneratorValue:
 def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, None]:
     assert len(messages) > 0, "received empty messages"
 
-    conversation_summary = get_conversation_summary(messages)
-    research_intent = detect_research_intent(conversation_summary, messages[-1]["content"])
+    conversation_summary = retry(get_conversation_summary)(messages)
+    research_intent = retry(detect_research_intent)(conversation_summary, messages[-1]["content"])
 
     logger.info(f"Research intent: {research_intent.model_dump_json()}")
 
     if not research_intent.is_research_request:
-        yield reply_conversation(conversation_summary, messages[-1]["content"])
+        yield retry(reply_conversation)(conversation_summary, messages[-1]["content"])
         return
 
     query = research_intent.research_query
