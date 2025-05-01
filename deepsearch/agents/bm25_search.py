@@ -8,6 +8,8 @@ from deepsearch.utils import to_chunk_data, wrap_thought
 # Set up logging
 logger = logging.getLogger("deepsearch.bm25")
 
+MINIMUM_TOKEN_COUNT = 15
+
 def tokenize(text: str) -> List[str]:
     """Tokenize text for BM25 indexing."""
     if not text or not isinstance(text, str):
@@ -32,7 +34,7 @@ def create_bm25_index(search_results: List[SearchResult]):
     tokenized_texts = [tokenize(text) for text in texts]
 
     # Filter out empty tokenized texts
-    valid_indices = [i for i, tokens in enumerate(tokenized_texts) if tokens]
+    valid_indices = [i for i, tokens in enumerate(tokenized_texts) if tokens and len(tokens) >= MINIMUM_TOKEN_COUNT]
     valid_tokenized_texts = [tokenized_texts[i] for i in valid_indices]
 
     # Guard against all empty tokenized texts

@@ -6,7 +6,7 @@ from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
 from deepsearch.models import SearchState
-from deepsearch.utils import to_chunk_data, wrap_thought
+from deepsearch.utils import escape_dollar_signs, to_chunk_data, wrap_thought
 
 # Set up logging
 logger = logging.getLogger("deepsearch.reasoning")
@@ -46,7 +46,6 @@ IMPORTANT INSTRUCTIONS:
 8. If the search results are not relevant to the query, state that you cannot provide an answer based on the search results.
 9. If the search results are too vague or unclear, state that you cannot provide a definitive answer.
 10. Do not include the references section at the end of your answer.
-11. Please be aware that you are outputting a Markdown-formatted answer. So, with the dollar sign ($) in the answer which does not indicate the mathematical formula, please use the backslash to escape it, to be properly displayed on the Markdown.
 
 Answer:
 """
@@ -159,6 +158,8 @@ def llama_reasoning_agent(state: SearchState) -> SearchState:
     else:
         answer = response
 
+    answer = escape_dollar_signs(answer)
+   
     # Calculate confidence score
     confidence = calculate_confidence(answer)
 

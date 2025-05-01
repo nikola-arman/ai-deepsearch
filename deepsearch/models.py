@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
+
 
 def sanitize_content(content) -> str:
     """Convert any content to a string appropriately."""
@@ -47,7 +48,10 @@ class SearchState(BaseModel):
     historical_knowledge_gaps: List[str] = []
     tavily_results: List[SearchResult] = []
     brave_results: List[SearchResult] = []
-    search_results: List[SearchResult] = []  # Combined results from all search engines
+    exa_results: list[SearchResult] = []
+    exa_twitter_results: list[SearchResult] = []
+    # Combined results from all search engines
+    search_results: List[SearchResult] = []
     faiss_results: List[SearchResult] = []
     bm25_results: List[SearchResult] = []
     combined_results: List[SearchResult] = []

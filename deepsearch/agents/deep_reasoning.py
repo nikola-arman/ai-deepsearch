@@ -4,13 +4,16 @@ import json
 import logging
 import uuid
 from dotenv import load_dotenv
+from json_repair import repair_json
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 import re
 import datetime  # Add import for datetime module
 
+from deepsearch.magic import retry
 from deepsearch.models import SearchState, SearchResult
 from deepsearch.utils import to_chunk_data, wrap_step_finish, wrap_step_start, wrap_thought
+from deepsearch.utils import escape_dollar_signs
 
 # Set up logging
 logger = logging.getLogger("deepsearch.deep_reasoning")
@@ -236,7 +239,7 @@ Do not include any headings, bullet points, or section markers.
 """
 
 # Define the template for detailed notes generation
-DETAILED_NOTES_TEMPLATE = """You are an expert content writer. Your task is to provide an outline of detailed sections for expanding on the direct answer.
+DETAILED_NOTES_TEMPLATE = """You are an expert content writer. Your task is to provide a comprehensive outline for detailed sections that expand on the direct answer.
 
 ORIGINAL QUERY: {original_query}
 
@@ -253,23 +256,46 @@ SEARCH DETAILS:
 {search_details}
 
 INSTRUCTIONS:
-Create an outline for detailed, structured notes that expand on the direct answer with more in-depth information. Your outline should:
-1. Include logical sections with clear headings (up to 5 sections for thorough coverage)
-2. Focus on clear, descriptive section titles that reflect the key aspects of the topic
-3. Keep the outline simple - just the section headings in markdown format
+Create a detailed outline for structured notes that expand on the direct answer. Your outline should:
+1. Include 3-5 main sections with clear, descriptive headings
+2. For each section, provide 2-3 specific sub-points that should be covered
+3. For each sub-point, include:
+   - A clear description of what should be covered
+   - Any specific technical details, examples, or comparisons to include
+   - References to relevant search results that support this point
+4. Ensure there is no overlap between sections - each section should cover distinct aspects
+5. Maintain a logical flow between sections
 
 IMPORTANT RULES:
-1. ONLY include sections that can be fully supported by the search context
+1. ONLY include sections and sub-points that can be fully supported by the search context
 2. DO NOT create sections that would require information not present in the search results
-3. Clearly indicate which search results support each section using markdown hyperlinks
+3. Clearly indicate which search results support each point using markdown hyperlinks
 4. If certain aspects cannot be covered due to limited search context, note this limitation
 
-Format your response as a numbered list of section headings in markdown format, like this:
-1. ## Section Heading 1 ([Source Title](source_url))
-2. ## Section Heading 2 ([Source Title](source_url))
-3. ## Section Heading 3 ([Source Title](source_url))
+Format your response as a structured outline in markdown format, like this:
+```
+## [Section Heading 1]
+- [Subpoint 1]
+  - Description: [What should be covered]
+  - Details: [Specific technical details, examples, or comparisons]
+  - Sources: [Relevant search results]
+- [Subpoint 2]
+  - Description: [What should be covered]
+  - Details: [Specific technical details, examples, or comparisons]
+  - Sources: [Relevant search results]
 
-DO NOT include any content under these headings - just provide the section headings.
+## [Section Heading 2]
+- [Subpoint 1]
+  - Description: [What should be covered]
+  - Details: [Specific technical details, examples, or comparisons]
+  - Sources: [Relevant search results]
+- [Subpoint 2]
+  - Description: [What should be covered]
+  - Details: [Specific technical details, examples, or comparisons]
+  - Sources: [Relevant search results]
+```
+
+DO NOT include any content under these headings - just provide the structured outline.
 Each section will be expanded in a separate step. Do not include an introduction or conclusion.
 """
 
@@ -292,20 +318,24 @@ SEARCH DETAILS:
 
 SECTION TO EXPAND: {section_heading}
 
+SECTION OUTLINE:
+{section_outline}
+
 INSTRUCTIONS:
-Create rich, detailed content for the section "{section_heading}". Your content should:
-1. Be thorough and comprehensive (at least 2-4 paragraphs plus additional elements as needed)
-2. Include technical details, examples, and comparisons where relevant
-3. Elaborate on all important aspects related to this specific section
-4. Use proper markdown formatting for subsections and formatting
-5. Where relevant, include:
+Create rich, detailed content for the section "{section_heading}" following the provided outline exactly. Your content should:
+1. Cover each sub-point in the outline in the specified order
+2. Include all technical details, examples, and comparisons mentioned in the outline
+3. Use the sources referenced in the outline to support your points
+4. Be thorough and comprehensive (at least 2-4 paragraphs per sub-point)
+5. Use proper markdown formatting for subsections and formatting
+6. Where relevant, include:
    - Tables for comparing options or features
    - Bulleted lists for steps or features
    - Numbered lists for sequential processes
    - Mathematical formulas if applicable
-6. Use **bold** for important terms and concepts
-7. Use *italics* for emphasis when appropriate
-8. Create subsections with ### heading level when needed to organize complex information
+7. Use **bold** for important terms and concepts
+8. Use *italics* for emphasis when appropriate
+9. Create subsections with ### heading level when needed to organize complex information
 
 IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
@@ -318,13 +348,12 @@ IMPORTANT RULES:
 8. Focus ONLY on this section without repeating information from other sections
 9. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
 10. Do not include the references section at the end of your answer.
-11. Please be aware that you are outputting a Markdown-formatted answer. So, with the dollar sign ($) in the answer which does not indicate the mathematical formula, please use the backslash to escape it, to be properly displayed on the Markdown.
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
 
 Provide in-depth, authoritative content with specific facts, figures, and examples where possible,
-while strictly adhering to the information available in the search context.
+while strictly adhering to the information available in the search context and following the outline exactly.
 """
 
 # Define the template for initial query generation
@@ -360,7 +389,8 @@ def init_reasoning_llm(temperature: float = 0.3):
         openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
         temperature=temperature,
         max_tokens=1024,
-        streaming=True
+        streaming=True,
+        seed=123,
     )
     return llm
 
@@ -406,7 +436,7 @@ def generate_initial_queries(original_query: str) -> List[str]:
 
     try:
         # Parse the JSON response
-        queries = json.loads(query_text)
+        queries = json.loads(repair_json(query_text))
 
         # Ensure we have a list of strings
         if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
@@ -547,17 +577,8 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generat
     else:
         analysis_text = response
 
-    # Clean up the response text to improve JSON parsing chances
-    analysis_text = analysis_text.strip()
-    # Remove any markdown code block markers
-    analysis_text = re.sub(r'^```json\s*', '', analysis_text)
-    analysis_text = re.sub(r'\s*```$', '', analysis_text)
-    # Remove any stray markdown characters
-    analysis_text = re.sub(r'^#+\s*', '', analysis_text)
-
-    # Parse the JSON response
-    try:
-        analysis = json.loads(analysis_text)
+    def run_llm():
+        analysis = json.loads(repair_json(analysis_text))
 
         # Update the state with the analysis results
         state.key_points = analysis.get("key_points", [])
@@ -585,121 +606,13 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generat
         # Log the reasoning
         if "reasoning" in analysis:
             logger.info(f"Reasoning: {analysis['reasoning']}")
-
-    except json.JSONDecodeError:
-        logger.error(f"Failed to parse deep reasoning JSON output: {analysis_text[:100]}...")
-        # Try to extract JSON-like content using regex
-
-        try:
-            # First attempt: Look for complete JSON object in the text
-            json_match = re.search(r'(\{.*\})', analysis_text, re.DOTALL)
-            if json_match:
-                json_string = json_match.group(1)
-                # Try to parse it again
-                analysis = json.loads(json_string)
-                logger.info("Successfully extracted JSON using regex pattern 1")
-            else:
-                # Second attempt: Try to fix common JSON formatting issues
-                fixed_text = analysis_text
-                # Replace single quotes with double quotes if they're being used for JSON
-                if "'" in fixed_text and '"' not in fixed_text:
-                    fixed_text = fixed_text.replace("'", '"')
-
-                # Try to add missing quotes around property names
-                fixed_text = re.sub(r'(\{|\,)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', fixed_text)
-
-                # Fix boolean values that might be capitalized
-                fixed_text = re.sub(r':\s*True\b', r':true', fixed_text)
-                fixed_text = re.sub(r':\s*False\b', r':false', fixed_text)
-
-                try:
-                    analysis = json.loads(fixed_text)
-                    logger.info("Successfully parsed JSON after fixing formatting")
-                except json.JSONDecodeError:
-                    # If we still can't parse JSON, try to build a minimal valid structure
-                    logger.warning("Attempting to build a minimal valid structure from response")
-
-                    # Try to extract key points from the response
-                    key_points = []
-                    knowledge_gaps = []
-                    new_queries = []
-                    search_complete = True  # Default to true to avoid infinite loops
-
-                    # Extract any content that looks like lists
-                    key_points_match = re.search(r'"key_points"\s*:\s*\[(.*?)\]', fixed_text, re.DOTALL)
-                    if key_points_match:
-                        # Split by commas, but only those followed by a quote to avoid splitting content with commas
-                        points_text = key_points_match.group(1)
-                        points = re.findall(r'"([^"]*)"', points_text)
-                        if points:
-                            key_points = points
-
-                    # Extract knowledge gaps similarly
-                    gaps_match = re.search(r'"knowledge_gaps"\s*:\s*\[(.*?)\]', fixed_text, re.DOTALL)
-                    if gaps_match:
-                        gaps_text = gaps_match.group(1)
-                        gaps = re.findall(r'"([^"]*)"', gaps_text)
-                        if gaps:
-                            knowledge_gaps = gaps
-                            search_complete = False
-
-                    # Extract new queries
-                    queries_match = re.search(r'"new_queries"\s*:\s*\[(.*?)\]', fixed_text, re.DOTALL)
-                    if queries_match:
-                        queries_text = queries_match.group(1)
-                        queries = re.findall(r'"([^"]*)"', queries_text)
-                        if queries:
-                            new_queries = queries
-
-                    # Check for search_complete value
-                    complete_match = re.search(r'"search_complete"\s*:\s*(true|false)', fixed_text, re.IGNORECASE)
-                    if complete_match:
-                        search_complete = complete_match.group(1).lower() == 'true'
-
-                    # Build our analysis dictionary
-                    analysis = {
-                        "key_points": key_points,
-                        "knowledge_gaps": knowledge_gaps,
-                        "new_queries": new_queries,
-                        "search_complete": search_complete
-                    }
-
-                    logger.info("Successfully built analysis from extracted components")
-
-                    # If we couldn't extract anything useful, try to get key points from bullet points
-                    if not key_points:
-                        lines = analysis_text.split('\n')
-                        for line in lines:
-                            line = line.strip()
-                            # Look for bullet points or numbered lists that might be key points
-                            if re.match(r'^[\*\-\d\.]\s+', line) and len(line) > 5:
-                                # Remove the bullet or number
-                                point = re.sub(r'^[\*\-\d\.]+\s+', '', line)
-                                key_points.append(point)
-
-                        if key_points:
-                            analysis["key_points"] = key_points
-                            logger.info(f"Extracted {len(key_points)} key points from bullet points")
-
-            # Update the state with the analysis results
-            state.key_points = analysis.get("key_points", [])
-            new_knowledge_gaps = analysis.get("knowledge_gaps", [])
-            filtered_knowledge_gaps = [gap for gap in new_knowledge_gaps if gap not in state.historical_knowledge_gaps]
-            state.knowledge_gaps = filtered_knowledge_gaps
-            state.historical_knowledge_gaps.extend(filtered_knowledge_gaps)
-            state.search_complete = analysis.get("search_complete", False)
-
-            # If we need to continue searching, add new queries
-            if not state.search_complete and "new_queries" in analysis and analysis["new_queries"]:
-                state.generated_queries = analysis["new_queries"]
-                logger.info(f"Generated {len(state.generated_queries)} new queries based on knowledge gaps")
-                for i, query in enumerate(state.generated_queries):
-                    logger.info(f"  New query {i+1}: {query}")
-
-        except Exception as e:
-            logger.error(f"Failed to extract JSON data: {str(e)}")
-            state.search_complete = True
-            state.key_points = ["Error in analyzing search results."]
+    
+    try:
+        retry(run_llm(), max_retry=3, first_interval=1, interval_multiply=1)
+    except Exception as e:
+        logger.error(f"Error analyzing search results: {e}")
+        state.search_complete = True
+        state.key_points = ["Error in analyzing search results."]
 
     # If we've reached the maximum iterations, force completion
     if state.current_iteration >= max_iterations:
@@ -720,8 +633,8 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     Generates the final, structured answer in a multi-stage process:
     1. Generate concise key points
     2. Create a direct answer based on key points
-    3. Generate an outline for detailed notes sections
-    4. Expand each section with dedicated LLM calls
+    3. Generate a comprehensive outline for detailed notes sections
+    4. Expand each section with dedicated LLM calls, following the outline strictly
 
     Args:
         state: The current search state with key points and other information
@@ -744,7 +657,6 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
 
     # Stage 1: Generate refined key points
-
     refine_key_points_uuid = str(uuid.uuid4())
     yield to_chunk_data(wrap_step_start(refine_key_points_uuid, "Generating key points"))
     key_points_llm = init_reasoning_llm(temperature=0.2)
@@ -791,7 +703,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     logger.info("Generated direct answer")
     yield to_chunk_data(wrap_step_finish(generate_direct_answer_uuid, f"Finished"))
 
-    # Stage 3: Generate detailed notes outline (section headings only)
+    # Stage 3: Generate comprehensive outline for detailed notes
     generate_detailed_notes_outline_uuid = str(uuid.uuid4())
     yield to_chunk_data(wrap_step_start(generate_detailed_notes_outline_uuid, "Generating detailed notes outline"))
 
@@ -813,38 +725,64 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     # Extract the content if it's a message object
     section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
     logger.info("Generated section outline for detailed notes")
+    logger.info(f"Section outline: {section_outline}")
 
-    print("Section outline:")
-    print(section_outline)
+    # Parse the section headings and their sub-points from the outline
+    sections = []
+    current_section = None
+    current_subpoints = []
 
-    # Parse the section headings from the outline
-    section_headings = []
     for line in section_outline.strip().split('\n'):
-        # Match lines that contain section headings (## Something)
-        if '##' in line:
-            # Extract just the heading text, removing numbers, source citations and other artifacts
-            heading = line.split('##')[1].strip()
-            if '(' in heading:  # Remove source citation if present
-                heading = heading.split('(')[0].strip()
-            if heading:  # Skip empty headings
-                section_headings.append(heading)
+        line = line.strip()
+        if not line:
+            continue
 
-    logger.info(f"Identified {len(section_headings)} sections to expand")
-    yield to_chunk_data(wrap_step_finish(generate_detailed_notes_outline_uuid, f"Generated {len(section_headings)} sections to expand"))
+        if line.startswith('## '):
+            # Save previous section if exists
+            if current_section is not None:
+                sections.append({
+                    'heading': current_section,
+                    'subpoints': current_subpoints
+                })
+            # Start new section
+            current_section = line[3:].strip()  # Remove '## '
+            current_subpoints = []
+        elif line.startswith('- '):
+            # Add subpoint
+            subpoint = line[2:].strip()  # Remove '- '
+            current_subpoints.append(subpoint)
+
+    # Add the last section
+    if current_section is not None:
+        sections.append({
+            'heading': current_section,
+            'subpoints': current_subpoints
+        })
+
+    logger.info(f"Sections outline: {json.dumps(sections, indent=2)}")
+
+    logger.info(f"Identified {len(sections)} sections to expand")
+    yield to_chunk_data(wrap_step_finish(generate_detailed_notes_outline_uuid, f"Generated {len(sections)} sections to expand"))
 
     # Stage 4: Generate detailed content for each section
-
     section_llm = init_reasoning_llm(temperature=0.4)
     section_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading", "search_context"],
+        input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading", "section_outline", "search_context"],
         template=SECTION_CONTENT_TEMPLATE
     )
     section_chain = section_prompt | section_llm
 
     # Generate content for each section
     detailed_notes = "## Detailed Notes\n\n"
-    for idx, heading in enumerate(section_headings):
+    for idx, section in enumerate(sections):
+        heading = section['heading']
+        subpoints = section['subpoints']
         logger.info(f"Generating content for section: {heading}")
+
+        # Format the section outline for the prompt
+        section_outline_text = f"## {heading}\n"
+        for subpoint in subpoints:
+            section_outline_text += f"- {subpoint}\n"
 
         generate_section_content_uuid = str(uuid.uuid4())
         yield to_chunk_data(wrap_step_start(generate_section_content_uuid, f"Generating detailed content for section {idx+1}: {heading}"))
@@ -855,6 +793,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
             "direct_answer": direct_answer,
             "search_details": search_details,
             "section_heading": heading,
+            "section_outline": section_outline_text,
             "search_context": search_context
         })
 
@@ -862,7 +801,6 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
         section_content = section_response.content if hasattr(section_response, 'content') else section_response
 
         # Process the content to remove any headings that match the current heading
-        # This prevents duplication of the heading we're about to add
         content_lines = section_content.split('\n')
         cleaned_lines = []
         skip_next_line = False
@@ -902,6 +840,9 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
 
 {detailed_notes.replace('# DETAILED NOTES', '## Detailed Notes')}
 """
+
+    # Escape dollar signs in the final answer
+    final_answer = escape_dollar_signs(final_answer)
 
     # Update the state with the final answer
     state.final_answer = final_answer.strip()

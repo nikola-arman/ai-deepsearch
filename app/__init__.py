@@ -4,25 +4,28 @@ import eai_http_middleware # do not remove this
 
 import os
 
+from deepsearch.magic import retry
+
 os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
+os.environ["EXA_API_KEY"] = "no-need"
 
-from typing import Dict, Any, Generator, List
+from typing import Annotated, Dict, Any, Generator, List
 from deepsearch.models import SearchState
 from deepsearch.agents import (
     tavily_search_agent,
     faiss_indexing_agent,
     bm25_search_agent,
     llama_reasoning_agent,
-    query_expansion_agent,
     deep_reasoning_agent,
     brave_search_agent,
     information_extraction_agent,
-    fact_checking_agent
+    fact_checking_agent,
+    exa_search_agent,
 )
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
-
+from app.utils import detect_query_complexity, detect_research_intent, get_conversation_summary, reply_conversation
 
 from json_repair import repair_json
 import json
@@ -34,9 +37,11 @@ logger = logging.getLogger(__name__)
 from langchain.prompts import PromptTemplate
 from deepsearch.utils import to_chunk_data, wrap_step_start, wrap_step_finish, wrap_thought
 
+
 class Retriever(Enum):
     TAVILY = "tavily"
     BRAVE = "brave"
+    EXA = "exa"
 
 
 def write_state_to_file(state: SearchState):
@@ -54,9 +59,33 @@ def get_retriever_from_env() -> List[Retriever]:
             retrievers.append(Retriever.TAVILY)
         elif retriever == Retriever.BRAVE.value:
             retrievers.append(Retriever.BRAVE)
+        elif retriever == Retriever.EXA.value:
+            retrievers.append(Retriever.EXA)
         else:
             raise ValueError(f"Invalid retriever: {retriever}")
     return retrievers
+
+
+def extract_urls_from_report(report: str) -> set[str]:
+    """
+    Extract all URLs from a markdown report that appear in markdown links.
+
+    Args:
+        report: The markdown report text
+
+    Returns:
+        Set of URLs found in the report
+    """
+    import re
+    # Match markdown links with nested square brackets: [text with [nested] brackets](url)
+    url_pattern = r'\[(?:[^\[\]]|\[[^\[\]]*\])*\]\((https?://[^)]+)\)'
+    urls = set()
+
+    for match in re.finditer(url_pattern, report):
+        url = match.group(1)
+        urls.add(url)
+
+    return urls
 
 
 def run_simple_pipeline(query: str) -> Generator[bytes, None, Dict[str, Any]]:
@@ -136,12 +165,53 @@ JSON response:
         else:
             logger.info("Step 2: Brave search skipped")
 
-        # Combine search results
-        state.search_results = state.tavily_results + state.brave_results
-        logger.info(f"  Combined {len(state.search_results)} total search results")
+        # Step 3: Exa search
+        if Retriever.EXA in retrievers:
+            logger.info("Step 3: Performing Exa search...")
+            # Use the current query as the original query for this temp state)
+            temp_state = SearchState(
+                original_query=search_query,
+            )
+            try:
+                temp_state = exa_search_agent(temp_state)
+                logger.info(f"  Found {len(temp_state.exa_results)} results")
+                yield to_chunk_data(
+                    wrap_step_finish(
+                        web_search_uuid,
+                        (
+                            f"Found {len(temp_state.exa_results)} results "
+                            "from Exa search"
+                        ),
+                    ),
+                )
+            except Exception as e:
+                logger.error(f"Error in Exa search: {str(e)}", exc_info=True)
+                temp_state.exa_results = []
+                yield to_chunk_data(
+                    wrap_step_finish(
+                        web_search_uuid,
+                        "Exa search failed",
+                        str(e),
+                        is_error=True,
+                    ),
+                )
+            state.exa_results = temp_state.exa_results
+        else:
+            logger.info("Step 3: Exa search skipped")
+            state.exa_results = []
 
-        # Step 3: FAISS Indexing (semantic search)
-        logger.info("Step 3: Performing semantic search...")
+        # Combine search results
+        state.search_results = (
+            state.tavily_results
+            + state.brave_results
+            + state.exa_results
+        )
+        logger.info(
+            f"Combined {len(state.search_results)} total search results",
+        )
+
+        # Step 4: FAISS Indexing (semantic search)
+        logger.info("Step 4: Performing semantic search...")
         retrieving_search_result_uuid = str(uuid.uuid4())
         yield to_chunk_data(wrap_step_start(retrieving_search_result_uuid, "Retrieving relevant web search results"))
         try:
@@ -153,8 +223,8 @@ JSON response:
             state.faiss_results = []
             yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Retrieving semantically relevant results failed", str(e), is_error=True))
 
-        # Step 4: BM25 Search (keyword search)
-        logger.info("Step 4: Performing keyword search...")
+        # Step 5: BM25 Search (keyword search)
+        logger.info("Step 5: Performing keyword search...")
 
         try:
             state = bm25_search_agent(state)
@@ -215,6 +285,7 @@ JSON response:
         # Return the results
         sources = []
         if state.combined_results:
+            # Only include sources whose URLs appear in the report
             for res in state.combined_results:
                 sources.append({
                     "title": res.title,
@@ -244,7 +315,12 @@ JSON response:
             "has_error": True
         }
 
-def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[bytes, None, Dict[str, Any]]:
+
+def run_deep_search_pipeline(
+    query: str,
+    twitter_search_needed: bool = False,
+    max_iterations: int = 3,
+) -> Generator[bytes, None, dict[str, Any]]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
         # Initialize state
@@ -299,7 +375,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
 
                 web_search_uuid = str(uuid.uuid4())
                 yield to_chunk_data(wrap_step_start(web_search_uuid, "Performing web search"))
-                
+
                 retrievers = get_retriever_from_env()
                 if Retriever.TAVILY in retrievers:
                     logger.info(f"    Performing Tavily web search...")
@@ -318,28 +394,108 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
 
                 # Step 3: Brave Search for this query
                 if Retriever.BRAVE in retrievers:
-                    logger.info(f"    Performing Brave web search...")
+                    logger.info("Performing Brave web search...")
                     try:
                         temp_state = brave_search_agent(temp_state, use_ai_snippets=True)
                         # Tag results with the query that produced them
                         for result in temp_state.brave_results:
                             result.query = query
-                        logger.info(f"    Found {len(temp_state.brave_results)} web results")
+                        logger.info(f"Found {len(temp_state.brave_results)} web results")
                         yield to_chunk_data(wrap_step_finish(web_search_uuid, f"Found {len(temp_state.brave_results)} results from Brave search"))
                     except Exception as e:
                         logger.error(f"    Error in Brave search: {str(e)}", exc_info=True)
                         yield to_chunk_data(wrap_step_finish(web_search_uuid, f"Brave search failed", str(e), is_error=True))
                 else:
-                    logger.info(f"    Brave web search skipped")
+                    logger.info(f"Brave web search skipped")
+
+                # Step 4: Exa search for this query
+                if Retriever.EXA in retrievers:
+                    logger.info("Performing Exa search...")
+                    try:
+                        temp_state = exa_search_agent(temp_state)
+                        # Tag results with the query that produced them
+                        for result in temp_state.exa_results:
+                            result.query = query
+                        logger.info(
+                            f"Found {len(temp_state.exa_results)} web results",
+                        )
+                        yield to_chunk_data(
+                            wrap_step_finish(
+                                web_search_uuid,
+                                (
+                                    f"Found {len(temp_state.exa_results)} "
+                                    "results from Exa search"
+                                ),
+                            ),
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Error in Exa search: {str(e)}",
+                            exc_info=True,
+                        )
+                        yield to_chunk_data(
+                            wrap_step_finish(
+                                web_search_uuid,
+                                "Exa search failed",
+                                str(e),
+                                is_error=True,
+                            ),
+                        )
+                else:
+                    logger.info("Exa web search skipped")
+                    temp_state.exa_results = []
+
+                # Step 5: Perform Twitter search if needed
+                if twitter_search_needed:
+                    logger.info("Performing Twitter search...")
+                    try:
+                        temp_state = exa_search_agent(
+                            temp_state,
+                            max_results=20,
+                            field_to_update="exa_twitter_results",
+                            domains=["x.com", "twitter.com"],
+                        )
+                        # Tag results with the query that produced them
+                        for result in temp_state.exa_twitter_results:
+                            result.query = query
+                        logger.info(
+                            f"Found {len(temp_state.exa_twitter_results)} Twitter results",  # noqa
+                        )
+                        yield to_chunk_data(
+                            wrap_step_finish(
+                                web_search_uuid,
+                                f"Found {len(temp_state.exa_twitter_results)} from Twitter search",  # noqa
+                            ),
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Error in Twitter search: {str(e)}",
+                            exc_info=True,
+                        )
+                        yield to_chunk_data(
+                            wrap_step_finish(
+                                web_search_uuid,
+                                "Twitter search failed",
+                                str(e),
+                                is_error=True,
+                            ),
+                        )
+                else:
+                    logger.info("Twitter web search skipped")
+                    temp_state.exa_results = []
 
                 # Combine search results
-                temp_state.search_results = temp_state.tavily_results + temp_state.brave_results
-                logger.info(f"    Combined {len(temp_state.search_results)} total search results")
+                temp_state.search_results = (
+                    temp_state.tavily_results
+                    + temp_state.brave_results
+                    + temp_state.exa_results
+                )
+                logger.info(f"Combined {len(temp_state.search_results)} total search results")
 
                 retrieving_search_result_uuid = str(uuid.uuid4())
                 yield to_chunk_data(wrap_step_start(retrieving_search_result_uuid, "Retrieving relevant web search results"))
 
-                # Step 4: FAISS Indexing (semantic search) for this query
+                # Step 5: FAISS Indexing (semantic search) for this query
                 logger.info(f"    Performing semantic search...")
                 try:
                     temp_state = faiss_indexing_agent(temp_state)
@@ -352,7 +508,7 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                     logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
                     yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Retrieving semantically relevant results failed", str(e), is_error=True))
 
-                # Step 5: BM25 Search (keyword search) for this query
+                # Step 6: BM25 Search (keyword search) for this query
                 logger.info(f"    Performing keyword search...")
                 try:
                     temp_state = bm25_search_agent(temp_state)
@@ -430,7 +586,8 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
                 state = yield from deep_reasoning_agent(state, max_iterations)
                 logger.info(f"  Search complete: {state.search_complete}")
                 if not state.search_complete:
-                    logger.info(f"  Knowledge gaps identified: {len(state.knowledge_gaps)}")
+                    joined_gaps = '\n'.join([f'- {gap}' for gap in state.knowledge_gaps])
+                    logger.info(f"  Knowledge gaps identified:\n{joined_gaps}")
                     logger.info(f"  New queries generated: {len(state.generated_queries)}")
                     yield to_chunk_data(wrap_step_finish(analyze_results_uuid, f"Identified {len(state.knowledge_gaps)} knowledge gaps. Generated {len(state.generated_queries)} new queries"))
                 else:
@@ -459,11 +616,16 @@ def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Generator[b
         # Return the results
         sources = []
         if state.combined_results:
+            # Extract URLs from the final answer
+            report_urls = extract_urls_from_report(state.final_answer)
+
+            # Only include sources whose URLs appear in the report
             for res in state.combined_results:
-                sources.append({
-                    "title": res.title,
-                    "url": res.url
-                })
+                if res.url in report_urls:
+                    sources.append({
+                        "title": res.title,
+                        "url": res.url
+                    })
 
         # Extract components from the final answer if available
         answer = state.final_answer
@@ -503,105 +665,27 @@ class GeneratorValue:
         self.value = yield from self.gen
         return self.value
 
-def detect_query_complexity(query: str) -> bool:
-    """
-    Analyze the query to determine if it requires a simple or complex search pipeline.
-
-    Args:
-        query: The user's query string
-
-    Returns:
-        bool: True if the query is complex and requires deep search, False if it's simple
-    """
-    # Initialize LLM for complexity analysis
-    llm = init_reasoning_llm()
-
-    # Create prompt for complexity analysis
-    complexity_prompt = """Analyze the following query and determine if it requires a simple or complex search approach.
-
-QUERY: {query}
-
-Consider the following factors:
-1. Does the query ask for a simple fact or definition that can be answered in a few sentences?
-2. Does the query require gathering and synthesizing information from multiple sources?
-3. Is the query open-ended or exploratory in nature?
-4. Does the query require comparing different perspectives or analyzing trends?
-5. Would answering the query benefit from multiple search iterations?
-6. Does the query involve temporal aspects or need recent/current information?
-7. Does it require domain expertise or technical knowledge?
-8. Are there multiple sub-questions within the main query?
-
-Respond with a JSON object in this format:
-{{
-    "complexity": "simple" or "complex",
-    "reasoning": ["reason1", "reason2", ...],
-    "confidence": 0.0 to 1.0
-}}
-"""
-
-    # Create the prompt template
-    prompt_template = PromptTemplate(
-        input_variables=["query"],
-        template=complexity_prompt
-    )
-
-    # Create the chain
-    chain = prompt_template | llm
-
-    # Get the response
-    response = chain.invoke({"query": query})
-
-    # Extract the content if it's a message object
-    response_text = response.content if hasattr(response, 'content') else response
-
-    try:
-        analysis = json.loads(repair_json(response_text))
-
-        logger.info(f"Query complexity analysis: {analysis}")
-
-        # Return False for simple queries, True for complex ones
-        return analysis["complexity"].strip().lower() == "complex"
-
-    except Exception as e:
-        logger.error(f"Error parsing complexity analysis: {str(e)}")
-        # Default to treating as complex if parsing fails
-        return True
 
 def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, None]:
     assert len(messages) > 0, "received empty messages"
 
-    llm = init_reasoning_llm()
-    llm = llm.bind_tools([answer_query, perform_research])
+    conversation_summary = retry(get_conversation_summary)(messages)
+    research_intent = retry(detect_research_intent)(conversation_summary, messages[-1]["content"])
 
-    messages_with_system_prompt = [{
-        "role": "system",
-        "content": "You are Vibe Deepsearch, an helpful and friendly AI assistant that can perform thorough research, answer user's inquiry, and write detailed report that explores any topic in depth."
-    }] + messages
+    logger.info(f"Research intent: {research_intent.model_dump_json()}")
 
-    print("messages_with_system_prompt:", messages_with_system_prompt)
-
-    response = llm.invoke(messages_with_system_prompt)
-
-    if not response.tool_calls or len(response.tool_calls) == 0:
-        yield response.content
+    if not research_intent.is_research_request:
+        yield retry(reply_conversation)(conversation_summary, messages[-1]["content"])
         return
 
-    tool_call = response.tool_calls[-1]
-    logger.info(f"Tool call: {tool_call}")
-    query = tool_call["args"]["query"]
+    query = research_intent.research_query
+    twitter_search_needed = True
 
-    # Detect query complexity
-    logger.info("Analyzing query complexity...")
-    is_complex = detect_query_complexity(query)
-    logger.info(f"Query complexity: {'complex' if is_complex else 'simple'}")
-
-    # Choose appropriate pipeline based on complexity
-    if is_complex:
-        logger.info("Using deep search pipeline for complex query")
-        res = yield from run_deep_search_pipeline(query)
-    else:
-        logger.info("Using simple pipeline for straightforward query")
-        res = yield from run_simple_pipeline(query)
+    logger.info("Always using deep search pipeline")
+    res = yield from run_deep_search_pipeline(
+        query,
+        twitter_search_needed=twitter_search_needed,
+    )
 
     final_resp = res["answer"]
 
@@ -621,14 +705,3 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
             final_resp += "- [{title}]({url})\n".format(**item)
 
     yield final_resp
-
-
-@tool
-def answer_query(query: str) -> str:
-    """Answer the user's inquiry."""
-    return ""
-
-@tool
-def perform_research(query: str) -> str:
-    """Write detailed report in depth about a topic query"""
-    return ""

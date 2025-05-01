@@ -110,3 +110,17 @@ class Generator:
     def __iter__(self):
         self.value = yield from self.gen
         return self.value
+
+
+def escape_dollar_signs(text: str) -> str:
+    """
+    Escapes all dollar signs in the text by replacing them with backslash-dollar.
+    This prevents markdown from interpreting them as math formula delimiters.
+
+    Args:
+        text: The text to process
+
+    Returns:
+        Text with all dollar signs escaped
+    """
+    return text.replace('$', '\\$')
