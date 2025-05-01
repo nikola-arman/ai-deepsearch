@@ -319,7 +319,7 @@ JSON response:
 def run_deep_search_pipeline(
     query: str,
     twitter_search_needed: bool = False,
-    max_iterations: int = 3,
+    max_iterations: int = 2,
 ) -> Generator[bytes, None, dict[str, Any]]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
@@ -353,6 +353,7 @@ def run_deep_search_pipeline(
 
             # Reset results for this iteration but keep accumulated results
             previous_results = state.combined_results.copy() if state.combined_results else []
+            previous_verified_information = state.verified_information.copy() if state.verified_information else {}
             state.tavily_results = []
             state.brave_results = []
             state.search_results = []
@@ -521,22 +522,6 @@ def run_deep_search_pipeline(
                     logger.error(f"    Error in keyword search: {str(e)}", exc_info=True)
                     yield to_chunk_data(wrap_step_finish(retrieving_search_result_uuid, f"Retrieving keyword relevant results failed", str(e), is_error=True))
 
-                # Step 6: Information Extraction for this query
-                logger.info(f"    Extracting information from results...")
-                try:
-                    temp_state = yield from information_extraction_agent(temp_state)
-                    logger.info(f"    Extracted information from {len(temp_state.combined_results)} results")
-                except Exception as e:
-                    logger.error(f"    Error in information extraction: {str(e)}", exc_info=True)
-
-                # Step 7: Fact Checking for this query
-                logger.info(f"    Verifying extracted information...")
-                try:
-                    temp_state = yield from fact_checking_agent(temp_state)
-                    logger.info(f"    Verified {len(temp_state.verified_information['verified'])} statements")
-                except Exception as e:
-                    logger.error(f"    Error in fact checking: {str(e)}", exc_info=True)
-
                 # Collect results from this query
                 state.tavily_results.extend(temp_state.tavily_results)
                 state.brave_results.extend(temp_state.brave_results)
@@ -548,6 +533,24 @@ def run_deep_search_pipeline(
                 # Merge verified information
                 for category in ["verified", "contradicted", "unverified"]:
                     state.verified_information[category].extend(temp_state.verified_information[category])
+
+            # Step 6: Information Extraction for this query
+            logger.info(f"    Extracting information from results...")
+            try:
+                state = yield from information_extraction_agent(state)
+                logger.info(f"    Extracted information from {len(state.combined_results)} results")
+            except Exception as e:
+                logger.error(f"    Error in information extraction: {str(e)}", exc_info=True)
+
+            # Step 7: Fact Checking for this query
+            logger.info(f"    Verifying extracted information...")
+            try:
+                state = yield from fact_checking_agent(state)
+                logger.info(f"    Verified {len(state.verified_information['verified'])} statements, "
+                            f"found {len(state.verified_information['contradicted'])} contradictions, "
+                            f"and {len(state.verified_information['unverified'])} unverified statements")
+            except Exception as e:
+                logger.error(f"    Error in fact checking: {str(e)}", exc_info=True)
 
             # Add back previous results to ensure continuity
             if state.combined_results:
@@ -564,6 +567,11 @@ def run_deep_search_pipeline(
             if not state.combined_results:
                 # Combine FAISS and search results
                 state.combined_results = state.faiss_results + state.search_results
+
+            # Add back previous verified information to ensure continuity
+            if previous_verified_information:
+                for category in ["verified", "contradicted", "unverified"]:
+                    state.verified_information[category].extend(previous_verified_information[category])
 
             # Deduplicate combined results by URL
             if state.combined_results:

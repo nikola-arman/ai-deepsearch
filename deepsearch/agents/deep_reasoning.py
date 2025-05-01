@@ -647,11 +647,26 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
 
     # Format search context from combined results
     search_context = ""
-    if state.combined_results:
-        search_context = "\n\n".join([
-            f"Source: {result.title}\nURL: {result.url}\nContent: {result.content}"
-            for result in state.combined_results
-        ])
+    # if state.combined_results:
+    #     search_context = "\n\n".join([
+    #         f"Source: {result.title}\nURL: {result.url}\nContent: {result.content}"
+    #         for result in state.combined_results
+    #     ])
+
+    if state.verified_information:
+        search_context += f"Verified Information\n\n"
+        for result in state.verified_information["verified"]:
+            formatted_sources = []
+            for source in result["sources"]:
+                og_source = next((x for x in state.combined_results if x.url == source), None)
+                if og_source:
+                    formatted_sources.append(f"- {og_source.title} ({og_source.url})")
+            sources_str = "\n".join(formatted_sources)
+            search_context += f"Statement: {result['statement']}\nConfidence: {result['confidence']}\nSupporting Sources:\n{sources_str}\nNotes: {result['notes']}\n\n"
+
+        search_context += f"Contradicted Information\n\n"
+
+    print("search_context:", search_context)
 
     # Format the key points from the deep reasoning
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
