@@ -406,8 +406,6 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
 
     messages = await refine_chat_history(messages, system_prompt=system_prompt)
     response_uuid = str(uuid.uuid4())
-    
-    print("ATTACHMENT PATHS", attachment_paths)
 
     if len(attachment_paths) > 0:
         calls = []
@@ -445,14 +443,14 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 )
             )
 
-            vis, comment = await chess_xray_lesion_detector.xray_dianose_agent(path)
+            vis, comment = chess_xray_lesion_detector.xray_dianose_agent(path)
 
             if vis is not None:
                 template = '''\
-<p align="center">
+<div style="margin: 0 auto;">
     <img src="{uri}" width=480 alt><br>
     <em>{comment}</em>
-</p>                
+</div>                
 
 '''
 
@@ -494,6 +492,8 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
     )
 
     model_id = os.getenv('LLM_MODEL_ID')
+
+    print("MESSAGES", json.dumps(messages, indent=2))
 
     completion = await client.chat.completions.create(
         model=model_id,

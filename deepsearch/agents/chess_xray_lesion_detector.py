@@ -88,7 +88,7 @@ class RelativePosition(str, Enum):
         }[self.value]
 
 def calc_relative_position(xyxyn: list[list[float]]) -> RelativePosition: 
-    cnx, cny = (xyxyn[0][0] + xyxyn[0][2]) / 2, (xyxyn[0][1] + xyxyn[0][3]) / 2
+    cny, cnx = (xyxyn[0] + xyxyn[2]) / 2, (xyxyn[1] + xyxyn[3]) / 2
     
     if 0.3 < cnx < 0.7 and 0.3 < cny < 0.7:
         return RelativePosition.CENTER
@@ -97,25 +97,25 @@ def calc_relative_position(xyxyn: list[list[float]]) -> RelativePosition:
         return RelativePosition.TOP_LEFT
 
     if cnx < 0.3 and cny > 0.7:
-        return RelativePosition.TOP_RIGHT
+        return RelativePosition.BOTTOM_LEFT
 
     if cnx > 0.7 and cny > 0.7:
         return RelativePosition.BOTTOM_RIGHT
 
     if cnx > 0.7 and cny < 0.3:
-        return RelativePosition.BOTTOM_LEFT
+        return RelativePosition.TOP_RIGHT
 
     if cnx < 0.3:
-        return RelativePosition.TOP
-
-    if cnx > 0.7:
-        return RelativePosition.BOTTOM
-
-    if cny < 0.3:
         return RelativePosition.LEFT
 
-    if cny > 0.7:
+    if cnx > 0.7:
         return RelativePosition.RIGHT
+
+    if cny < 0.3:
+        return RelativePosition.TOP
+
+    if cny > 0.7:
+        return RelativePosition.BOTTOM
     
 def quick_diagnose(result: PredictionResult) -> str:
     by_relative_position = {}
@@ -157,7 +157,7 @@ def visualize(result: PredictionResult) -> np.ndarray:
     for xyxyn, conf, cls in zip(result.xyxyn, result.conf, result.cls):
         if ENABLED_CLS[cls]:
             h, w = image.shape[:2]
-            x1, y1, x2, y2 = xyxyn[0]
+            x1, y1, x2, y2 = xyxyn
 
             x1 = max(0, int(x1 * w) - PAD)
             y1 = max(0, int(y1 * h) - PAD)
@@ -165,7 +165,7 @@ def visualize(result: PredictionResult) -> np.ndarray:
             y2 = min(h, int(y2 * h) + PAD)
 
             cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            cv2.putText(image, CLS_NAMES[cls], (x1, y1), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 0.5, (0, 0, 255), 2)
+            # cv2.putText(image, CLS_NAMES[cls], (x1 + 5, y1 + 5), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 0.5, (0, 0, 255), 2)
 
     return image
 

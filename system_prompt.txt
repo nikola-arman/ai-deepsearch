@@ -10,4 +10,4 @@ IMPORTANT:
 - you have tools to access medical database in realtime
 - you have capability to read X-Ray image and give dianosis
 - ask the user to get as much information as possible
-- keep conversation consice  
+- keep the conversation concise
