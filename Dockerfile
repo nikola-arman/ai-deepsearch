@@ -7,6 +7,7 @@ run python -m pip install --no-cache-dir ultralytics
 
 copy app app
 copy deepsearch deepsearch
+copy system_prompt.txt system_prompt.txt
 
 env ETERNALAI_MCP_PROXY_URL="http://84532-proxy/prompt"
 env PROXY_SCOPE="*api.tavily.com*"

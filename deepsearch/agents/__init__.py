@@ -2,7 +2,7 @@
 Agents module for the DeepSearch system.
 """
 
-from deepsearch.agents.tavily_search import tavily_search_agent
+from deepsearch.agents.tavily_search import tavily_search_agent, tavily_search
 from deepsearch.agents.faiss_indexing import faiss_indexing_agent
 from deepsearch.agents.bm25_search import bm25_search_agent
 from deepsearch.agents.llama_reasoning import llama_reasoning_agent
@@ -19,5 +19,6 @@ __all__ = [
     "deep_reasoning_agent",
     "generate_final_answer",
     "pubmed_search_agent",
-    "pmed_search"
+    "pmed_search",
+    "tavily_search"
 ]

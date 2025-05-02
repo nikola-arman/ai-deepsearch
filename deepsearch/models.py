@@ -61,5 +61,4 @@ class SearchState(BaseModel):
     historical_knowledge_gaps: List[str] = Field(default_factory=list)  # Track all previously identified knowledge gaps
     search_complete: bool = False  # Flag to indicate if search is complete
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    image_paths: list[str] = Field(default_factory=list) # list of image paths
-    lesion_diagnosis: list[Optional[str]] = Field(default_factory=list) # list of lesion diagnosis
+    

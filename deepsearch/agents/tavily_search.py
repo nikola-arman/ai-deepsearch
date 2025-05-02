@@ -100,3 +100,11 @@ def tavily_search_agent(state: SearchState) -> SearchState:
         state.tavily_results = []
 
     return state
+
+def tavily_search(query: str) -> List[SearchResult]:
+    """
+    Fetches real-time web search results using the Tavily API.
+    """
+    client = init_tavily_client()
+    search_response = client.search(query=query, search_depth="advanced", max_results=10)
+    return convert_tavily_results(search_response.get("results", []))
