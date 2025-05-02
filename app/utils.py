@@ -9,7 +9,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-async def preserve_upload_file(file_data_uri: str, file_name: str) -> str:
+async def preserve_upload_file(file_data_uri: str, file_name: str, preserve_attachments: bool = False) -> str:
     os.makedirs(os.path.join(os.getcwd(), 'uploads'), exist_ok=True)
 
     file_data_base64 = file_data_uri.split(',')[-1]
@@ -18,6 +18,9 @@ async def preserve_upload_file(file_data_uri: str, file_name: str) -> str:
     try:
         file_data = base64.b64decode(file_data_base64)
         file_path = os.path.join(os.getcwd(), 'uploads', f"{timestamp}_{file_name}")
+        
+        if not preserve_attachments:
+            return file_path
 
         with open(file_path, 'wb') as f:
             f.write(file_data)
@@ -29,14 +32,34 @@ async def preserve_upload_file(file_data_uri: str, file_name: str) -> str:
     
 async def get_attachments(content: list[dict[str, str]]) -> list[str]:
     attachments = []
+    
+    if isinstance(content, str):
+        return []
 
     for item in content:
+        print("ITEM", item.keys())
+    
         if item.get('type', 'undefined') == 'file':
-            attachments.append(item.get('file'))
+            file = item.get('file')
+            print("FILE", file.keys())
+            data = file.get('file_data')
+            filename = file.get('filename')
+
+            if data and filename:
+                attachments.append((data, filename))
+
+        elif item.get('type', 'undefined') == 'image_url':
+            image_url = item.get('image_url')
+            print("IMAGE URL", image_url.keys())
+            name = image_url.get('name')
+            url = image_url.get('url')
+
+            if url and name:
+                attachments.append((url, name))
 
     return attachments
 
-async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str) -> list[dict[str, str]]:
+async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, preserve_attachments: bool = False) -> list[dict[str, str]]:
     refined_messages = []
 
     has_system_prompt = False
@@ -64,9 +87,25 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
                 elif item.get('type', 'undefined') == 'file':
                     file_item = item.get('file', {})
                     if 'file_data' in file_item and 'filename' in file_item:
+                        
+                        
                         file_path = await preserve_upload_file(
                             file_item.get('file_data', ''),
-                            file_item.get('filename', '')
+                            file_item.get('filename', ''),
+                            preserve_attachments
+                        )
+
+                        if file_path:
+                            attachments.append(file_path)
+                            
+                elif item.get('type', 'undefined') == 'image_url':
+                    file_item = item.get('image_url', {})
+
+                    if 'url' in file_item:
+                        file_path = await preserve_upload_file(
+                            file_item.get('url', ''),
+                            file_item.get('name', f'image_{len(attachments)}.jpg'),
+                            preserve_attachments
                         )
 
                         if file_path:
@@ -94,7 +133,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
     if isinstance(refined_messages[-1], str):
         refined_messages[-1] = {
             "role": "user",
-            "content": refined_messages[-1]
+            "content": refined_messages[-1] + '\n/no_think'
         }
 
     return refined_messages

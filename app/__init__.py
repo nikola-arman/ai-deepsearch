@@ -60,6 +60,7 @@ async_chess_xray_lesion_visualize = sync2async(chess_xray_lesion_detector.visual
 async_chess_xray_lesion_quick_diagnose = sync2async(chess_xray_lesion_detector.quick_diagnose)
 
 import logging
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 async def run_deep_search_pipeline(query: str, max_iterations: int = 3, response_uuid: str = str(uuid.uuid4())) -> AsyncGenerator[bytes, None]:
@@ -376,12 +377,13 @@ async def execute_openai_compatible_toolcall(name: str, args: dict[str, str]) ->
 async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[bytes, None]:
     assert len(messages) > 0, "received empty messages"
 
-    attachments = await get_attachments(messages)
+    attachments = await get_attachments(messages[-1].get('content', ''))
+    
     attachment_paths = []
 
     if len(attachments) > 0:
-        for attachment in attachments:
-            path = await preserve_upload_file(attachment, attachment.split('/')[-1])
+        for data, filename in attachments:
+            path = await preserve_upload_file(data, filename, preserve_attachments=True)
             if path is not None:
                 attachment_paths.append(path)
             
@@ -404,6 +406,8 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
 
     messages = await refine_chat_history(messages, system_prompt=system_prompt)
     response_uuid = str(uuid.uuid4())
+    
+    print("ATTACHMENT PATHS", attachment_paths)
 
     if len(attachment_paths) > 0:
         calls = []
@@ -495,7 +499,8 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
         model=model_id,
         messages=messages,
         tools=TOOL_CALLS,
-        tool_choice="auto"
+        tool_choice="auto",
+        temperature=0.1
     )
 
     if completion.choices[0].message.content:
@@ -523,7 +528,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 yield await to_chunk_data(
                     await wrap_thinking_chunk(
                         response_uuid,
-                        f'Researching on {_args["topic"]}'
+                        f'Start researching on {_args["topic"]}\n'
                     )
                 )
 
@@ -568,7 +573,8 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
             tools=TOOL_CALLS if loops < 2 else (
                 TOOL_CALLS[:1] if loops < 5 else openai._types.NOT_GIVEN
             ),
-            tool_choice="auto"
+            tool_choice="auto",
+            temperature=0.1
         )
 
         if completion.choices[0].message.content:

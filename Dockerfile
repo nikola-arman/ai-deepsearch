@@ -5,6 +5,8 @@ run python -m pip install --no-cache-dir -r requirements.txt
 run python -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 run python -m pip install --no-cache-dir ultralytics
 
+run apt-get update && apt-get install -y libgl1
+
 copy app app
 copy deepsearch deepsearch
 copy system_prompt.txt system_prompt.txt
@@ -14,3 +16,4 @@ env PROXY_SCOPE="*api.tavily.com*"
 env RETRIEVER="tavily"
 env PUBMED_EMAIL="daniel@bvm.network"
 env TAVILY_API_KEY="tvly-hahaha"
+env FORWARD_ALL_MESSAGES=1

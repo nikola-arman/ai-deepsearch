@@ -108,6 +108,8 @@ The outline should follow this structure:
 - [Subpoint 2]
 ...
 ```
+
+/no_think
 """
 
 # Define the template for the writer agent that will expand the outline into full content
@@ -133,6 +135,8 @@ For each section:
 
 Your expanded answer should be thorough, informative, and directly address the original query,
 while carefully following the outline structure.
+
+/no_think
 """
 
 # Define the prompt template for generating key points
@@ -158,6 +162,8 @@ Format your response as a markdown list of bullet points ONLY:
 ...
 
 Do not include any introduction, explanation, or conclusion outside of the bullet points.
+
+/no_think
 """
 
 # Define the prompt template for direct answer generation
@@ -186,6 +192,8 @@ Create a well-rounded, complete direct answer to the original query. The answer 
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, or section markers.
+
+/no_think
 """
 
 # Define the template for detailed notes generation
@@ -215,6 +223,8 @@ Format your response as a numbered list of section headings in markdown format, 
 
 DO NOT include any content under these headings - just provide the section headings.
 Each section will be expanded in a separate step. Do not include an introduction or conclusion.
+
+/no_think
 """
 
 # Define the template for generating content for a single section
@@ -255,6 +265,8 @@ Start directly with the content. If you need subsections, use ### level headings
 
 Focus ONLY on this section without repeating information from other sections.
 Provide in-depth, authoritative content with specific facts, figures, and examples where possible.
+
+/no_think
 """
 
 # Define the template for initial query generation
@@ -276,6 +288,8 @@ Format your response as a JSON array of 5 strings representing the search querie
 ["query1", "query2", "query3", "query4", "query5"]
 
 CRITICAL: Your entire response MUST be a valid, parseable JSON array and nothing else. Do not include any text before or after the JSON array. Do not include any explanation, markdown formatting, or code blocks around the JSON. The response must start with '[' and end with ']' and contain only valid JSON.
+
+/no_think
 """
 
 def init_reasoning_llm(temperature: float = 0.3):

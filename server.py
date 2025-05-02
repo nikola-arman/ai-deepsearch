@@ -1,6 +1,3 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
