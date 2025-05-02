@@ -149,7 +149,7 @@ async def refine_assistant_message(
     return assistant_message
     
 
-async def wrap_chunk(uuid: str, raw: str) -> ChatCompletionStreamResponse:
+async def wrap_chunk(uuid: str, raw: str, role: str = 'assistant') -> ChatCompletionStreamResponse:
     return ChatCompletionStreamResponse(
         id=uuid,
         object='chat.completion.chunk',
@@ -158,7 +158,10 @@ async def wrap_chunk(uuid: str, raw: str) -> ChatCompletionStreamResponse:
         choices=[
             dict(
                 index=0,
-                delta=dict(content=raw)
+                delta=dict(
+                    content=raw, 
+                    role=role
+                )
             )
         ]
     )

@@ -426,11 +426,8 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
 
         messages.append({
             "role": "assistant",
-            "choices": [
-                {
-                    "tool_calls": calls
-                }
-            ]
+            "tool_calls": calls,
+            "content": ""
         })
         
         for call, path in zip(calls, attachment_paths):
@@ -446,11 +443,13 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
             vis, comment = chess_xray_lesion_detector.xray_dianose_agent(path)
 
             if vis is not None:
-                template = '''\
-<div style="margin: 0 auto;">
-    <img src="{uri}" width=480 alt><br>
-    <em>{comment}</em>
-</div>                
+                template = '''
+![Image]({uri})
+
+<details>
+    <summary>Diagnosis</summary>
+    {comment}
+</details>
 
 '''
 
@@ -459,15 +458,17 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 yield await to_chunk_data(
                     await wrap_chunk(
                         response_uuid,
-                        template.format(uri=uri, comment=comment.replace('\n', '<br>'))
+                        template.format(uri=uri, comment=comment.replace('\n', '<br>')),
+                        role='tool'
                     )
                 )
 
             else:
                 template = '''\
-<blockquote cite="{file_basename}">
-    <p>{comment}</p>
-</blockquote>
+<details>
+    <summary>Diagnosis</summary>
+    {comment}
+</details>
 
 '''
                 yield await to_chunk_data(
@@ -475,8 +476,9 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                         response_uuid,
                         template.format(
                             file_basename=file_basename, 
-                            comment=comment
-                        )
+                            comment=comment,
+                        ),
+                        role='tool'
                     )
                 )
 
@@ -493,14 +495,11 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
 
     model_id = os.getenv('LLM_MODEL_ID')
 
-    print("MESSAGES", json.dumps(messages, indent=2))
-
     completion = await client.chat.completions.create(
         model=model_id,
         messages=messages,
         tools=TOOL_CALLS,
         tool_choice="auto",
-        temperature=0.1
     )
 
     if completion.choices[0].message.content:
@@ -574,7 +573,6 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 TOOL_CALLS[:1] if loops < 5 else openai._types.NOT_GIVEN
             ),
             tool_choice="auto",
-            temperature=0.1
         )
 
         if completion.choices[0].message.content:
