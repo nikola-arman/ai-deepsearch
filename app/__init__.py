@@ -375,7 +375,7 @@ async def execute_openai_compatible_toolcall(name: str, args: dict[str, str]) ->
 async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[bytes, None]:
     assert len(messages) > 0, "received empty messages"
 
-    attachments = get_attachments(messages)
+    attachments = await get_attachments(messages)
     attachment_paths = []
 
     if len(attachments) > 0:
@@ -401,7 +401,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
         with open('system_prompt.txt', 'r') as f:
             system_prompt = f.read()
 
-    messages = refine_chat_history(messages, system_prompt=system_prompt)
+    messages = await refine_chat_history(messages, system_prompt=system_prompt)
     response_uuid = str(uuid.uuid4())
 
     if len(attachment_paths) > 0:
@@ -526,7 +526,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                     )
                 )
 
-                async for chunk in await run_deep_search_pipeline(
+                async for chunk in run_deep_search_pipeline(
                     _args['topic'], 
                     response_uuid=response_uuid
                 ):

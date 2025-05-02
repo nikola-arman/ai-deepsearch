@@ -5,7 +5,6 @@ Test script for query expansion diversity.
 
 import os
 import logging
-from dotenv import load_dotenv
 from deepsearch.models import SearchState
 from deepsearch.agents import query_expansion_agent
 
@@ -15,9 +14,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("test-query-expansion")
-
-# Load environment variables
-load_dotenv()
 
 # Test queries
 TEST_QUERIES = [

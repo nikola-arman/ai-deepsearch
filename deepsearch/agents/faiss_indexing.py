@@ -3,7 +3,6 @@ import os
 import numpy as np
 import faiss
 import logging
-from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 import re
 
@@ -12,12 +11,9 @@ from deepsearch.models import SearchState, SearchResult
 # Set up logging
 logger = logging.getLogger("deepsearch.faiss")
 
-# Load environment variables
-load_dotenv()
-
 # Get the OpenAI-compatible API base URL and API key
-openai_api_base = os.environ.get("OPENAI_API_BASE", "http://localhost:8080/v1")
-openai_api_key = os.environ.get("OPENAI_API_KEY", "not-needed")
+openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")
+openai_api_key = os.environ.get("LLM_API_KEY", "not-needed")
 
 
 def batching(data: Generator, batch_size = 1):

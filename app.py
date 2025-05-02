@@ -10,7 +10,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
 
 from main import run_deep_search_pipeline
 
@@ -21,8 +20,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("deepsearch-api")
 
-# Load environment variables
-load_dotenv()
 
 # Verify environment variables
 required_env_vars = ["TAVILY_API_KEY"]

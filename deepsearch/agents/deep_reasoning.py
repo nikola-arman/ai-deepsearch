@@ -2,7 +2,6 @@ from typing import List, Dict, Any, Tuple, Generator
 import os
 import json
 import logging
-from dotenv import load_dotenv
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 import re
@@ -13,12 +12,9 @@ import datetime
 # Set up logging
 logger = logging.getLogger("deepsearch.deep_reasoning")
 
-# Load environment variables
-load_dotenv()
-
 # Get the OpenAI-compatible API base URL and API key
-openai_api_base = os.environ.get("OPENAI_API_BASE", "http://localhost:8080/v1")
-openai_api_key = os.environ.get("OPENAI_API_KEY", "not-needed")
+openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")
+openai_api_key = os.environ.get("LLM_API_KEY", "not-needed")
 
 def get_pmid(url: str) -> str:
     """Extract the PMID from a PubMed URL."""

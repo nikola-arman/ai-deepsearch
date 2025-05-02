@@ -72,6 +72,11 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
                         if file_path:
                             attachments.append(file_path)
 
+            if len(attachments) > 0:
+                text_input += f'\nAttachments:\n'
+                for attachment in attachments:
+                    text_input += f'- {attachment}\n'
+
             refined_messages.append({
                 "role": "user",
                 "content": text_input

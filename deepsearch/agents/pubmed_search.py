@@ -1,7 +1,6 @@
 from typing import List, Dict, Any, Optional
 import os
 import logging
-from dotenv import load_dotenv
 from pymed import PubMed
 from pymed.article import PubMedArticle
 import datetime
@@ -11,12 +10,8 @@ from deepsearch.models import SearchState, SearchResult
 # Set up logging
 logger = logging.getLogger("deepsearch.pubmed")
 
-# Load environment variables
-load_dotenv()
-
 # Get email for PubMed API (required by their terms of service)
 pubmed_email = os.environ.get("PUBMED_EMAIL")
-
 
 def init_pubmed_client():
     """Initialize the PubMed client."""
