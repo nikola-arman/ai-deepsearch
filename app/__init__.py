@@ -1,3 +1,4 @@
+import eai_http_middleware
 
 import os
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
@@ -12,6 +13,8 @@ from deepsearch.agents import (
     deep_reasoning_agent,
     pubmed_search_agent,
     chess_xray_lesion_detector,
+    pmed_search,
+    tavily_search
 ) 
 from app.utils import (
     refine_assistant_message, 
@@ -29,6 +32,7 @@ import json
 import uuid
 from openai import AsyncClient
 import openai
+from .models import PromptErrorResponse
 
 
 def sync2async(sync_func: Callable):
@@ -56,14 +60,11 @@ async_chess_xray_lesion_quick_diagnose = sync2async(chess_xray_lesion_detector.q
 import logging
 logger = logging.getLogger(__name__)
 
-async def run_deep_search_pipeline(query: str, image_paths: list[str] = [], max_iterations: int = 3, response_uuid: str = str(uuid.uuid4())) -> AsyncGenerator[bytes, None]:
+async def run_deep_search_pipeline(query: str, max_iterations: int = 3, response_uuid: str = str(uuid.uuid4())) -> AsyncGenerator[bytes, None]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
         # Initialize state
-        state = SearchState(
-            original_query=query, 
-            image_paths=image_paths
-        )
+        state = SearchState(original_query=query)
 
         # Instead of using query_expansion_agent, let the deep_reasoning_agent handle initial query generation
         # This avoids potential conflicts and allows for better reasoning about query generation
@@ -214,11 +215,18 @@ async def run_deep_search_pipeline(query: str, image_paths: list[str] = [], max_
                                 f'- {kg}\n'
                             )
                         )
+                        
+                    yield await to_chunk_data(
+                        await wrap_thinking_chunk(
+                            response_uuid,
+                            f'\n'
+                        )
+                    )
 
                     yield await to_chunk_data(
                         await wrap_thinking_chunk(
                             response_uuid,
-                            f'\nNew {len(state.generated_queries)} queries generated\n'
+                            f'New {len(state.generated_queries)} queries generated\n'
                         )
                     )
 
@@ -261,19 +269,25 @@ async def run_deep_search_pipeline(query: str, image_paths: list[str] = [], max_
                             chunk
                         )
                     )
-                    
-                    return
 
             except Exception as e:
                 logger.error(f"Error generating final answer: {str(e)}", exc_info=True)
+                
                 state.final_answer = "I reached the maximum number of search iterations but couldn't generate a comprehensive answer. Here's what I found: " + "\n".join(
                     [f"- {point}" for point in state.key_points]
                 )
-
+                
                 yield await to_chunk_data(
                     await wrap_chunk(
                         response_uuid,
                         state.final_answer
+                    )
+                )
+
+                yield await to_chunk_data(
+                    PromptErrorResponse(
+                        message="Error whille generating final answer",
+                        details=str(e)
                     )
                 )
 
@@ -340,15 +354,18 @@ TOOL_CALLS = [
 ]
 
 async def quick_search(query: str) -> str:
-    pass
+    result = tavily_search(query)
+    res = ''
+
+    for r in result:
+        res += f'{r.title}\n- URL: {r.url}\n- Content: {r.content}\n\n'
+
+    return res
 
 async def execute_openai_compatible_toolcall(name: str, args: dict[str, str]) -> str:
     try:
         if name == 'search':
             return await quick_search(args['query'])
-        
-        if name == 'research':
-            return await run_deep_search_pipeline(args['topic'])
         
         return f"Tool {name} not found"
     except Exception as e:
@@ -364,8 +381,8 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
     if len(attachments) > 0:
         for attachment in attachments:
             path = await preserve_upload_file(attachment, attachment.split('/')[-1])
-            attachment_paths.append(path)
-            
+            if path is not None:
+                attachment_paths.append(path)
             
     attachment_paths = [
         e
@@ -509,7 +526,10 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                     )
                 )
 
-                async for chunk in await run_deep_search_pipeline(_args['topic']):
+                async for chunk in await run_deep_search_pipeline(
+                    _args['topic'], 
+                    response_uuid=response_uuid
+                ):
                     yield chunk
 
                 return
