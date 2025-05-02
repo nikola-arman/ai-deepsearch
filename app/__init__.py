@@ -33,6 +33,8 @@ import uuid
 from openai import AsyncClient
 import openai
 from .models import PromptErrorResponse
+from .utils import get_attachments, preserve_upload_file, refine_chat_history
+from typing import AsyncGenerator
 
 
 def sync2async(sync_func: Callable):
@@ -309,8 +311,7 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 3, response
         )
 
 
-from .utils import get_attachments, preserve_upload_file, refine_chat_history
-from typing import AsyncGenerator
+
 
 TOOL_CALLS = [
     {
@@ -336,7 +337,7 @@ TOOL_CALLS = [
         "type": "function",
         "function": {
             "name": "search",
-            "description": "Quick search for information on the internet to answer the question directly",
+            "description": "Quick search for realtime information on the internet to answer the question directly",
             "parameters": {
                 "type": "object",
                 "properties": {
