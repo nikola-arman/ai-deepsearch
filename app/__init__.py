@@ -3,22 +3,43 @@ import os
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 
-from typing import Dict, Any, Callable
+from typing import Dict, Any, Callable, Generator, AsyncGenerator
 from deepsearch.models import SearchState
 from deepsearch.agents import (
     faiss_indexing_agent,
     bm25_search_agent,
     llama_reasoning_agent,
     deep_reasoning_agent,
-    pubmed_search_agent
+    pubmed_search_agent,
+    chess_xray_lesion_detector,
+) 
+from app.utils import (
+    refine_assistant_message, 
+    wrap_toolcall_request, 
+    wrap_chunk, 
+    to_chunk_data, 
+    wrap_toolcall_response, 
+    image_to_base64_uri, 
+    wrap_thinking_chunk
 )
 from starlette.concurrency import run_in_threadpool
 from functools import partial
 import asyncio
+import json
+import uuid
+from openai import AsyncClient
+import openai
+
 
 def sync2async(sync_func: Callable):
     async def async_func(*args, **kwargs):
-        return await run_in_threadpool(partial(sync_func, *args, **kwargs))
+        res = run_in_threadpool(partial(sync_func, *args, **kwargs))
+
+        if isinstance(res, (Generator, AsyncGenerator)):
+            return res
+
+        return await res
+
     return async_func if not asyncio.iscoroutinefunction(sync_func) else sync_func
 
 # Convert synchronous functions to asynchronous
@@ -28,92 +49,21 @@ async_llama_reasoning_agent = sync2async(llama_reasoning_agent)
 async_deep_reasoning_agent = sync2async(deep_reasoning_agent)
 async_pubmed_search_agent = sync2async(pubmed_search_agent)
 
+async_chess_xray_lesion_detector = sync2async(chess_xray_lesion_detector.predict)
+async_chess_xray_lesion_visualize = sync2async(chess_xray_lesion_detector.visualize)
+async_chess_xray_lesion_quick_diagnose = sync2async(chess_xray_lesion_detector.quick_diagnose)
+
 import logging
 logger = logging.getLogger(__name__)
 
-async def run_simple_pipeline(query: str) -> Dict[str, Any]:
-    """Run a simple pipeline without graph complexity."""
-    try:
-        # Initialize state
-        state = SearchState(original_query=query)
-
-        logger.info(f"Using query: {state.original_query}")
-
-        # Step 1: PubMed Search
-        logger.info("Step 1: Performing PubMed search...")
-        try:
-            state = await pubmed_search_agent(state)
-            logger.info(f"  Found {len(state.pubmed_results)} PubMed results")
-        except Exception as e:
-            logger.error(f"  Error in PubMed search: {str(e)}", exc_info=True)
-            state.pubmed_results = []
-
-        # Step 2: FAISS Indexing (semantic search)
-        logger.info("Step 2: Performing semantic search...")
-        try:
-            state = await async_faiss_indexing_agent(state)
-            logger.info(f"  Found {len(state.faiss_results)} semantically relevant results")
-        except Exception as e:
-            logger.error(f"  Error in semantic search: {str(e)}", exc_info=True)
-            state.faiss_results = []
-
-        # Step 3: BM25 Search (keyword search)
-        logger.info("Step 3: Performing keyword search...")
-        try:
-            state = await async_bm25_search_agent(state)
-            logger.info(f"  Found {len(state.bm25_results)} keyword relevant results")
-            logger.info(f"  Combined {len(state.combined_results)} total relevant results")
-        except Exception as e:
-            logger.error(f"  Error in keyword search: {str(e)}", exc_info=True)
-            state.bm25_results = []
-            # Ensure we have combined results even if BM25 fails
-            if not state.combined_results:
-                state.combined_results = state.faiss_results + state.pubmed_results
-
-        # Step 4: LLM Reasoning
-        logger.info("Step 4: Generating answer...")
-        try:
-            state = await async_llama_reasoning_agent(state)
-            logger.info(f"  Confidence: {state.confidence_score}")
-        except Exception as e:
-            logger.error(f"  Error in reasoning: {str(e)}", exc_info=True)
-            # Provide a fallback answer
-            state.final_answer = "I'm sorry, but I couldn't generate a proper answer for your query due to a technical issue. Please try again with a different query."
-            state.confidence_score = 0.1
-
-        # Return the results
-        sources = []
-        if state.combined_results:
-            for res in state.combined_results:
-                sources.append({
-                    "title": res.title,
-                    "url": res.url
-                })
-
-        return {
-            "original_query": state.original_query,
-            "answer": state.final_answer,
-            "confidence": state.confidence_score,
-            "sources": sources[:5],  # Limit to 5 sources,
-            "has_error": False
-        }
-
-    except Exception as e:
-        # Handle any unexpected errors
-        logger.error(f"Unexpected error in pipeline: {str(e)}", exc_info=True)
-        return {
-            "original_query": query,
-            "answer": "An unexpected error occurred while processing your query. Please try again later.",
-            "confidence": 0.0,
-            "sources": [],
-            "has_error": True
-        }
-
-async def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[str, Any]:
+async def run_deep_search_pipeline(query: str, image_paths: list[str] = [], max_iterations: int = 3, response_uuid: str = str(uuid.uuid4())) -> AsyncGenerator[bytes, None]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
         # Initialize state
-        state = SearchState(original_query=query)
+        state = SearchState(
+            original_query=query, 
+            image_paths=image_paths
+        )
 
         # Instead of using query_expansion_agent, let the deep_reasoning_agent handle initial query generation
         # This avoids potential conflicts and allows for better reasoning about query generation
@@ -122,11 +72,19 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[
             # Initial call to deep_reasoning_agent will generate the queries
             state = await async_deep_reasoning_agent(state, max_iterations)
             logger.info(f"  Generated {len(state.generated_queries)} initial search queries")
+            
         except Exception as e:
             logger.error(f"  Error in initial reasoning: {str(e)}", exc_info=True)
             # If reasoning fails, use just the original query
             state.generated_queries = [state.original_query]
             state.current_iteration = 1  # Ensure we don't skip the first iteration
+
+        yield await to_chunk_data(
+            await wrap_thinking_chunk(
+                response_uuid,
+                f'Prepared {len(state.generated_queries)} search queries:\n'
+            )
+        )
 
         # Iterative search loop
         while not state.search_complete and state.current_iteration < max_iterations:
@@ -141,7 +99,12 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[
 
             # Process each query in this iteration
             for i, query in enumerate(state.generated_queries):
-                logger.info(f"  Processing query {i+1}/{len(state.generated_queries)}: {query}")
+                yield await to_chunk_data(
+                    await wrap_thinking_chunk(
+                        response_uuid,
+                        f'Searching for {query}...\n'
+                    )
+                )
 
                 # Create a temporary state for this query
                 temp_state = SearchState(
@@ -231,17 +194,57 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[
 
             # Step 5: Deep Reasoning - analyze results and decide whether to continue
             logger.info(f"  Analyzing search results and determining next steps...")
+
             try:
                 state = await async_deep_reasoning_agent(state, max_iterations)
                 logger.info(f"  Search complete: {state.search_complete}")
+
                 if not state.search_complete:
+                    yield await to_chunk_data(
+                        await wrap_thinking_chunk(
+                            response_uuid,
+                            f'Knowledge gaps identified:\n'
+                        )
+                    )
+                    
+                    for kg in state.knowledge_gaps:
+                        yield await to_chunk_data(
+                            await wrap_thinking_chunk(
+                                response_uuid,
+                                f'- {kg}\n'
+                            )
+                        )
+
+                    yield await to_chunk_data(
+                        await wrap_thinking_chunk(
+                            response_uuid,
+                            f'\nNew {len(state.generated_queries)} queries generated\n'
+                        )
+                    )
+
                     logger.info(f"  Knowledge gaps identified: {len(state.knowledge_gaps)}")
                     logger.info(f"  New queries generated: {len(state.generated_queries)}")
+
             except Exception as e:
                 logger.error(f"  Error in deep reasoning: {str(e)}", exc_info=True)
                 # If reasoning fails, stop the search to avoid infinite loops
                 state.search_complete = True
                 state.final_answer = "I'm sorry, but I couldn't properly analyze the search results due to a technical issue. Please try again with a different query."
+                
+                yield await to_chunk_data(
+                    await wrap_thinking_chunk(
+                        response_uuid,
+                        f'Search complete: {state.search_complete}\n'
+                    )
+                )
+
+                yield await to_chunk_data(
+                    await wrap_chunk(
+                        response_uuid,
+                        state.final_answer
+                    )
+                )
+                
                 state.confidence_score = 0.1
 
         # Prepare the response
@@ -249,78 +252,312 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 3) -> Dict[
             # If we exited the loop due to max iterations, generate the final answer
             logger.info("Maximum iterations reached, generating final answer...")
             try:
-                from deepsearch.agents.deep_reasoning import generate_final_answer
-                state = await sync2async(generate_final_answer)(state)
+                from deepsearch.agents.deep_reasoning import generate_final_answer_stream
+
+                for chunk in generate_final_answer_stream(state):
+                    yield await to_chunk_data(
+                        await wrap_chunk(
+                            response_uuid,
+                            chunk
+                        )
+                    )
+                    
+                    return
+
             except Exception as e:
                 logger.error(f"Error generating final answer: {str(e)}", exc_info=True)
                 state.final_answer = "I reached the maximum number of search iterations but couldn't generate a comprehensive answer. Here's what I found: " + "\n".join(
                     [f"- {point}" for point in state.key_points]
                 )
+
+                yield await to_chunk_data(
+                    await wrap_chunk(
+                        response_uuid,
+                        state.final_answer
+                    )
+                )
+
                 state.confidence_score = 0.5
 
-        # Return the results
-        sources = []
-        if state.combined_results:
-            for res in state.combined_results[:5]:  # Limit to 5 sources
-                sources.append({
-                    "title": res.title,
-                    "url": res.url
-                })
-
-        # Extract components from the final answer if available
-        answer = state.final_answer
-        key_points = state.key_points if state.key_points else []
-        detailed_notes = state.detailed_notes if state.detailed_notes else None
-
-        return {
-            "original_query": state.original_query,
-            "generated_queries": state.generated_queries,
-            "iterations": state.current_iteration,
-            "answer": answer,
-            "key_points": key_points,
-            "detailed_notes": detailed_notes,
-            "confidence": state.confidence_score,
-            "sources": sources,
-            "has_error": False,
-            "combined_results": [
-                e.model_dump()
-                for e in state.combined_results
-            ]
-        }
     except Exception as e:
-        # Handle any unexpected errors
-        logger.error(f"Unexpected error in deep search pipeline: {str(e)}", exc_info=True)
-        return {
-            "original_query": query,
-            "answer": "An unexpected error occurred while processing your query. Please try again later.",
-            "confidence": 0.0,
-            "sources": [],
-            "has_error": True,
-            "combined_results": state.combined_results
-        }
-
-async def prompt(messages: list[dict[str, str]], **kwargs) -> str:
-    assert len(messages) > 0, "received empty messages"
-    query = messages[-1]['content']
-
-    res: Dict = await run_deep_search_pipeline(query)
-    
-    sep = "-" * 30
-    final_resp = res["answer"]
-
-    # if len(res["sources"]) > 0:
-    #     final_resp += "\n## References:\n"
-
-    #     for item in res["sources"]:
-    #         final_resp += "- [{title}]({url})\n".format(**item)
-
-    if not res["has_error"]:
-        if final_resp.strip()[-1] != '\n':
-            final_resp += '\n'
-
-        final_resp += "{sep}\nConfidence score: {confidence}".format(
-            confidence=res["confidence"],
-            sep=sep
+        yield await to_chunk_data(
+            await wrap_thinking_chunk(
+                response_uuid,
+                f'Search complete: {state.search_complete}\n'
+            )
         )
 
-    return final_resp # , res
+        yield await to_chunk_data(
+            await wrap_chunk(
+                response_uuid,
+                "An unexpected error occurred while processing your query. Please try again later."
+            )
+        )
+
+
+from .utils import get_attachments, preserve_upload_file, refine_chat_history
+from typing import AsyncGenerator
+
+TOOL_CALLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "research",
+            "description": "Research on a scientific topic deeper and more comprehensive",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The topic to research on"
+                    }
+                },
+                "required": ["topic"],
+                "additionalProperties": False
+            },
+            "strict": True
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search",
+            "description": "Quick search for information on the internet to answer the question directly",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The query to search for"
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False
+            },
+            "strict": True
+        }
+    }
+]
+
+async def quick_search(query: str) -> str:
+    pass
+
+async def execute_openai_compatible_toolcall(name: str, args: dict[str, str]) -> str:
+    try:
+        if name == 'search':
+            return await quick_search(args['query'])
+        
+        if name == 'research':
+            return await run_deep_search_pipeline(args['topic'])
+        
+        return f"Tool {name} not found"
+    except Exception as e:
+        logger.error(f"Error executing tool call {name} (args: {args}): {str(e)}", exc_info=True)
+        return f"An error occurred while executing the tool call: {str(e)}"
+
+async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[bytes, None]:
+    assert len(messages) > 0, "received empty messages"
+
+    attachments = get_attachments(messages)
+    attachment_paths = []
+
+    if len(attachments) > 0:
+        for attachment in attachments:
+            path = await preserve_upload_file(attachment, attachment.split('/')[-1])
+            attachment_paths.append(path)
+            
+            
+    attachment_paths = [
+        e
+        for e in attachment_paths
+        if os.path.splitext(e)[-1] in 
+        [
+            '.jpg', '.jpeg', '.png', 
+            '.bmp', '.tiff', '.ico', 
+            '.webp'
+        ]
+    ]
+    
+    system_prompt = ''
+
+    if os.path.exists('system_prompt.txt'):
+        with open('system_prompt.txt', 'r') as f:
+            system_prompt = f.read()
+
+    messages = refine_chat_history(messages, system_prompt=system_prompt)
+    response_uuid = str(uuid.uuid4())
+
+    if len(attachment_paths) > 0:
+        calls = []
+
+        for path in attachment_paths:
+            calls.append(
+                {
+                    "id": 'call_' + str(uuid.uuid4()),
+                    "type": "function",
+                    "function": {
+                        "name": "diagnose",
+                        "arguments": json.dumps({
+                            "image_path": path
+                        })
+                    }
+                }
+            )
+
+        messages.append({
+            "role": "assistant",
+            "choices": [
+                {
+                    "tool_calls": calls
+                }
+            ]
+        })
+        
+        for call, path in zip(calls, attachment_paths):
+            file_basename = os.path.basename(path)
+
+            yield await to_chunk_data(
+                await wrap_thinking_chunk(
+                    response_uuid,
+                    f'Diagnosing: {file_basename}'
+                )
+            )
+
+            vis, comment = await chess_xray_lesion_detector.xray_dianose_agent(path)
+
+            if vis is not None:
+                template = '''\
+<p align="center">
+    <img src="{uri}" width=480 alt><br>
+    <em>{comment}</em>
+</p>                
+
+'''
+
+                uri = image_to_base64_uri(vis)
+
+                yield await to_chunk_data(
+                    await wrap_chunk(
+                        response_uuid,
+                        template.format(uri=uri, comment=comment.replace('\n', '<br>'))
+                    )
+                )
+
+            else:
+                template = '''\
+<blockquote cite="{file_basename}">
+    <p>{comment}</p>
+</blockquote>
+
+'''
+                yield await to_chunk_data(
+                    await wrap_chunk(
+                        response_uuid,
+                        template.format(
+                            file_basename=file_basename, 
+                            comment=comment
+                        )
+                    )
+                )
+
+            messages.append({
+                "role": "tool",
+                "content": comment,
+                "tool_call_id": call['id']
+            })
+
+    client = AsyncClient(
+        base_url=os.getenv('LLM_BASE_URL'),
+        api_key=os.getenv('LLM_API_KEY')
+    )
+
+    model_id = os.getenv('LLM_MODEL_ID')
+
+    completion = await client.chat.completions.create(
+        model=model_id,
+        messages=messages,
+        tools=TOOL_CALLS,
+        tool_choice="auto"
+    )
+
+    if completion.choices[0].message.content:
+        yield await to_chunk_data(
+            await wrap_chunk(
+                response_uuid,
+                completion.choices[0].message.content
+            )
+        )
+
+    messages.append(
+        await refine_assistant_message(completion.choices[0].message.model_dump())
+    )
+
+    loops = 0
+
+    while completion.choices[0].message.tool_calls is not None and len(completion.choices[0].message.tool_calls) > 0:
+        loops += 1
+
+        for call in completion.choices[0].message.tool_calls:
+            _id, _name = call.id, call.function.name
+            _args = json.loads(call.function.arguments)
+            
+            if _name == 'research':
+                yield await to_chunk_data(
+                    await wrap_thinking_chunk(
+                        response_uuid,
+                        f'Researching on {_args["topic"]}'
+                    )
+                )
+
+                async for chunk in await run_deep_search_pipeline(_args['topic']):
+                    yield chunk
+
+                return
+            
+            yield await to_chunk_data(
+                await wrap_toolcall_request(
+                    response_uuid,
+                    _name,
+                    _args
+                )
+            )
+
+            result = await execute_openai_compatible_toolcall(_name, _args)
+            
+            yield await to_chunk_data(
+                await wrap_toolcall_response(
+                    response_uuid,
+                    _name,
+                    _args,
+                    result
+                )
+            )
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": _id,
+                    "content": result
+                }
+            )
+
+        completion = await client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            tools=TOOL_CALLS if loops < 2 else (
+                TOOL_CALLS[:1] if loops < 5 else openai._types.NOT_GIVEN
+            ),
+            tool_choice="auto"
+        )
+
+        if completion.choices[0].message.content:
+            yield await to_chunk_data(
+                await wrap_chunk(
+                    response_uuid,
+                    completion.choices[0].message.content
+                )
+            )
+
+        messages.append(
+            await refine_assistant_message(completion.choices[0].message.model_dump())
+        )

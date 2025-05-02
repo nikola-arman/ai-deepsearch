@@ -115,3 +115,15 @@ def pubmed_search_agent(state: SearchState) -> SearchState:
         state.pubmed_results = []
 
     return state
+
+def pmed_search(query: str, max_results=5) -> List[SearchResult]:
+    client = init_pubmed_client()
+
+    search_response = client.query(
+        query=query,
+        max_results=max_results 
+    )
+
+    pubmed_results = convert_pubmed_results(search_response)
+    
+    return pubmed_results
