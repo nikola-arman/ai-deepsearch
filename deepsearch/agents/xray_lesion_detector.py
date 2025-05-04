@@ -39,10 +39,7 @@ CLS_NAMES = [
     "Other Lesion", 
     "Spondylolysthesis", 
     "Surgical Implant", 
-    "Vertebral Collapse"
-]
-
-ANOTHER_CLS_NAMES = [ 
+    "Vertebral Collapse",
     'Aortic enlargement',
     'Atelectasis',
     'Calcification',
@@ -59,16 +56,7 @@ ANOTHER_CLS_NAMES = [
     'Pulmonary fibrosis'
 ]
 
-ENABLED_CLS = [
-    True, # Disc Space Narrowing
-    True, # Foraminal Stenosis
-    True, # Osteophytes
-    True, # Other Lesion
-    True, # Spondylolysthesis
-    True, # Surgical Implant
-    True, # Vertebral Collapse
-    *[True] * len(ANOTHER_CLS_NAMES)
-]
+ENABLED_CLS = [True] * len(CLS_NAMES)
 
 @dataclass
 class PredictionResult:
@@ -90,7 +78,7 @@ def predict(image_path: str) -> PredictionResult:
     return PredictionResult(
         xyxyn=results.xyxyn.cpu().numpy().tolist() + another_results.xyxyn.cpu().numpy().tolist(),
         conf=results.conf.cpu().numpy().tolist() + another_results.conf.cpu().numpy().tolist(),
-        cls=results.cls.cpu().numpy().astype(int).tolist() + another_results.cls.cpu().numpy().astype(int).tolist(),
+        cls=results.cls.cpu().numpy().astype(int).tolist() + (another_results.cls.cpu().numpy() + 7).astype(int).tolist(),
         org_size=size, 
         org_path=image_path,
     )
