@@ -26,7 +26,7 @@ def _load_another_model():
 
     if not os.path.exists(tmp_path):
         os.makedirs(os.path.dirname(tmp_path), exist_ok=True)
-        gdown.download(id='1fiyUNbAuDCOBRt6cuiZynjOU4y5ELmbY', output=tmp_path)
+        gdown.download(id='1p_HXgO-mMpzX4bF9PtRK35Sv5VkIl8RF', output=tmp_path)
 
     return ultralytics.YOLO(tmp_path)
 
@@ -45,11 +45,11 @@ CLS_NAMES = [
     'Calcification',
     'Cardiomegaly',
     'Consolidation',
-    'ILD',
+    'Interstitial lung disease',
     'Infiltration',
     'Lung Opacity',
     'Nodule/Mass',
-    'Other lesion',
+    'Other lesion', # keep duplications
     'Pleural effusion',
     'Pleural thickening',
     'Pneumothorax',
@@ -70,8 +70,8 @@ def predict(image_path: str) -> PredictionResult:
     model = _load_model()
     another_model = _load_another_model()
     
-    results = model(image_path, verbose=False)[0].boxes
-    another_results = another_model(image_path, verbose=False)[0].boxes
+    results = model(image_path, verbose=False, conf=0.2)[0].boxes
+    another_results = another_model(image_path, verbose=False, conf=0.2)[0].boxes
     
     size = results.orig_shape
 
