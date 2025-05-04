@@ -12,9 +12,10 @@ from deepsearch.agents import (
     llama_reasoning_agent,
     deep_reasoning_agent,
     pubmed_search_agent,
-    chess_xray_lesion_detector,
     pmed_search,
-    tavily_search
+    tavily_search,
+    rag,
+    xray_lesion_detector
 ) 
 from app.utils import (
     refine_assistant_message, 
@@ -55,9 +56,9 @@ async_llama_reasoning_agent = sync2async(llama_reasoning_agent)
 async_deep_reasoning_agent = sync2async(deep_reasoning_agent)
 async_pubmed_search_agent = sync2async(pubmed_search_agent)
 
-async_chess_xray_lesion_detector = sync2async(chess_xray_lesion_detector.predict)
-async_chess_xray_lesion_visualize = sync2async(chess_xray_lesion_detector.visualize)
-async_chess_xray_lesion_quick_diagnose = sync2async(chess_xray_lesion_detector.quick_diagnose)
+async_chess_xray_lesion_detector = sync2async(xray_lesion_detector.predict)
+async_chess_xray_lesion_visualize = sync2async(xray_lesion_detector.visualize)
+async_chess_xray_lesion_quick_diagnose = sync2async(xray_lesion_detector.quick_diagnose)
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -356,13 +357,12 @@ TOOL_CALLS = [
 ]
 
 async def quick_search(query: str) -> str:
-    result = tavily_search(query)
-    res = ''
+    result = rag.search(query)
 
-    for r in result:
-        res += f'{r.title}\n- URL: {r.url}\n- Content: {r.content}\n\n'
+    if not result:
+        return "No results found"
 
-    return res
+    return "\n".join(result)
 
 async def execute_openai_compatible_toolcall(name: str, args: dict[str, str]) -> str:
     try:
@@ -406,6 +406,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
 
     messages = await refine_chat_history(messages, system_prompt=system_prompt)
     response_uuid = str(uuid.uuid4())
+    user_message = messages[-1]['content']
 
     if len(attachment_paths) > 0:
         calls = []
@@ -440,8 +441,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 )
             )
 
-            vis, comment = chess_xray_lesion_detector.xray_dianose_agent(path)
-
+            vis, comment = xray_lesion_detector.xray_dianose_agent(path, user_message)
 
             if vis is not None:
                 template = '''
