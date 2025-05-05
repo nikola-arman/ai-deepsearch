@@ -111,6 +111,7 @@ def get_conversation_summary(conversation: list[dict[str, str]]) -> str:
     
     return response.content
 
+
 DETECT_RESEARCH_INTENT_PROMPT = """
 You are an expert at detecting whether a user message is a research request or just casual conversation.
 
@@ -126,6 +127,8 @@ Return your response in this JSON format:
     "is_research_request": <true or false>,
     "research_query": <string or null>
 }}
+
+Return only the JSON object without any other text or comments.
 
 Examples:
 
@@ -178,7 +181,7 @@ def detect_research_intent(conversation_summary: str, user_last_message: str) ->
 
     print(f"Detect research intent response: {response.content}")
 
-    data = repair_json(response.content, return_objects=True)
+    data = curly_brackets_repair_json(response.content)
 
     return ResearchIntent.model_validate(data)
 
@@ -209,3 +212,18 @@ def reply_conversation(conversation_summary: str, user_last_message: str) -> str
     response = llm.invoke(messages)
 
     return response.content
+
+
+def curly_brackets_repair_json(text: str) -> dict:
+    """
+    Repair JSON from a string, only take the content between curly brackets.
+    """
+
+    # Find the first and last curly brackets
+    start = text.find('{')
+    end = text.rfind('}') + 1
+
+    # Extract the content between the curly brackets
+    content = text[start:end]
+
+    return repair_json(content, return_objects=True)
