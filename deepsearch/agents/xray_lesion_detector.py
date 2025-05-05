@@ -319,17 +319,17 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
         return vis, comment_by_doctor.choices[0].message.content
 
 if __name__ == '__main__':
-    ds_path = '~/projects/SpineXR-Lesions-Detection/coco10k'
-    import glob
+    # ds_path = '~/projects/SpineXR-Lesions-Detection/coco10k'
+    # import glob
 
-    not_xray = glob.glob(os.path.expanduser(os.path.join(ds_path, '**', '*.jpg')), recursive=True)[:20]
-    print(len(not_xray))
+    # not_xray = glob.glob(os.path.expanduser(os.path.join(ds_path, '**', '*.jpg')), recursive=True)[:20]
+    # print(len(not_xray))
 
-    for img_path in not_xray:
-        is_xray = is_xray_image(img_path)
-        print(img_path, is_xray)
-        vis, diagnosis = xray_dianose_agent(img_path)
-        print(diagnosis)
+    # for img_path in not_xray:
+    #     is_xray = is_xray_image(img_path)
+    #     print(img_path, is_xray)
+    #     vis, diagnosis = xray_dianose_agent(img_path)
+    #     print(diagnosis)
 
     ds_path = '~/projects/SpineXR-Lesions-Detection/chess-xray-coco'
     import glob
