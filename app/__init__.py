@@ -357,12 +357,15 @@ TOOL_CALLS = [
 ]
 
 async def quick_search(query: str) -> str:
-    result = rag.search(query)
+    result = tavily_search(query)
 
     if not result:
         return "No results found"
 
-    return "\n".join(result)
+    return "\n".join([
+        f'{i + 1}. {e.title}\nURL: {e.url}\nContent: {e.content}\n' 
+        for i, e in enumerate(result)
+        ])
 
 async def execute_openai_compatible_toolcall(name: str, args: dict[str, str]) -> str:
     try:
