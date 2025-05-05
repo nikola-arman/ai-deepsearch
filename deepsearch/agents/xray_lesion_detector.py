@@ -208,7 +208,7 @@ def is_xray_image(img_path: str) -> bool:
     )
 
     out = client.chat.completions.create(
-        model=os.getenv('VLM_MODEL_ID'),
+        model=os.getenv('VLM_MODEL_ID', 'local-model'),
         messages=[
             {
                 'role': 'system',
@@ -256,7 +256,7 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
         image_uri = f'data:image/jpeg;base64,{base64.b64encode(b.getvalue()).decode("utf-8")}'
 
         comment_by_doctor = client.chat.completions.create(
-            model=os.getenv('LLM_MODEL_ID'),
+            model=os.getenv('LLM_MODEL_ID', 'local-model'),
             messages=[
                 {
                     'role': 'system', 
@@ -301,7 +301,7 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
         system_prompt = 'You are a doctor, you are reading an X-ray image of a patient and it has some lesions on it. You need to provide a short comment on the image and give a diagnosis for the patient. Notice that the Other lesion can be anything, but mostly backbone-related or bone breakage. Write the diagnosis in under 3 sentences, plain text only, no new lines.'
 
         comment_by_doctor = client.chat.completions.create(
-            model=os.getenv('LLM_MODEL_ID'),
+            model=os.getenv('LLM_MODEL_ID', 'local-model'),
             messages=[
                 {
                     'role': 'system', 

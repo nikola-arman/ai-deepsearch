@@ -45,7 +45,7 @@ def init_reasoning_llm():
     """Initialize the language model for reasoning using OpenAI-compatible API."""
     # Use OpenAI-compatible server
     llm = ChatOpenAI(
-        model=os.getenv("LLM_MODEL_ID", "no-need"),
+        model=os.getenv("LLM_MODEL_ID", "local-model"),
         openai_api_key=openai_api_key,
         openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
         temperature=0.3,

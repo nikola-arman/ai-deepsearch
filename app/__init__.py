@@ -2,7 +2,7 @@ import eai_http_middleware
 
 import os
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
-os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
+os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'local-model')
 
 from typing import Dict, Any, Callable, Generator, AsyncGenerator
 from deepsearch.models import SearchState
@@ -496,7 +496,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
         api_key=os.getenv('LLM_API_KEY')
     )
 
-    model_id = os.getenv('LLM_MODEL_ID')
+    model_id = os.getenv('LLM_MODEL_ID', 'local-model')
 
     completion = await client.chat.completions.create(
         model=model_id,

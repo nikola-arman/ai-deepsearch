@@ -74,7 +74,7 @@ Example of CORRECT response format:
 def init_query_expansion_llm(temperature: float = 0.7):
     """Initialize the language model for query expansion using OpenAI-compatible API."""
     llm = ChatOpenAI(
-        model=os.getenv("LLM_MODEL_ID", "no-need"),
+        model=os.getenv("LLM_MODEL_ID", "local-model"),
         openai_api_key=openai_api_key,
         openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
         temperature=temperature,  # Higher temperature for query diversity

@@ -79,7 +79,7 @@ async def chat_completion_loop(messages: list[dict[str, str]], **additional_kwar
     ]
 
     client = openai.AsyncClient(
-        api_key=os.getenv("LLM_API_KEY", os.environ.get("OPENAI_API_KEY", 'no-need')),
+        api_key=os.getenv("LLM_API_KEY", os.environ.get("OPENAI_API_KEY", 'local-model')),
         base_url=os.getenv("LLM_BASE_URL", 'https://api.openai.com/v1'),
     )
 
