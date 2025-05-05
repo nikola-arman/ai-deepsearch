@@ -390,11 +390,10 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
     attachment_paths = [
         e
         for e in attachment_paths
-        if os.path.splitext(e)[-1] in 
+        if os.path.splitext(e)[-1].lower() in 
         [
             '.jpg', '.jpeg', '.png', 
-            '.bmp', '.tiff', '.ico', 
-            '.webp'
+            '.bmp', '.webp'
         ]
     ]
     
