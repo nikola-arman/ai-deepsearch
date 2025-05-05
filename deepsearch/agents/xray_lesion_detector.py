@@ -191,23 +191,62 @@ def visualize(result: PredictionResult) -> np.ndarray:
 
     return image
 
+def is_xray_image(img_path: str) -> bool:
+
+    img = cv2.imread(img_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = Image.fromarray(img)
+    b = io.BytesIO()
+    img.save(b, format='JPEG')
+
+    image_uri = f'data:image/jpeg;base64,{base64.b64encode(b.getvalue()).decode("utf-8")}'
+    system_prompt = 'you are classifying whether the image is a xray image or not. just answer "yes" or "no" in plain text.'
+
+    client = OpenAI(
+        base_url=os.getenv('VLM_BASE_URL'),
+        api_key=os.getenv('VLM_API_KEY')
+    )
+
+    out = client.chat.completions.create(
+        model=os.getenv('VLM_MODEL_ID'),
+        messages=[
+            {
+                'role': 'system',
+                'content': system_prompt
+            },
+            {
+                'role': 'user',
+                'content': [
+                    {
+                        'type': 'image_url',
+                        'image_url': {
+                            "url": image_uri
+                        }
+                    },
+                    {
+                        'type': 'text',
+                        'text': 'is this a xray image?'
+                    }
+                ]
+            }
+        ],
+        max_tokens=10,
+        temperature=0.2
+    )
+
+    msg_out = out.choices[0].message.content
+    return 'yes' in msg_out.lower()
 
 def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -> tuple[Optional[np.ndarray], Optional[str]]:
-    result = predict(img_path)
-    res = quick_diagnose(result) 
+    is_xray = is_xray_image(img_path)
 
-    if res is not None:
-        vis = visualize(result)
-    else:
-        vis = None
-
-    if not res:
+    if not is_xray:
         client = OpenAI(
             base_url=os.getenv('VLM_BASE_URL'),
             api_key=os.getenv('VLM_API_KEY')
         )
 
-        system_prompt = 'you are reading a user provided image (un categorized) and you need to provide a short comment on the image and give a diagnosis for the patient, if it is not medical or healthcare related docluemnts, just need to answer "looking good!" . Write the diagnosis in under 3 sentences, plain text only and no new lines.'
+        system_prompt = 'you are a healthcare master, you are reading and diagnosing an image by user.  If it is not medical or healthcare related docluemnts, just need to answer "looking good!". Notice that the image can be skin, face or other parts and problem can be lesions, fractures, etc. Write the diagnosis in under 3 sentences, plain text only and no new lines. Keep the conversation short and concise.'
 
         img = cv2.imread(img_path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -246,13 +285,21 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
         return None, comment_by_doctor.choices[0].message.content
 
     else:
+        result = predict(img_path)
+        res = quick_diagnose(result) 
+
+        if res is not None:
+            vis = visualize(result)
+        else:
+            vis = None
+
         client = OpenAI(
             base_url=os.getenv('LLM_BASE_URL'),
             api_key=os.getenv('LLM_API_KEY')
         )
-            
+
         system_prompt = 'You are a doctor, you are reading an X-ray image of a patient and it has some lesions on it. You need to provide a short comment on the image and give a diagnosis for the patient. Notice that the Other lesion can be anything, but mostly backbone-related or bone breakage. Write the diagnosis in under 3 sentences, plain text only, no new lines.'
-        
+
         comment_by_doctor = client.chat.completions.create(
             model=os.getenv('LLM_MODEL_ID'),
             messages=[
@@ -262,7 +309,7 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
                 },
                 {
                     'role': 'user', 
-                    'content': f'Yolo v11l output: {res}'
+                    'content': f'Yolo v11l output: {res or "no lesions found"}'
                 }
             ],
             max_tokens=256,
@@ -270,3 +317,28 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
         )
 
         return vis, comment_by_doctor.choices[0].message.content
+
+if __name__ == '__main__':
+    ds_path = '~/projects/SpineXR-Lesions-Detection/coco10k'
+    import glob
+
+    not_xray = glob.glob(os.path.expanduser(os.path.join(ds_path, '**', '*.jpg')), recursive=True)[:20]
+    print(len(not_xray))
+
+    for img_path in not_xray:
+        is_xray = is_xray_image(img_path)
+        print(img_path, is_xray)
+        vis, diagnosis = xray_dianose_agent(img_path)
+        print(diagnosis)
+
+    ds_path = '~/projects/SpineXR-Lesions-Detection/chess-xray-coco'
+    import glob
+
+    xray = glob.glob(os.path.expanduser(os.path.join(ds_path, '**', '*.png')), recursive=True)[:20]
+    print(len(xray))
+
+    for img_path in xray:
+        is_xray = is_xray_image(img_path)
+        print(img_path, is_xray)
+        vis, diagnosis = xray_dianose_agent(img_path)
+        print(diagnosis)
