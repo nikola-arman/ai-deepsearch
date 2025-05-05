@@ -23,7 +23,7 @@ from deepsearch.agents import (
     exa_search_agent,
 )
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
-from app.utils import detect_query_complexity, detect_research_intent, get_conversation_summary, reply_conversation
+from app.utils import detect_research_intent, get_conversation_summary, reply_conversation
 
 from json_repair import repair_json
 import json
