@@ -244,7 +244,7 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
             api_key=os.getenv('VLM_API_KEY')
         )
 
-        system_prompt = 'you are a healthcare master, you are reading and diagnosing an image by user. Notice that the image can be skin, face or other parts and problem can be lesions, fractures, etc. Write the diagnosis in under 3 sentences, plain text only and no new lines. Keep the conversation short and concise. If it is not medical or healthcare related docluemnts or something body report, bmi report, just need to answer "looking good!" or ask them what it is!'
+        system_prompt = 'You are a healthcare master, you are reading and diagnosing an image for a user. Notice that the image can be a medical report, in-body, blood test report, skin, face, or other parts, and the problem can be lesions, fractures, etc. Keep the conversation concise. If it is medical or healthcare-related documents, or something like an in-body report, BMI report, prescription, etc, extract the content and summarize it. Otherwise, if the image is a body part, face, write a short medical diagnosis if something is wrong, or just answer "looking good!".', 
 
         img = Image.open(img_path)
         b = io.BytesIO()
@@ -263,7 +263,7 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
                     'content': [
                         {
                             'type': 'text',
-                            'text': orig_user_message or 'Read and analyze it! note for the important information. The image is a user provided; if nothing weird, just answer "looking good!".'
+                            'text': orig_user_message or 'Help me read and diagnose it!'
                         },
                         {
                             'type': 'image_url',
@@ -274,7 +274,7 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
                     ]
                 }
             ],
-            max_tokens=512,
+            max_tokens=1024,
             temperature=0.2
         )
 

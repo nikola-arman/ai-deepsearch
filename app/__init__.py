@@ -492,8 +492,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                         template.format(
                             file_basename=file_basename, 
                             comment=comment,
-                        ),
-                        role='tool'
+                        )
                     )
                 )
 
