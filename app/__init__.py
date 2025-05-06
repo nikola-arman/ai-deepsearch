@@ -1,4 +1,6 @@
 import eai_http_middleware
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 import os
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
@@ -24,7 +26,8 @@ from app.utils import (
     to_chunk_data, 
     wrap_toolcall_response, 
     image_to_base64_uri, 
-    wrap_thinking_chunk
+    wrap_thinking_chunk,
+    random_str
 )
 from starlette.concurrency import run_in_threadpool
 from functools import partial
@@ -60,8 +63,7 @@ async_chess_xray_lesion_detector = sync2async(xray_lesion_detector.predict)
 async_chess_xray_lesion_visualize = sync2async(xray_lesion_detector.visualize)
 async_chess_xray_lesion_quick_diagnose = sync2async(xray_lesion_detector.quick_diagnose)
 
-import logging
-logging.basicConfig(level=logging.DEBUG)
+
 logger = logging.getLogger(__name__)
 
 async def run_deep_search_pipeline(query: str, max_iterations: int = 3, response_uuid: str = str(uuid.uuid4())) -> AsyncGenerator[bytes, None]:
@@ -357,12 +359,15 @@ TOOL_CALLS = [
 ]
 
 async def quick_search(query: str) -> str:
-    result = rag.search(query)
+    result = tavily_search(query)
 
     if not result:
         return "No results found"
 
-    return "\n".join(result)
+    return "\n".join([
+        f'{i + 1}. {e.title}\nURL: {e.url}\nContent: {e.content}\n' 
+        for i, e in enumerate(result)
+        ])
 
 async def execute_openai_compatible_toolcall(name: str, args: dict[str, str]) -> str:
     try:
@@ -384,19 +389,20 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
     if len(attachments) > 0:
         for data, filename in attachments:
             path = await preserve_upload_file(data, filename, preserve_attachments=True)
+
             if path is not None:
                 attachment_paths.append(path)
-            
+
     attachment_paths = [
         e
         for e in attachment_paths
         if os.path.splitext(e)[-1].lower() in 
         [
             '.jpg', '.jpeg', '.png', 
-            '.bmp', '.webp'
+            '.bmp', '.webp', '.heic'
         ]
     ]
-    
+
     system_prompt = ''
 
     if os.path.exists('system_prompt.txt'):
@@ -413,7 +419,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
         for path in attachment_paths:
             calls.append(
                 {
-                    "id": 'call_' + str(uuid.uuid4()),
+                    "id": 'call_' + random_str(24),
                     "type": "function",
                     "function": {
                         "name": "diagnose",
@@ -480,8 +486,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                         template.format(
                             file_basename=file_basename, 
                             comment=comment,
-                        ),
-                        role='tool'
+                        )
                     )
                 )
 

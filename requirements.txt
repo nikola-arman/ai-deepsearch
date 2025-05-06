@@ -9,3 +9,5 @@ git+https://github.com/daniel-bvm/pymed
 git+https://github.com/daniel-bvm/http-middleware
 gdown
 opencv-python
+onnxruntime
+pillow-heif
