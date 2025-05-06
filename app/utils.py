@@ -5,7 +5,20 @@ import base64
 from .models import ChatCompletionStreamResponse
 import time
 import json
+import uuid
 from typing import Any
+from PIL import Image
+from io import BytesIO
+
+
+def heif_to_jpeg(file_data_uri: str) -> str:
+    file_data_base64 = file_data_uri.split(',')[-1]
+    file_data = base64.b64decode(file_data_base64)
+    img = Image.open(BytesIO(file_data))
+    img = img.convert('RGB')
+    buffer = BytesIO()
+    img.save(buffer, format='JPEG')
+    return buffer.getvalue()
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +29,12 @@ async def preserve_upload_file(file_data_uri: str, file_name: str, preserve_atta
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
     try:
-        file_data = base64.b64decode(file_data_base64)
         file_path = os.path.join(os.getcwd(), 'uploads', f"{timestamp}_{file_name}")
-        
+
         if not preserve_attachments:
             return file_path
+
+        file_data = base64.b64decode(file_data_base64)
 
         with open(file_path, 'wb') as f:
             f.write(file_data)
@@ -268,3 +282,6 @@ import cv2
 def image_to_base64_uri(image: np.ndarray) -> str:
     _, buffer = cv2.imencode('.jpeg', image)
     return f'data:image/jpeg;base64,{base64.b64encode(buffer).decode("utf-8")}'
+
+def random_str(n: int) -> str:
+    return os.urandom(n // 2).hex()

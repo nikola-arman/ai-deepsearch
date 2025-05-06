@@ -1,5 +1,12 @@
 import eai_http_middleware
 
+
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except Exception as e:
+    pass 
+
 import os
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'local-model')
@@ -24,7 +31,8 @@ from app.utils import (
     to_chunk_data, 
     wrap_toolcall_response, 
     image_to_base64_uri, 
-    wrap_thinking_chunk
+    wrap_thinking_chunk,
+    random_str
 )
 from starlette.concurrency import run_in_threadpool
 from functools import partial
@@ -387,19 +395,20 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
     if len(attachments) > 0:
         for data, filename in attachments:
             path = await preserve_upload_file(data, filename, preserve_attachments=True)
+
             if path is not None:
                 attachment_paths.append(path)
-            
+
     attachment_paths = [
         e
         for e in attachment_paths
         if os.path.splitext(e)[-1].lower() in 
         [
             '.jpg', '.jpeg', '.png', 
-            '.bmp', '.webp'
+            '.bmp', '.webp', '.heic'
         ]
     ]
-    
+
     system_prompt = ''
 
     if os.path.exists('system_prompt.txt'):
@@ -416,7 +425,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
         for path in attachment_paths:
             calls.append(
                 {
-                    "id": 'call_' + str(uuid.uuid4()),
+                    "id": 'call_' + random_str(24),
                     "type": "function",
                     "function": {
                         "name": "diagnose",

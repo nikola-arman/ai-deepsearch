@@ -193,9 +193,7 @@ def visualize(result: PredictionResult) -> np.ndarray:
 
 def is_xray_image(img_path: str) -> bool:
 
-    img = cv2.imread(img_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = Image.fromarray(img)
+    img = Image.open(img_path)
     b = io.BytesIO()
     img.save(b, format='JPEG')
 
@@ -246,11 +244,9 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
             api_key=os.getenv('VLM_API_KEY')
         )
 
-        system_prompt = 'you are a healthcare master, you are reading and diagnosing an image by user.  If it is not medical or healthcare related docluemnts, just need to answer "looking good!". Notice that the image can be skin, face or other parts and problem can be lesions, fractures, etc. Write the diagnosis in under 3 sentences, plain text only and no new lines. Keep the conversation short and concise.'
+        system_prompt = 'you are a healthcare master, you are reading and diagnosing an image by user. Notice that the image can be skin, face or other parts and problem can be lesions, fractures, etc. Write the diagnosis in under 3 sentences, plain text only and no new lines. Keep the conversation short and concise. If it is not medical or healthcare related docluemnts or something body report, bmi report, just need to answer "looking good!" or ask them what it is!'
 
-        img = cv2.imread(img_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = Image.fromarray(img)
+        img = Image.open(img_path)
         b = io.BytesIO()
         img.save(b, format='JPEG')
         image_uri = f'data:image/jpeg;base64,{base64.b64encode(b.getvalue()).decode("utf-8")}'

@@ -4,6 +4,7 @@ copy requirements.txt requirements.txt
 run python -m pip install --no-cache-dir -r requirements.txt 
 run python -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 run python -m pip install --no-cache-dir ultralytics transformers
+run python -m pip install --no-cache-dir pillow-heif
 
 run apt-get update && apt-get install -y libgl1
 
