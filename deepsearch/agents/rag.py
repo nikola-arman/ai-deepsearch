@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer, AutoModel
+# from transformers import AutoTokenizer, AutoModel
 from functools import lru_cache
 import gdown
 import os

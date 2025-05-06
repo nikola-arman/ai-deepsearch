@@ -1,11 +1,6 @@
 import eai_http_middleware
-
-
-try:
-    from pillow_heif import register_heif_opener
-    register_heif_opener()
-except Exception as e:
-    pass 
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 import os
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
@@ -68,8 +63,7 @@ async_chess_xray_lesion_detector = sync2async(xray_lesion_detector.predict)
 async_chess_xray_lesion_visualize = sync2async(xray_lesion_detector.visualize)
 async_chess_xray_lesion_quick_diagnose = sync2async(xray_lesion_detector.quick_diagnose)
 
-import logging
-logging.basicConfig(level=logging.DEBUG)
+
 logger = logging.getLogger(__name__)
 
 async def run_deep_search_pipeline(query: str, max_iterations: int = 3, response_uuid: str = str(uuid.uuid4())) -> AsyncGenerator[bytes, None]:
