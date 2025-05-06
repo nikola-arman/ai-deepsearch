@@ -1,173 +1,105 @@
-# Multi-Agent Deep Search System
+# Vibe Healthcare Master
 
-A highly dynamic and adaptive deep search system that efficiently combines Tavily API for real-time web search, Llama reasoning for analysis and synthesis, FAISS for dense vector search, and BM25 for keyword-based retrieval.
+Vibe Healthcare Master is an AI-powered healthcare assistant designed to provide medical information, analyze X-ray images, and facilitate medical research. The goal of this agent is to assist healthcare professionals and patients with various medical inquiries and diagnostic support.
 
-## Overview
+## Key Features
 
-The DeepSearch system implements an iterative multi-query approach that goes beyond traditional search engines:
+- **Medical Question Answering**: the agent can answer questions related to medical conditions, symptoms, treatments, and procedures, drawing on real-time medical databases.
+- **X-ray Image Analysis**: the agent uses a YOLOv11 model for detecting potential lesions and abnormalities in X-ray images. Please be aware that this analysis is for informational purposes only and does not replace a professional radiologist's interpretation.
+- **Real-time Information Search**: the agent can perform quick searches on the Internet to find the most up-to-date information.
 
-1. **Understanding Intent**: Analyzes the user's query to identify the core information needs
-2. **Query Diversification**: Generates multiple diverse search queries to explore different aspects
-3. **Multi-Source Retrieval**: Combines web search, semantic indexing, and keyword search
-4. **Iterative Learning**: Identifies knowledge gaps and generates follow-up queries in multiple iterations
-5. **Structured Synthesis**: Creates structured answers through a two-stage content generation process
+## Usage
 
-This approach yields significantly more comprehensive and accurate results than single-query systems, especially for complex or technical questions.
+1. Provide a clear and concise description of your medical question, concern, or the X-ray image you wish to analyze.
+2. For X-ray image analysis, please provide the image data.
+3. The agent will process your request and provide a response, potentially including tool calls to access additional information or analysis.
 
-## Features
+## Installation
 
-- No preloaded knowledge base: FAISS and BM25 index freshly fetched search results dynamically
-- Dynamic index creation: Generates embeddings and keyword indices on-the-fly
-- Multi-agent architecture: Each component is specialized for a specific search task
-- Iterative deep search: Generates multiple search queries and identifies knowledge gaps
-- Two-stage content generation: Creates structured outlines before expanding into detailed answers
-- Adaptive reasoning: Refines queries, combines insights, and handles ambiguous requests
-
-## Requirements
-
-- Tavily API key for web search capabilities
-- OpenAI-compatible API server (like LM Studio, llama.cpp server, Ollama, etc.) OR OpenAI API key
-
-## Installing and Running llama.cpp Server
-
-If you prefer to use llama.cpp as your local inference server, follow these steps:
-
-### 1. Clone and Build llama.cpp
+First, build the Docker image:
 
 ```bash
-# Clone the repository
-git clone https://github.com/ggerganov/llama.cpp.git
-cd llama.cpp
-
-# Build the project (standard build)
-make
-
-# For optimized builds with specific hardware acceleration:
-# - For Apple Silicon: make LLAMA_METAL=1
-# - For CUDA: make LLAMA_CUBLAS=1
-# - For OpenBLAS: make LLAMA_OPENBLAS=1
-# - For AMD ROCm: make LLAMA_HIPBLAS=1
+docker build -t vibe-healthcare-master .
 ```
 
-### 2. Run the Server
-
-You can run the server in two ways:
-
-#### Option A: Automatic Model Download (Recommended)
-
-`llama-server` can automatically download models from Hugging Face:
+Then, run the Docker container:
 
 ```bash
-# Start server and download model in one command
-./llama-server --hf-repo unsloth/gemma-3-4b-it-GGUF --hf-file gemma-3-4b-it-Q8_0.gguf -c 65536
-
-# Additional useful options:
-# --no-mmap: Don't use memory mapping for model loading (can improve performance)
-# --mlock: Lock model in memory to prevent swapping
-# --pooling cls: Use CLS token pooling for embeddings
-# -p 8080: Set server port (default is 8080)
-# --host 0.0.0.0: Bind to all network interfaces
+docker run --rm -it -p 4000:80 \
+-e LLM_BASE_URL=<your-llm-base-url> \
+-e LLM_API_KEY=<your-llm-api-key> \
+-e LLM_MODEL_ID=<llm-model> \
+-e EMBEDDING_MODEL_ID=<embedding-model> \
+-e LOCAL_TEST=1 \
+-e DEBUG_MODE=1 \
+vibe-healthcare-master
 ```
 
-This will automatically download the specified model from Hugging Face and start the server.
+Example payload for the agent:
 
-#### Option B: Manual Model Download
+Raw text:
 
-If you prefer to download models manually:
-
-1. Download a compatible GGUF model:
-```bash
-# Example: Download Mistral 7B Instruct
-wget https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf -O models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+```json
+{
+   "messages": [
+      {
+         "role": "user",
+         "content": "who are you?"
+      }
+   ]
+}
 ```
 
-2. Start the server with your downloaded model:
-```bash
-# Basic server start
-./server -m models/mistral-7b-instruct-v0.2.Q4_K_M.gguf -c 2048
+With attachment
+
+```json
+{
+   "messages":[
+      {
+         "role": "user",
+         "content": [
+            {
+               "type": "text",
+               "text": "check this X-ray and tell me some abnormalities "
+            },
+            {
+               "type": "image_url",
+               "image_url": {
+                  "url":"data:image/jpeg;base64,/9j/4QlQaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wLwA8P3hwYWNrZXQgYmVnaW49Iu+7vyIgaWQ9Ilc1TTBNcENlaGlIenJlU3pOVGN6a2M5ZCI/PiA8eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIiB4OnhtcHRrPSJBZG9iZSBYTVAgQ29yZSA1LjYtYzE0MiA3OS4xNjA5MjQsIDIwMTcvMDcvMTMtMDE6MDY6MzkgICAgICAgICI+IDxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+IDxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiLz4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8P3hwYWNrZXQgZW5kPSJ3Ij8+/+0ALFBob3Rvc2hvcCAzLjAAOEJJTQQlAAAAAAAQ1B2M2Y8AsgTpgAmY7PhCfv/bAIQADAgICAkIDAkJDBELCgsRFQ8MDA8VGBMTFRMTGBcSFBQUFBIXFxscHhwbFyQkJyckJDUzMzM1Ozs7Ozs7Ozs7OwENCwsNDg0QDg4QFA4PDhQUEBEREBQdFBQVFBQdJRoXFxcXGiUgIx4eHiMgKCglJSgoMjIwMjI7Ozs7Ozs7Ozs7/90ABAAY/+4ADkFkb2JlAGTAAAAAAf/AABEIAVIBeAMAIgABEQECEQH/xAB5AAADAQEBAQEAAAAAAAAAAAADBAUCAQAGBwEBAAAAAAAAAAAAAAAAAAAAABAAAQMCBQEGBQMEAgEEAwEAAQACEQMhBBIxQVFhBRMiMnGBQpGhscEUUtEj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",
+                  "detail":"",
+                  "name":"xray-mass-lul.jpg"
+               }
+            }
+         ]
+      }
+   ]
+}
 ```
 
-### 3. Configure DeepSearch to Use llama.cpp Server
+## Demo
 
-In your `.env` file, ensure you have:
+### X-ray Image Analysis
 
-```
-OPENAI_API_BASE=http://localhost:8080/v1
-OPENAI_API_KEY=not-needed
-LLM_MODEL_ID=gpt-3.5-turbo  # This is just a placeholder, llama.cpp will use the loaded model
-```
+The agent can analyze X-ray images and provide detailed information about the findings. An example is in the following images.
+![x-ray](./assets/xray1.jpg)
+![x-ray](./assets/xray2.jpg)
 
-## Setup
+### Blood Test Analysis
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+The agent can analyze blood test results and provide detailed information about the findings. An example is in the following image.
+![blood-test](./assets/blood.jpg)
 
-2. Configure environment variables:
-```bash
-cp .env.example .env
-```
+### InBody Report Analysis
 
-3. Edit `.env` to add your Tavily API key and either:
-   - Set the OpenAI-compatible API server URL (default: http://localhost:8080/v1), OR
-   - Add your OpenAI API key
+The agent can analyze InBody reports and provide detailed information about the findings. An example is in the following image.
+![inbody](./assets/inbody-report.jpg)
 
-4. Run the application:
-```bash
-python main.py "your search query here"
-```
+### Deep Research
 
-Options:
-- `--verbose` or `-v`: Display additional information including generated queries
-- `--show-confidence` or `-c`: Show confidence scores
-- `--disable-refinement` or `-d`: Disable query refinement
-- `--max-iterations` or `-i`: Set maximum number of search iterations (default: 3)
+Moreover, the agent can conduct deep research to provide more accurate medical advice. An example is in the following image.
+![deep-research](./assets/deepsearch1.jpg)
+![deep-research](./assets/deepsearch2.jpg)
 
-## Architecture
+## Disclaimer
 
-The system uses the following agents in its deep search pipeline:
-
-```
-                  ┌──────────────────┐
-                  │   User Interface │
-                  │   (CLI or API)   │
-                  └────────┬─────────┘
-                           │
-                           ▼
-                           ─────────────────┐
-                   Search Pipeline          │
-                                            │
-                                            │
-                                            ▼
-                           ┌─────────────────────────────┐
-                           │     Iterative Search Loop   │◄────┐
-                           └────────────────┬────────────┘     │
-                                            │                  │
-                                            ▼                  │
-┌─────────────────────┐   ┌─────────────────┴────────────┐     │
-│  BM25 Keyword-based │◄──┤  FAISS Semantic Indexing     │     │
-│    Search Agent     │   │         Agent                │     │
-└─────────┬───────────┘   └──────────────────────────────┘     │
-          │                                                    │
-          ▼                                                    │
-┌─────────┴───────────┐   ┌─────────────────────────────┐      │
-│  Deep Reasoning     │──►│      Knowledge Gap          │──────┘
-│       Agent         │   │      Detection              │
-└─────────┬───────────┘   └─────────────────────────────┘
-          │
-          ▼
-┌─────────┴───────────┐
-│  Answer Generation  │
-│ (Structured Format) │
-└─────────────────────┘
-```
-
-1. Query Refinement Agent - Improves the original query for better search results
-2. Query Expansion Agent - Generates multiple diverse queries targeting different aspects
-3. Tavily Search Agent - Fetches real-time web search results (not shown in diagram)
-4. Dynamic FAISS Indexing Agent - Creates vector embeddings for semantic search
-5. Dynamic BM25 Search Agent - Performs keyword-based retrieval
-6. Deep Reasoning Agent - Analyzes results, identifies knowledge gaps, and synthesizes information into structured answers using a two-stage approach:
-   - Outline Creation Stage: Generates a structured outline with key points
-   - Content Writing Stage: Expands the outline into comprehensive content
+This should only be treated as an assistant, and not an official replacement for doctors/medical professionals. Always consult with a qualified healthcare provider for any medical advice or treatment.
