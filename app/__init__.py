@@ -6,7 +6,7 @@ import os
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'local-model')
 
-from typing import Dict, Any, Callable, Generator, AsyncGenerator
+from typing import Callable, Generator, AsyncGenerator
 from deepsearch.models import SearchState
 from deepsearch.agents import (
     faiss_indexing_agent,
@@ -14,9 +14,7 @@ from deepsearch.agents import (
     llama_reasoning_agent,
     deep_reasoning_agent,
     pubmed_search_agent,
-    pmed_search,
     tavily_search,
-    rag,
     xray_lesion_detector
 ) 
 from app.utils import (
