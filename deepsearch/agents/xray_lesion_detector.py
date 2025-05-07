@@ -109,8 +109,8 @@ def postprocess(
     img_height: int,
     img_width: int,
     pad: Tuple[int, int],
-    confidence_thres: float = 0.5,
-    iou_thres: float = 0.5
+    confidence_thres: float = 0.2,
+    iou_thres: float = 0.45
 ) -> np.ndarray:
     """
     Perform post-processing on the model's output to extract and visualize detections.
