@@ -504,7 +504,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
     completion = await client.chat.completions.create(
         model=model_id,
         messages=messages,
-        tools=TOOL_CALLS,
+        tools=TOOL_CALLS[:1],
         tool_choice="auto",
     )
 
@@ -575,9 +575,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
         completion = await client.chat.completions.create(
             model=model_id,
             messages=messages,
-            tools=TOOL_CALLS if loops < 2 else (
-                TOOL_CALLS[:1] if loops < 5 else openai._types.NOT_GIVEN
-            ),
+            tools=TOOL_CALLS[:1] if loops < 5 else openai._types.NOT_GIVEN,
             tool_choice="auto",
         )
 
