@@ -47,6 +47,7 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+
 class Source(BaseModel):
     """Source model for search results."""
     title: str

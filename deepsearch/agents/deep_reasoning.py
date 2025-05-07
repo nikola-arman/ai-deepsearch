@@ -374,20 +374,20 @@ def format_search_results(state: SearchState) -> str:
     if not results:
         if state.faiss_results:
             results.extend(state.faiss_results)
-        
+
         if state.bm25_results:
             print(f"BM25 results: {len(state.bm25_results)}")
-        
+
             # normalize the score of bm25 results to be between 0 and 1
             max_score = max(result.score for result in state.bm25_results)
             min_score = min(result.score for result in state.bm25_results)
             normalized_scores = [(result.score - min_score) / (max_score - min_score) for result in state.bm25_results]
-    
+
             for result, score in zip(state.bm25_results, normalized_scores):
                 result.score = score
-    
+
             results.extend(state.bm25_results)
-        
+
         if state.tavily_results:
             results.extend(state.tavily_results)
         if state.pubmed_results:
@@ -400,29 +400,29 @@ def format_search_results(state: SearchState) -> str:
         group_by_url_content[result.url + result.content] = result
 
     group_by_url = {}
-    
+
     for url_content, result in group_by_url_content.items():
         if result.url not in group_by_url:
             group_by_url[result.url] = []
-        
+
         group_by_url[result.url].append(result)
-        
+
     documents = []
 
     for i, (url, results) in enumerate(group_by_url.items()):
         doc = {}
-        
+
         doc['PMID'] = get_pmid(url)
 
         date = None
         if results[0].publication_date:
             date = datetime.datetime.strptime(results[0].publication_date, "%Y-%m-%d")
-        
+
         authors = ""
-        
+
         if len(results[0].authors) > 0:
             first_author = results[0].authors[0]
-            
+
             if first_author.firstname and first_author.lastname:
                 first_author_name = first_author.firstname or first_author.lastname
 
@@ -433,10 +433,10 @@ def format_search_results(state: SearchState) -> str:
                     authors = "Anonymous"
 
         doc['Title'] = results[0].title
-        
+
         if authors:
             doc['Author'] = authors
-    
+
         if date:
             doc['Year'] = date.year
 
@@ -515,7 +515,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     # Create the reasoning prompt
     reasoning_prompt = PromptTemplate(
         input_variables=[
-            "original_query", "iteration", "search_results", 
+            "original_query", "iteration", "search_results",
             "previous_knowledge_gaps", "max_iterations", "current_date"
         ],
         template=REASONING_TEMPLATE
@@ -794,7 +794,7 @@ def generate_final_answer(state: SearchState) -> SearchState:
             "direct_answer": direct_answer,
             "search_details": search_details
         }).to_string())
-    
+
     outline_response = outline_chain.invoke({
         "original_query": state.original_query,
         "key_points": key_points,
@@ -894,16 +894,16 @@ def generate_final_answer(state: SearchState) -> SearchState:
 
 """
 
-    cited_pmids = set([])    
+    cited_pmids = set([])
     pat = re.compile(r'\[.*\]\(PMID:\s?(\d+)\)')
 
     for line in final_answer.split('\n'):
         match = pat.search(line)
         if match:
             cited_pmids.add(match.group(1))
-    
+
     searched_pmids = set([])
- 
+
     # Stage 5: Generate references section
     references = "## References\n\n"
     if state.combined_results and cited_pmids:
@@ -913,9 +913,9 @@ def generate_final_answer(state: SearchState) -> SearchState:
             key=lambda x: x.score if x.score is not None else 0,
             reverse=True
         )
-        
+
         track = set([])
-        
+
         # Add each source with its title and URL
         for i, result in enumerate(sorted_results):
             url = result.url
@@ -923,13 +923,13 @@ def generate_final_answer(state: SearchState) -> SearchState:
 
             # if pmid not in cited_pmids:
             #     continue
-            
+
             if pmid not in track:
                 track.add(pmid)
                 searched_pmids.add(pmid)
             else:
                 continue
-                        
+
             if result.publication_date:
                 publication_date = datetime.datetime.strptime(result.publication_date, "%Y-%m-%d")
                 year = publication_date.year
@@ -937,27 +937,27 @@ def generate_final_answer(state: SearchState) -> SearchState:
                 year = None
 
             authors = result.authors[0].firstname + " " + result.authors[0].lastname + " et al." if len(result.authors) > 1 else ""
-            
+
             # Format the reference
             references += f"{i + 1}. [{result.title}]({result.url})"
 
             if year:
                 references += f" ({year})"
-            
+
             references += "\n"
 
     hallucinated_pmids = set([])
     for pmid in cited_pmids:
         if pmid in searched_pmids:
             final_answer = re.sub(
-                r'\[(.*)\]\(PMID:\s?(\d+)\)', 
-                r'[\1](https://pubmed.ncbi.nlm.nih.gov/\2)', 
+                r'\[(.*)\]\(PMID:\s?(\d+)\)',
+                r'[\1](https://pubmed.ncbi.nlm.nih.gov/\2)',
                 final_answer
             )
-            
+
             final_answer = re.sub(
-                r'PMID:\s?(\d+)', 
-                r'[\1](https://pubmed.ncbi.nlm.nih.gov/\1)', 
+                r'PMID:\s?(\d+)',
+                r'[\1](https://pubmed.ncbi.nlm.nih.gov/\1)',
                 final_answer
             )
         else:
@@ -991,7 +991,7 @@ class ReferenceBuilder:
         # Add each source with its title and URL
         for i, result in enumerate(self.sorted_results):
             self.searched_pmids.add(get_pmid(result.url))
-            
+
     def backtrack(self, pmid: str) -> str:
         if pmid in self.searched_pmids:
             for result in self.sorted_results:
@@ -1002,11 +1002,11 @@ class ReferenceBuilder:
 
     def build(self) -> str:
         return "\n".join(
-            f"{i + 1}. {self.backtrack(pmid)}" 
-            for i, pmid 
+            f"{i + 1}. {self.backtrack(pmid)}"
+            for i, pmid
             in enumerate(list(self.cited_pmids))
         )
-    
+
     def embed_references(self, answer: str) -> str:
         cited_pmids = set([])
         for line in answer.split('\n'):
@@ -1015,16 +1015,16 @@ class ReferenceBuilder:
                 cited_pmids.add(match.group(1))
 
         for pmid in cited_pmids:
-            if pmid in self.searched_pmids: 
+            if pmid in self.searched_pmids:
                 answer = re.sub(
-                    r'\[(.*)\]\(PMID:\s?(\d+)\)', 
-                    r'[\1](https://pubmed.ncbi.nlm.nih.gov/\2)', 
+                    r'\[(.*)\]\(PMID:\s?(\d+)\)',
+                    r'[\1](https://pubmed.ncbi.nlm.nih.gov/\2)',
                     answer
                 )
 
                 answer = re.sub(
-                    r'PMID:\s?(\d+)', 
-                    r'[\1](https://pubmed.ncbi.nlm.nih.gov/\1)', 
+                    r'PMID:\s?(\d+)',
+                    r'[\1](https://pubmed.ncbi.nlm.nih.gov/\1)',
                     answer
                 )
 
@@ -1036,7 +1036,10 @@ class ReferenceBuilder:
         return answer
 
 
-def generate_final_answer_stream(state: SearchState) -> Generator[str, None, None]:
+def generate_final_answer_stream(
+    state: SearchState,
+    detailed: bool = True,
+) -> Generator[str, None, None]:
     """
     Generates the final, structured answer in a multi-stage process:
     1. Generate concise key points
@@ -1085,10 +1088,12 @@ def generate_final_answer_stream(state: SearchState) -> Generator[str, None, Non
         if kp:
             yield ref_builder.embed_references(kp) + '\n'
 
+    logger.info(f"Generated key points for final answer {key_points}")
+
     # Stage 2: Generate direct answer
     yield '\n'
     yield '## Direct Answer\n\n'
-    
+
     direct_answer_llm = init_reasoning_llm(temperature=0.3)
     direct_answer_prompt = PromptTemplate(
         input_variables=["original_query", "key_points", "search_details"],
@@ -1103,9 +1108,17 @@ def generate_final_answer_stream(state: SearchState) -> Generator[str, None, Non
     })
 
     # Extract the content if it's a message object
-    direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
-    logger.info("Generated direct answer")
+    direct_answer = (
+        direct_answer_response.content
+        if hasattr(direct_answer_response, 'content')
+        else direct_answer_response
+    )
+    logger.info(f"Generated direct answer {direct_answer}")
 
+    if not detailed:
+        answer = direct_answer + f"\n\nHere is what I found for {state.original_query}. Do you want me to deep dive into it?"
+        yield answer
+        return
     yield ref_builder.embed_references(direct_answer)
 
     # Stage 3: Generate detailed notes outline (section headings only)
@@ -1118,7 +1131,7 @@ def generate_final_answer_stream(state: SearchState) -> Generator[str, None, Non
         template=DETAILED_NOTES_TEMPLATE
     )
     outline_chain = outline_prompt | outline_llm
-    
+
     outline_response = outline_chain.invoke({
         "original_query": state.original_query,
         "key_points": key_points,
@@ -1187,13 +1200,16 @@ def generate_final_answer_stream(state: SearchState) -> Generator[str, None, Non
             skip_next_line = False
 
         cleaned_content = '\n'.join(cleaned_lines)
-        
+
         yield '\n'
         yield f"## {heading}\n\n"
         yield ref_builder.embed_references(cleaned_content)
 
     logger.info("Generated all section content for detailed notes")
-    
+
     yield '\n'
+    references = ref_builder.build()
+    if not references:
+        return
     yield '## References\n\n'
-    yield ref_builder.build()
+    yield references

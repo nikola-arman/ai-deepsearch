@@ -29,6 +29,7 @@ def init_embedding_model():
             model=os.getenv("EMBEDDING_MODEL_ID", "text-embedding-ada-002"),  # Default to a known model
             openai_api_key=openai_api_key,
             openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
+            check_embedding_ctx_length=False,
             dimensions=384  # Adjust based on your model
         )
 
@@ -160,18 +161,18 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
         final_texts = []
         final_indices = []
         final_chunk_map = {}
-    
+
         for batch_idx, batch_texts in enumerate(batching(texts, batch_size)):
             try:
                 # Additional type validation for the batch
                 batch_texts = [
-                    str(text) if not isinstance(text, str) else text 
+                    str(text) if not isinstance(text, str) else text
                     for text in batch_texts
                 ]
-                
+
                 # Get embeddings for the batch
                 batch_embeddings = embeddings.embed_documents(batch_texts)
-                
+
                 # Add each embedding and its associated data
                 for i, (text, embedding) in enumerate(zip(batch_texts, batch_embeddings)):
                     embedded_texts.append(embedding)
@@ -179,7 +180,7 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
                     original_idx = valid_indices[batch_idx * batch_size + i]
                     final_indices.append(original_idx)
                     final_chunk_map[len(embedded_texts) - 1] = original_to_chunk_map[batch_idx * batch_size + i]
-            
+
             except Exception as e:
                 logger.warning(f"Skipping batch at index {batch_idx} due to embedding error: {str(e)}")
                 continue
