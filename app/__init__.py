@@ -64,7 +64,7 @@ async_chess_xray_lesion_quick_diagnose = sync2async(xray_lesion_detector.quick_d
 
 logger = logging.getLogger(__name__)
 
-async def run_deep_search_pipeline(query: str, max_iterations: int = 3, response_uuid: str = str(uuid.uuid4())) -> AsyncGenerator[bytes, None]:
+async def run_deep_search_pipeline(query: str, max_iterations: int = 1, response_uuid: str = str(uuid.uuid4())) -> AsyncGenerator[bytes, None]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     try:
         # Initialize state
