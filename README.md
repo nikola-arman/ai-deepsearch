@@ -86,11 +86,11 @@ curl -X POST http://localhost:4000/prompt -d '
 The agent can analyze X-ray images and provide detailed information about the findings. An example is in the following images.
 
 <p align="center">
-<img src="./assets/xray1.jpg" width=360px alt/>
+<img src="https://raw.githubusercontent.com/daniel-bvm/medical-ai-deepsearch/refs/heads/main/assets/xray1.jpg" alt/>
 </p>
 
 <p align="center">
-<img src="./assets/xray2.jpg" width=360px alt/>
+<img src="https://raw.githubusercontent.com/daniel-bvm/medical-ai-deepsearch/refs/heads/main/assets/xray2.jpg" alt/>
 </p>
 
 ### Blood Test Analysis
@@ -98,7 +98,7 @@ The agent can analyze X-ray images and provide detailed information about the fi
 The agent can analyze blood test results and provide detailed information about the findings. An example is in the following image.
 
 <p align="center">
-<img src="./assets/blood.jpg" width=360px alt/>
+<img src="https://raw.githubusercontent.com/daniel-bvm/medical-ai-deepsearch/refs/heads/main/assets/blood.jpg" alt/>
 </p>
 
 ### InBody Report Analysis
@@ -106,7 +106,7 @@ The agent can analyze blood test results and provide detailed information about 
 The agent can analyze InBody reports and provide detailed information about the findings. An example is in the following image.
 
 <p align="center">
-<img src="./assets/inbody-report.jpg" width=360px alt/>
+<img src="https://raw.githubusercontent.com/daniel-bvm/medical-ai-deepsearch/refs/heads/main/assets/inbody-report.jpg" alt/>
 </p>
 
 ### Deep Research
@@ -114,11 +114,11 @@ The agent can analyze InBody reports and provide detailed information about the 
 Moreover, the agent can conduct deep research to provide more accurate medical advice. An example is in the following image.
 
 <p align="center">
-<img src="./assets/deepsearch1.jpg" width=360px alt/>
+<img src="https://raw.githubusercontent.com/daniel-bvm/medical-ai-deepsearch/refs/heads/main/assets/deepsearch1.jpg" alt/>
 </p>
 
 <p align="center">
-<img src="./assets/deepsearch2.jpg" width=360px alt/>
+<img src="https://raw.githubusercontent.com/daniel-bvm/medical-ai-deepsearch/refs/heads/main/assets/deepsearch2.jpg" alt/>
 </p>
 
 ## Disclaimer
