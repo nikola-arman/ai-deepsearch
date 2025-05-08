@@ -580,6 +580,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                     _args['topic'],
                     response_uuid=response_uuid,
                     max_iterations=5,
+                    detailed_report=True,
                 ):
                     yield chunk
 
