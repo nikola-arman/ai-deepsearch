@@ -854,6 +854,7 @@ def generate_final_answer_stream(
             if kp:
                 yield ref_builder.embed_references(kp) + '\n'
 
+
     # Stage 2: Generate direct answer
     if detailed:
         yield '\n'

@@ -38,21 +38,21 @@ async def preserve_upload_file(file_data_uri: str, file_name: str, preserve_atta
 
         with open(file_path, 'wb') as f:
             f.write(file_data)
-        
+
         return file_path
     except Exception as e:
         logger.error(f"Failed to preserve upload file: {e}")
         return None
-    
+
 async def get_attachments(content: list[dict[str, str]]) -> list[str]:
     attachments = []
-    
+
     if isinstance(content, str):
         return []
 
     for item in content:
         print("ITEM", item.keys())
-    
+
         if item.get('type', 'undefined') == 'file':
             file = item.get('file')
             print("FILE", file.keys())
@@ -77,7 +77,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
     refined_messages = []
 
     has_system_prompt = False
-    
+
     for message in messages:
         message: dict[str, str]
 
@@ -85,7 +85,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
             message['content'] += f'\n{system_prompt}'
             has_system_prompt = True
             continue
-    
+
         if isinstance(message, dict) \
             and message.get('role', 'undefined') == 'user' \
             and isinstance(message.get('content'), list):
@@ -101,8 +101,8 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
                 elif item.get('type', 'undefined') == 'file':
                     file_item = item.get('file', {})
                     if 'file_data' in file_item and 'filename' in file_item:
-                        
-                        
+
+
                         file_path = await preserve_upload_file(
                             file_item.get('file_data', ''),
                             file_item.get('filename', ''),
@@ -111,7 +111,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
 
                         if file_path:
                             attachments.append(file_path)
-                            
+
                 elif item.get('type', 'undefined') == 'image_url':
                     file_item = item.get('image_url', {})
 
@@ -137,7 +137,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
 
         else:
             refined_messages.append(message)
-    
+
     if not has_system_prompt and system_prompt != "":
         refined_messages.insert(0, {
             "role": "system",
@@ -161,7 +161,7 @@ async def refine_assistant_message(
         assistant_message['content'] = assistant_message['content'] or ""
 
     return assistant_message
-    
+
 
 async def wrap_chunk(uuid: str, raw: str, role: str = 'assistant') -> ChatCompletionStreamResponse:
     return ChatCompletionStreamResponse(
@@ -173,13 +173,13 @@ async def wrap_chunk(uuid: str, raw: str, role: str = 'assistant') -> ChatComple
             dict(
                 index=0,
                 delta=dict(
-                    content=raw, 
+                    content=raw,
                     role=role
                 )
             )
         ]
     )
-    
+
 
 async def wrap_thinking_chunk(uuid: str, raw: str) -> ChatCompletionStreamResponse:
     return ChatCompletionStreamResponse(
@@ -194,12 +194,12 @@ async def wrap_thinking_chunk(uuid: str, raw: str) -> ChatCompletionStreamRespon
             )
         ]
     )
-    
 
-    
+
+
 async def wrap_toolcall_request(uuid: str, fn_name: str, args: dict[str, Any]) -> ChatCompletionStreamResponse:
     args_str = json.dumps(args, indent=2)
-    
+
     template = f'''
 Executing <b>{fn_name}</b>
 
@@ -230,7 +230,7 @@ Arguments:
             )
         ]
     )
-    
+
 
 async def to_chunk_data(chunk: ChatCompletionStreamResponse) -> bytes:
     return ("data: " + json.dumps(chunk.model_dump()) + "\n\n").encode()
@@ -275,13 +275,26 @@ Response:
             )
         ]
     )
-    
+
 import numpy as np
+from PIL import Image
+from io import BytesIO
 import cv2
 
 def image_to_base64_uri(image: np.ndarray) -> str:
-    _, buffer = cv2.imencode('.jpeg', image)
-    return f'data:image/jpeg;base64,{base64.b64encode(buffer).decode("utf-8")}'
+    buffer = BytesIO()
+    image = Image.fromarray(image)
+    image.save(buffer, format='JPEG')
+    return f'data:image/jpeg;base64,{base64.b64encode(buffer.getvalue()).decode("utf-8")}'
 
 def random_str(n: int) -> str:
     return os.urandom(n // 2).hex()
+
+if __name__ == "__main__":
+    # Example usage
+    image = cv2.imread('/Users/macbookpro/Projects/medical-ai-deepsearch/45002E7C-7615-4B80-A163-F0F92EFF633E.png')
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, (512, 512))
+    base64_uri = image_to_base64_uri(image)
+    print(base64_uri)
+    

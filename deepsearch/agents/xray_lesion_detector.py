@@ -15,7 +15,7 @@ try:
     from pillow_heif import register_heif_opener
     register_heif_opener()
 except Exception as e:
-    pass 
+    pass
 
 
 @lru_cache(maxsize=1)
@@ -180,7 +180,7 @@ def postprocess(
         box = boxes[i]
         score = scores[i]
         class_id = class_ids[i]
-        
+
         results.append({
             "class_id": int(class_id),
             "score": float(score),
@@ -192,12 +192,12 @@ def postprocess(
 from dataclasses import dataclass, field
 
 CLS_NAMES = [
-    "Disc Space Narrowing", 
-    "Foraminal Stenosis", 
-    "Osteophytes", 
-    "Other Lesion", 
-    "Spondylolysthesis", 
-    "Surgical Implant", 
+    "Disc Space Narrowing",
+    "Foraminal Stenosis",
+    "Osteophytes",
+    "Other Lesion",
+    "Spondylolysthesis",
+    "Surgical Implant",
     "Vertebral Collapse",
     'Aortic enlargement',
     'Atelectasis',
@@ -224,7 +224,7 @@ class PredictionResult:
     cls: list[int] = field(default_factory=list)
     org_size: tuple[int, int] = field(default_factory=tuple) # height, width
     org_path: str = field(default_factory=str)
-    
+
 def infer(session: ort.InferenceSession, image_path: str) -> PredictionResult:
     image_data, pad, img_height, img_width = preprocess(image_path)
     outputs = session.run(None, {session.get_inputs()[0].name: image_data})
@@ -241,26 +241,26 @@ def infer(session: ort.InferenceSession, image_path: str) -> PredictionResult:
         org_size=(img_height, img_width),
         org_path=image_path,
     )
-    
+
     return res
 
 def predict(image_path: str) -> PredictionResult:
     model = _load_model()
     another_model = _load_another_model()
-    
+
     results = infer(model, image_path)
     another_results = infer(another_model, image_path)
-    
+
     for i in range(len(another_results.cls)):
         another_results.cls[i] += 7
-    
+
     size = results.org_size
 
     return PredictionResult(
         xyxyn=results.xyxyn + another_results.xyxyn,
         conf=results.conf + another_results.conf,
         cls=results.cls + another_results.cls,
-        org_size=size, 
+        org_size=size,
         org_path=image_path,
     )
 
@@ -276,7 +276,7 @@ class RelativePosition(str, Enum):
     TOP_RIGHT = "top_right"
     BOTTOM_LEFT = "bottom_left"
     BOTTOM_RIGHT = "bottom_right"
-    
+
     def __str__(self):
         return {
             "left": "left",
@@ -290,9 +290,9 @@ class RelativePosition(str, Enum):
             "bottom_right": "lower right",
         }[self.value]
 
-def calc_relative_position(xyxyn: list[list[float]]) -> RelativePosition: 
+def calc_relative_position(xyxyn: list[list[float]]) -> RelativePosition:
     cny, cnx = (xyxyn[0] + xyxyn[2]) / 2, (xyxyn[1] + xyxyn[3]) / 2
-    
+
     if 0.3 < cnx < 0.7 and 0.3 < cny < 0.7:
         return RelativePosition.CENTER
 
@@ -319,7 +319,7 @@ def calc_relative_position(xyxyn: list[list[float]]) -> RelativePosition:
 
     if cny > 0.7:
         return RelativePosition.BOTTOM
-    
+
 def quick_diagnose(result: PredictionResult) -> str:
     by_relative_position = {}
     total = 0
@@ -331,7 +331,7 @@ def quick_diagnose(result: PredictionResult) -> str:
 
             if relative_position not in by_relative_position:
                 by_relative_position[relative_position] = []
-  
+
             by_relative_position[relative_position].append({
                 "conf": conf,
                 "lesion": CLS_NAMES[cls],
@@ -344,7 +344,7 @@ def quick_diagnose(result: PredictionResult) -> str:
 
     for relative_position, lesions in by_relative_position.items():
         res += '{}: {}'.format(
-            str(relative_position), 
+            str(relative_position),
             ', '.join(
                 ['{} (conf: {:.2f})'.format(lesion['lesion'], lesion['conf']) for lesion in lesions]
             )
@@ -377,8 +377,10 @@ def visualize(result: PredictionResult) -> np.ndarray:
 def is_xray_image(img_path: str) -> bool:
 
     img = Image.open(img_path)
+    # Convert to RGB
+    rgb_img = img.convert('RGB')
     b = io.BytesIO()
-    img.save(b, format='JPEG')
+    rgb_img.save(b, format='JPEG')
 
     image_uri = f'data:image/jpeg;base64,{base64.b64encode(b.getvalue()).decode("utf-8")}'
     system_prompt = 'you are classifying whether the image is a xray image or not. just answer "yes" or "no" in plain text.'
@@ -430,19 +432,20 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
         system_prompt = 'You are a healthcare master, you are reading and diagnosing an image for a user. Notice that the image can be a medical report, in-body, blood test report, skin, face, or other parts, and the problem can be lesions, fractures, etc. Keep the conversation concise. If it is medical or healthcare-related documents, or something like an in-body report, BMI report, prescription, etc, extract the content and summarize it. Otherwise, if the image is a body part, face, write a short medical diagnosis if something is wrong, or just answer "looking good!". Just  write diagnosis, no recommendation needed.'
 
         img = Image.open(img_path)
+        rgb_img = img.convert('RGB')
         b = io.BytesIO()
-        img.save(b, format='JPEG')
+        rgb_img.save(b, format='JPEG')
         image_uri = f'data:image/jpeg;base64,{base64.b64encode(b.getvalue()).decode("utf-8")}'
 
         comment_by_doctor = client.chat.completions.create(
             model=os.getenv('LLM_MODEL_ID', 'local-model'),
             messages=[
                 {
-                    'role': 'system', 
+                    'role': 'system',
                     'content': system_prompt
                 },
                 {
-                    'role': 'user', 
+                    'role': 'user',
                     'content': [
                         {
                             'type': 'text',
@@ -465,7 +468,7 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
 
     else:
         result = predict(img_path)
-        res = quick_diagnose(result) 
+        res = quick_diagnose(result)
 
         if res is not None:
             vis = visualize(result)
@@ -483,11 +486,11 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
             model=os.getenv('LLM_MODEL_ID', 'local-model'),
             messages=[
                 {
-                    'role': 'system', 
+                    'role': 'system',
                     'content': system_prompt
                 },
                 {
-                    'role': 'user', 
+                    'role': 'user',
                     'content': f'Yolo v11l output: {res or "no lesions found"}'
                 }
             ],
