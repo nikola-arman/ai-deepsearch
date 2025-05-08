@@ -79,7 +79,9 @@ async def run_deep_search_pipeline(
     response_uuid: str = str(uuid.uuid4()),
 ) -> AsyncGenerator[bytes, None]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
-    logger.info("Running deep search pipeline...")
+    logger.info(
+        f"Running deep search pipeline with query: {query}, max_iterations: {max_iterations}, detailed_report: {detailed_report}"
+    )
     try:
         # Initialize state
         state = SearchState(original_query=query)
@@ -593,7 +595,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 async for chunk in run_deep_search_pipeline(
                     _args['query'],
                     response_uuid=response_uuid,
-                    max_iterations=2
+                    max_iterations=2,  # Set to 2 because 1 will not trigger the while loop
                 ):
                     yield chunk
                 return

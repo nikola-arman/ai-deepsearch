@@ -484,7 +484,6 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
         Updated state with analysis and potentially new search queries
     """
     # If this is the first iteration, generate initial search queries
-    logger.info(f"Current iteration: {state.current_iteration}, max iterations: {max_iterations}")
     if state.current_iteration == 0:
         # Generate initial focused queries from the original query
         initial_queries = generate_initial_queries(state.original_query)
@@ -579,8 +578,10 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
         new_knowledge_gaps = analysis.get("knowledge_gaps", [])
 
         # Filter out any knowledge gaps that have been identified before
-        filtered_knowledge_gaps = [gap for gap in new_knowledge_gaps
-                                  if gap not in state.historical_knowledge_gaps]
+        filtered_knowledge_gaps = [
+            gap for gap in new_knowledge_gaps
+            if gap not in state.historical_knowledge_gaps
+        ]
 
         # Update current knowledge gaps (for this iteration)
         state.knowledge_gaps = filtered_knowledge_gaps
@@ -769,8 +770,6 @@ class ReferenceBuilder:
             match = self.citing_pat.search(line)
             if match:
                 cited_pmids.add(match.group(1))
-        logger.info(f"Cited PMIDs: {sorted(cited_pmids)}")
-        logger.info(f"All searched PMIDs: {sorted(self.searched_pmids)}")
 
         for pmid in cited_pmids:
             if pmid in self.searched_pmids:
@@ -846,20 +845,19 @@ def generate_final_answer_stream(
     # Extract the content if it's a message object
     key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
     logger.info("Generated key points for final answer")
+    if detailed:
+        yield '## Key Points\n\n'
 
-    yield '## Key Points\n\n'
+        for kp in key_points.split('\n'):
+            kp = kp.strip()
 
-    for kp in key_points.split('\n'):
-        kp = kp.strip()
-
-        if kp:
-            yield ref_builder.embed_references(kp) + '\n'
-
-    logger.info(f"Generated key points for final answer {key_points}")
+            if kp:
+                yield ref_builder.embed_references(kp) + '\n'
 
     # Stage 2: Generate direct answer
-    yield '\n'
-    yield '## Direct Answer\n\n'
+    if detailed:
+        yield '\n'
+        yield '## Direct Answer\n\n'
 
     direct_answer_llm = init_reasoning_llm(temperature=0.3)
     direct_answer_prompt = PromptTemplate(
@@ -888,11 +886,9 @@ def generate_final_answer_stream(
         if hasattr(direct_answer_response, 'content')
         else direct_answer_response
     )
-    logger.info(f"Generated direct answer {direct_answer}")
 
     if not detailed:
         answer = direct_answer + f"\n\nHere is what I found for {state.original_query}. Do you want me to deep dive into it?"
-        logger.info(f"Displayed direct answer {ref_builder.embed_references(answer)}")
         yield ref_builder.embed_references(answer)
         return
     yield ref_builder.embed_references(direct_answer)
