@@ -11,3 +11,4 @@ gdown
 opencv-python
 onnxruntime
 pillow-heif
+json-repair==0.44.1

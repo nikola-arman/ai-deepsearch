@@ -8,6 +8,7 @@ import re
 import datetime  # Add import for datetime module
 from deepsearch.models import SearchState, SearchResult
 import datetime
+import json_repair
 
 # Set up logging
 logger = logging.getLogger("deepsearch.deep_reasoning")
@@ -483,6 +484,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
         Updated state with analysis and potentially new search queries
     """
     # If this is the first iteration, generate initial search queries
+    logger.info(f"Current iteration: {state.current_iteration}, max iterations: {max_iterations}")
     if state.current_iteration == 0:
         # Generate initial focused queries from the original query
         initial_queries = generate_initial_queries(state.original_query)
@@ -541,11 +543,24 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
         "current_date": current_date
     })
 
+    with open("deep_reasoning_prompt.txt", "w") as f:
+        f.write(reasoning_prompt.invoke({
+            "original_query": state.original_query,
+            "iteration": state.current_iteration,
+            "search_results": formatted_results,
+            "previous_knowledge_gaps": formatted_previous_gaps,
+            "max_iterations": max_iterations,
+            "current_date": current_date
+        }).to_string())
+
     # Extract the content if it's a message object
     if hasattr(response, 'content'):
         analysis_text = response.content
     else:
         analysis_text = response
+
+    with open("analysis_text.txt", "w") as f:
+        f.write(analysis_text)
 
     # Clean up the response text to improve JSON parsing chances
     analysis_text = analysis_text.strip()
@@ -557,7 +572,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
 
     # Parse the JSON response
     try:
-        analysis = json.loads(analysis_text)
+        analysis = json_repair.loads(analysis_text)
 
         # Update the state with the analysis results
         state.key_points = analysis.get("key_points", [])
@@ -710,267 +725,8 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     state.current_iteration += 1
 
     # If search is complete, generate the final answer
-    if state.search_complete:
-        state = generate_final_answer(state)
 
     return state
-
-def generate_final_answer(state: SearchState) -> SearchState:
-    """
-    Generates the final, structured answer in a multi-stage process:
-    1. Generate concise key points
-    2. Create a direct answer based on key points
-    3. Generate an outline for detailed notes sections
-    4. Expand each section with dedicated LLM calls
-    5. Add a references section with all cited sources
-
-    Args:
-        state: The current search state with key points and other information
-
-    Returns:
-        Updated state with the final structured answer
-    """
-    # Format the search details
-    search_details = format_search_details(state)
-
-    # Format the key points from the deep reasoning
-    initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
-
-    # Stage 1: Generate refined key points
-    key_points_llm = init_reasoning_llm(temperature=0.2)
-    key_points_prompt = PromptTemplate(
-        input_variables=["original_query", "search_details", "key_points"],
-        template=KEY_POINTS_TEMPLATE
-    )
-    key_points_chain = key_points_prompt | key_points_llm
-
-    key_points_response = key_points_chain.invoke({
-        "original_query": state.original_query,
-        "search_details": search_details,
-        "key_points": initial_key_points
-    })
-
-    # Extract the content if it's a message object
-    key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
-    logger.info("Generated key points for final answer")
-
-    # Stage 2: Generate direct answer
-    direct_answer_llm = init_reasoning_llm(temperature=0.3)
-    direct_answer_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "search_details"],
-        template=DIRECT_ANSWER_TEMPLATE
-    )
-    direct_answer_chain = direct_answer_prompt | direct_answer_llm
-
-    with open("direct_answer_prompt.txt", "w") as f:
-        f.write(direct_answer_prompt.invoke({
-            "original_query": state.original_query,
-            "key_points": key_points,
-            "search_details": search_details
-        }).to_string())
-
-    direct_answer_response = direct_answer_chain.invoke({
-        "original_query": state.original_query,
-        "key_points": key_points,
-        "search_details": search_details
-    })
-
-    # Extract the content if it's a message object
-    direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
-    logger.info("Generated direct answer")
-
-    # Stage 3: Generate detailed notes outline (section headings only)
-    outline_llm = init_reasoning_llm(temperature=0.3)
-    outline_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "direct_answer", "search_details"],
-        template=DETAILED_NOTES_TEMPLATE
-    )
-    outline_chain = outline_prompt | outline_llm
-
-    with open("outline_prompt.txt", "w") as f:
-        f.write(outline_prompt.invoke({
-            "original_query": state.original_query,
-            "key_points": key_points,
-            "direct_answer": direct_answer,
-            "search_details": search_details
-        }).to_string())
-
-    outline_response = outline_chain.invoke({
-        "original_query": state.original_query,
-        "key_points": key_points,
-        "direct_answer": direct_answer,
-        "search_details": search_details
-    })
-
-    # Extract the content if it's a message object
-    section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
-    logger.info("Generated section outline for detailed notes")
-
-    # Parse the section headings from the outline
-    section_headings = []
-    for line in section_outline.strip().split('\n'):
-        # Match lines that contain section headings (## Something)
-        if '##' in line:
-            # Extract just the heading text, removing numbers and other artifacts
-            heading = line.split('##')[1].strip()
-            if heading:  # Skip empty headings
-                section_headings.append(heading)
-
-    logger.info(f"Identified {len(section_headings)} sections to expand")
-
-    # Stage 4: Generate detailed content for each section
-    section_llm = init_reasoning_llm(temperature=0.4)
-    section_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading"],
-        template=SECTION_CONTENT_TEMPLATE
-    )
-
-    # for heading in section_headings:
-    #     with open(f'section_content_{heading}.txt', 'w') as f:
-    #         f.write(section_prompt.invoke({
-    #             "original_query": state.original_query,
-    #             "key_points": key_points,
-    #             "direct_answer": direct_answer,
-    #             "search_details": search_details,
-    #             "section_heading": heading
-    #         }).to_string())
-
-    section_chain = section_prompt | section_llm
-
-    # Generate content for each section
-    detailed_notes = "## Detailed Notes\n\n"
-    for heading in section_headings:
-        logger.info(f"Generating content for section: {heading}")
-
-        section_response = section_chain.invoke({
-            "original_query": state.original_query,
-            "key_points": key_points,
-            "direct_answer": direct_answer,
-            "search_details": search_details,
-            "section_heading": heading
-        })
-
-        # Extract the content if it's a message object
-        section_content = section_response.content if hasattr(section_response, 'content') else section_response
-
-        # Process the content to remove any headings that match the current heading
-        # This prevents duplication of the heading we're about to add
-        content_lines = section_content.split('\n')
-        cleaned_lines = []
-        skip_next_line = False
-
-        for line in content_lines:
-            # Skip lines that contain the section heading with ## prefix
-            if f"## {heading}" in line or f"##  {heading}" in line or heading in line and line.startswith('##'):
-                skip_next_line = True
-                continue
-
-            # Skip empty line after a heading to maintain proper spacing
-            if skip_next_line and not line.strip():
-                skip_next_line = False
-                continue
-
-            # Keep all other lines
-            cleaned_lines.append(line)
-            skip_next_line = False
-
-        cleaned_content = '\n'.join(cleaned_lines)
-
-        # Add the heading and cleaned content to the detailed notes
-        detailed_notes += f"## {heading}\n\n{cleaned_content.strip()}\n\n"
-
-    logger.info("Generated all section content for detailed notes")
-
-    # Combine all sections into the final answer with enhanced markdown
-    final_answer = f"""## Key Points
-
-{key_points}
-
-## Direct Answer
-
-{direct_answer.strip()}
-
-{detailed_notes.replace('# DETAILED NOTES', '## Detailed Notes')}
-
-"""
-
-    cited_pmids = set([])
-    pat = re.compile(r'\[.*\]\(PMID:\s?(\d+)\)')
-
-    for line in final_answer.split('\n'):
-        match = pat.search(line)
-        if match:
-            cited_pmids.add(match.group(1))
-
-    searched_pmids = set([])
-
-    # Stage 5: Generate references section
-    references = "## References\n\n"
-    if state.combined_results and cited_pmids:
-        # Sort results by relevance score if available
-        sorted_results = sorted(
-            state.combined_results,
-            key=lambda x: x.score if x.score is not None else 0,
-            reverse=True
-        )
-
-        track = set([])
-
-        # Add each source with its title and URL
-        for i, result in enumerate(sorted_results):
-            url = result.url
-            pmid = get_pmid(url)
-
-            # if pmid not in cited_pmids:
-            #     continue
-
-            if pmid not in track:
-                track.add(pmid)
-                searched_pmids.add(pmid)
-            else:
-                continue
-
-            if result.publication_date:
-                publication_date = datetime.datetime.strptime(result.publication_date, "%Y-%m-%d")
-                year = publication_date.year
-            else:
-                year = None
-
-            authors = result.authors[0].firstname + " " + result.authors[0].lastname + " et al." if len(result.authors) > 1 else ""
-
-            # Format the reference
-            references += f"{i + 1}. [{result.title}]({result.url})"
-
-            if year:
-                references += f" ({year})"
-
-            references += "\n"
-
-    hallucinated_pmids = set([])
-    for pmid in cited_pmids:
-        if pmid in searched_pmids:
-            final_answer = re.sub(
-                r'\[(.*)\]\(PMID:\s?(\d+)\)',
-                r'[\1](https://pubmed.ncbi.nlm.nih.gov/\2)',
-                final_answer
-            )
-
-            final_answer = re.sub(
-                r'PMID:\s?(\d+)',
-                r'[\1](https://pubmed.ncbi.nlm.nih.gov/\1)',
-                final_answer
-            )
-        else:
-            hallucinated_pmids.add(pmid)
-
-    final_answer += references
-
-    # Update the state with the final answer
-    state.final_answer = final_answer.strip()
-    state.confidence_score = (0.8 if state.key_points else 0.5) * ((1 - 0.2 * len(hallucinated_pmids) / len(cited_pmids)) if len(cited_pmids) > 0 else 1)
-
-    return state
-
 
 
 class ReferenceBuilder:
@@ -1013,6 +769,8 @@ class ReferenceBuilder:
             match = self.citing_pat.search(line)
             if match:
                 cited_pmids.add(match.group(1))
+        logger.info(f"Cited PMIDs: {sorted(cited_pmids)}")
+        logger.info(f"All searched PMIDs: {sorted(self.searched_pmids)}")
 
         for pmid in cited_pmids:
             if pmid in self.searched_pmids:
@@ -1039,6 +797,7 @@ class ReferenceBuilder:
 def generate_final_answer_stream(
     state: SearchState,
     detailed: bool = True,
+    log_stages: bool = False,
 ) -> Generator[str, None, None]:
     """
     Generates the final, structured answer in a multi-stage process:
@@ -1076,6 +835,14 @@ def generate_final_answer_stream(
         "key_points": initial_key_points
     })
 
+    if log_stages:
+        with open("key_points_prompt.txt", "w") as f:
+            f.write(key_points_prompt.invoke({
+                "original_query": state.original_query,
+                "search_details": search_details,
+                "key_points": initial_key_points
+            }).to_string())
+
     # Extract the content if it's a message object
     key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
     logger.info("Generated key points for final answer")
@@ -1107,6 +874,14 @@ def generate_final_answer_stream(
         "search_details": search_details
     })
 
+    if log_stages:
+        with open("direct_answer_prompt.txt", "w") as f:
+            f.write(direct_answer_prompt.invoke({
+                "original_query": state.original_query,
+                "key_points": key_points,
+                "search_details": search_details
+            }).to_string())
+
     # Extract the content if it's a message object
     direct_answer = (
         direct_answer_response.content
@@ -1117,7 +892,8 @@ def generate_final_answer_stream(
 
     if not detailed:
         answer = direct_answer + f"\n\nHere is what I found for {state.original_query}. Do you want me to deep dive into it?"
-        yield answer
+        logger.info(f"Displayed direct answer {ref_builder.embed_references(answer)}")
+        yield ref_builder.embed_references(answer)
         return
     yield ref_builder.embed_references(direct_answer)
 
@@ -1138,6 +914,15 @@ def generate_final_answer_stream(
         "direct_answer": direct_answer,
         "search_details": search_details
     })
+
+    if log_stages:
+        with open("outline_prompt.txt", "w") as f:
+            f.write(outline_prompt.invoke({
+                "original_query": state.original_query,
+                "key_points": key_points,
+                "direct_answer": direct_answer,
+                "search_details": search_details
+            }).to_string())
 
     # Extract the content if it's a message object
     section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
@@ -1174,6 +959,15 @@ def generate_final_answer_stream(
             "search_details": search_details,
             "section_heading": heading
         })
+        if log_stages:
+            with open(f'section_content_{heading}.txt', 'w') as f:
+                f.write(section_prompt.invoke({
+                    "original_query": state.original_query,
+                    "key_points": key_points,
+                    "direct_answer": direct_answer,
+                    "search_details": search_details,
+                    "section_heading": heading
+                }).to_string())
 
         # Extract the content if it's a message object
         section_content = section_response.content if hasattr(section_response, 'content') else section_response

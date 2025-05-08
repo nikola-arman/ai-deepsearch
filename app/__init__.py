@@ -72,140 +72,12 @@ os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'local-model')
 
 
-async def run_simple_search_pipeline(query: str, response_uuid: str = str(uuid.uuid4())) -> AsyncGenerator[bytes, None]:
-    """Run a simple search pipeline with only one query and not iteratively."""
-    logger.info("Running simple search pipeline...")
-    state = SearchState(original_query=query)
-    # Step 1: PubMed search for the query
-    try:
-        logger.info("Step 1: Performing PubMed search...")
-        state = await async_pubmed_search_agent(state)
-        logger.info(f"Found {len(state.pubmed_results)} PubMed results")
-        for result in state.pubmed_results:
-            result.query = query
-        yield await to_chunk_data(
-            await wrap_thinking_chunk(
-                response_uuid,
-                f"Found {len(state.pubmed_results)} PubMed results\n",
-            ),
-        )
-    except Exception as exc:
-        logger.error(f"Error in PubMed search: {str(exc)}", exc_info=True)
-        yield await to_chunk_data(
-            await wrap_thinking_chunk(
-                response_uuid,
-                f"Error in PubMed search: {str(exc)}\n",
-            ),
-        )
-
-    # Step 2: FAISS Indexing (semantic search) for the query
-    logger.info("Step 2: Performing FAISS indexing...")
-    try:
-        state = await async_faiss_indexing_agent(state)
-        for result in state.faiss_results:
-            result.query = query
-        logger.info(f"Found {len(state.faiss_results)} FAISS results")
-        yield await to_chunk_data(
-            await wrap_thinking_chunk(
-                response_uuid,
-                f"Found {len(state.faiss_results)} FAISS results\n",
-            ),
-        )
-    except Exception as exc:
-        logger.error(f"Error in FAISS indexing: {str(exc)}", exc_info=True)
-        yield await to_chunk_data(
-            await wrap_thinking_chunk(
-                response_uuid,
-                f"Error in FAISS indexing: {str(exc)}\n",
-            ),
-        )
-    # Step 3: BM25 Search (keyword search) for the query
-    logger.info("Step 3: Performing BM25 (keyword) search...")
-    try:
-        state = await async_bm25_search_agent(state)
-        for result in state.bm25_results:
-            result.query = query
-        logger.info(f"Found {len(state.bm25_results)} BM25 results")
-        yield await to_chunk_data(
-            await wrap_thinking_chunk(
-                response_uuid,
-                f"Found {len(state.bm25_results)} BM25 results\n",
-            ),
-        )
-    except Exception as exc:
-        logger.error(f"Error in BM25 search: {str(exc)}", exc_info=True)
-        yield await to_chunk_data(
-            await wrap_thinking_chunk(
-                response_uuid,
-                f"Error in BM25 search: {str(exc)}\n",
-            ),
-        )
-    # Step 4: Combining and de-duplicating results
-    logger.info("Combining and de-duplicating results...")
-    if not state.combined_results:
-        # Make sure combined_results is populated even if BM25 didn't run
-        state.combined_results = state.faiss_results + state.pubmed_results
-    unique_results = {}
-    for result in state.combined_results:
-        # Keep the highest scoring result for each URL
-        if result.url not in unique_results:
-            unique_results[result.url + result.content] = []
-
-        unique_results[result.url + result.content].append(result)
-
-    for k in list(unique_results.keys()):
-        unique_results[k] = sorted(
-            unique_results[k],
-            key=lambda x: x.score,
-            reverse=True,
-        )[:3]
-
-    state.combined_results = [
-        item
-        for sublist in unique_results.values()
-        for item in sublist
-    ]
-
-    logger.info(f"Deduplicated to {len(state.combined_results)} unique results")
-
-    state.search_complete = True
-    state.current_iteration = 1
-
-    logger.info("Search complete, generating final answer...")
-    try:
-        from deepsearch.agents.deep_reasoning import generate_final_answer_stream
-
-        for chunk in generate_final_answer_stream(state, detailed=False):
-            yield await to_chunk_data(
-                await wrap_chunk(
-                    response_uuid,
-                    chunk,
-                ),
-            )
-    except Exception as exc:
-        logger.error(f"Error generating final answer: {str(exc)}", exc_info=True)
-
-        state.final_answer = "I could not generate a comprehensive answer. Here's what I found: " + "\n".join(
-            [f"- {point}" for point in state.key_points]
-        )
-        yield await to_chunk_data(
-            await wrap_chunk(
-                response_uuid,
-                state.final_answer,
-            ),
-        )
-
-        yield await to_chunk_data(
-            PromptErrorResponse(
-                message="Error while generating final answer",
-                details=str(exc),
-            ),
-        )
-
-        state.confidence_score = 0.5
-
-
-async def run_deep_search_pipeline(query: str, max_iterations: int = 1, response_uuid: str = str(uuid.uuid4())) -> AsyncGenerator[bytes, None]:
+async def run_deep_search_pipeline(
+    query: str,
+    max_iterations: int = 1,
+    detailed_report: bool = False,
+    response_uuid: str = str(uuid.uuid4()),
+) -> AsyncGenerator[bytes, None]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
     logger.info("Running deep search pipeline...")
     try:
@@ -365,7 +237,7 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 1, response
                     yield await to_chunk_data(
                         await wrap_thinking_chunk(
                             response_uuid,
-                            f'\n'
+                            '\n'
                         )
                     )
 
@@ -408,7 +280,11 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 1, response
             try:
                 from deepsearch.agents.deep_reasoning import generate_final_answer_stream
 
-                for chunk in generate_final_answer_stream(state):
+                for chunk in generate_final_answer_stream(
+                    state,
+                    detailed=detailed_report,
+                    log_stages=True,
+                ):
                     yield await to_chunk_data(
                         await wrap_chunk(
                             response_uuid,
@@ -438,6 +314,26 @@ async def run_deep_search_pipeline(query: str, max_iterations: int = 1, response
                 )
 
                 state.confidence_score = 0.5
+        else:
+            yield await to_chunk_data(
+                await wrap_thinking_chunk(
+                    response_uuid,
+                    f'Search complete: {state.search_complete}\n'
+                )
+            )
+
+            from deepsearch.agents.deep_reasoning import generate_final_answer_stream
+            for chunk in generate_final_answer_stream(
+                state,
+                detailed=detailed_report,
+                log_stages=True,
+            ):
+                yield await to_chunk_data(
+                    await wrap_chunk(
+                        response_uuid,
+                        chunk
+                    )
+                )
 
     except Exception:
         yield await to_chunk_data(
@@ -680,21 +576,24 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
 
                 async for chunk in run_deep_search_pipeline(
                     _args['topic'],
-                    response_uuid=response_uuid
+                    response_uuid=response_uuid,
+                    max_iterations=5,
                 ):
                     yield chunk
 
                 return
             elif _name == "search":
+
                 yield await to_chunk_data(
                     await wrap_thinking_chunk(
                         response_uuid,
                         f'Start searching on {_args["query"]}\n'
                     ),
                 )
-                async for chunk in run_simple_search_pipeline(
+                async for chunk in run_deep_search_pipeline(
                     _args['query'],
-                    response_uuid=response_uuid
+                    response_uuid=response_uuid,
+                    max_iterations=2
                 ):
                     yield chunk
                 return
