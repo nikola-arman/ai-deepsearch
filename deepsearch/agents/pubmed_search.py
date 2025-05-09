@@ -39,19 +39,19 @@ def convert_pubmed_results(pubmed_results: List[PubMedArticle]) -> List[SearchRe
 
             authors = dict_result.get("authors", [])
             publication_date: Optional[datetime.date] = dict_result.get("publication_date", None)
-            
+
             if isinstance(publication_date, datetime.date):
                 publication_date = publication_date.strftime("%Y-%m-%d")
             else:
                 publication_date = "unknown"
-                
+
             contents = [
                 ('Abstract', abstract),
                 ('Methods', methods),
                 ('Conclusions', conclusions),
                 ('Results', results)
             ]
-            
+
             search_results.extend([
                 SearchResult(
                     title=title,
@@ -99,7 +99,6 @@ def pubmed_search_agent(state: SearchState) -> SearchState:
 
         # Convert the results to our model
         pubmed_results = convert_pubmed_results(search_response)
-        print("DEBUG found", len(pubmed_results), "results for query ", query)
         logger.debug(f"Found {len(pubmed_results)} results from PubMed for query {query}")
 
         # Update the state
@@ -116,9 +115,9 @@ def pmed_search(query: str, max_results=5) -> List[SearchResult]:
 
     search_response = client.query(
         query=query,
-        max_results=max_results 
+        max_results=max_results,
     )
 
     pubmed_results = convert_pubmed_results(search_response)
-    
+
     return pubmed_results

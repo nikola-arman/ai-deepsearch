@@ -14,7 +14,7 @@ import onnxruntime as ort
 try:
     from pillow_heif import register_heif_opener
     register_heif_opener()
-except Exception as e:
+except Exception:
     pass
 
 
@@ -420,7 +420,18 @@ def is_xray_image(img_path: str) -> bool:
     msg_out = out.choices[0].message.content
     return 'yes' in msg_out.lower()
 
-def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -> tuple[Optional[np.ndarray], Optional[str]]:
+
+def xray_diagnose_agent(
+    img_path: str,
+    orig_user_message: Optional[str] = None,
+) -> tuple[bool, Optional[np.ndarray], Optional[str]]:
+    """Return the diagnosis of the image.
+
+    Returns:
+        - is_xray: bool, whether the image is xray or not
+        - vis: np.ndarray, the image with bounding boxes (can be None)
+        - comment_by_doctor: str, the comment by doctor
+    """
     is_xray = is_xray_image(img_path)
 
     if not is_xray:
@@ -464,45 +475,37 @@ def xray_dianose_agent(img_path: str, orig_user_message: Optional[str] = None) -
             temperature=0.2
         )
 
-        return None, comment_by_doctor.choices[0].message.content
+        return False, None, comment_by_doctor.choices[0].message.content
 
+    result = predict(img_path)
+    res = quick_diagnose(result)
+
+    if res is not None:
+        vis = visualize(result)
     else:
-        result = predict(img_path)
-        res = quick_diagnose(result)
+        vis = None
 
-        if res is not None:
-            vis = visualize(result)
-        else:
-            vis = None
+    client = OpenAI(
+        base_url=os.getenv('LLM_BASE_URL'),
+        api_key=os.getenv('LLM_API_KEY')
+    )
 
-        client = OpenAI(
-            base_url=os.getenv('LLM_BASE_URL'),
-            api_key=os.getenv('LLM_API_KEY')
-        )
+    system_prompt = 'You are a doctor, you are reading an X-ray image of a patient and it has some lesions on it. You need to provide a short comment on the image and give a diagnosis for the patient. Notice that the Other lesion can be anything, but mostly backbone-related or bone breakage. Write the diagnosis in under 3 sentences, plain text only, no new lines.'
 
-        system_prompt = 'You are a doctor, you are reading an X-ray image of a patient and it has some lesions on it. You need to provide a short comment on the image and give a diagnosis for the patient. Notice that the Other lesion can be anything, but mostly backbone-related or bone breakage. Write the diagnosis in under 3 sentences, plain text only, no new lines.'
+    comment_by_doctor = client.chat.completions.create(
+        model=os.getenv('LLM_MODEL_ID', 'local-model'),
+        messages=[
+            {
+                'role': 'system',
+                'content': system_prompt
+            },
+            {
+                'role': 'user',
+                'content': f'Yolo v11l output: {res or "no lesions found"}'
+            }
+        ],
+        max_tokens=256,
+        temperature=0.2
+    )
 
-        comment_by_doctor = client.chat.completions.create(
-            model=os.getenv('LLM_MODEL_ID', 'local-model'),
-            messages=[
-                {
-                    'role': 'system',
-                    'content': system_prompt
-                },
-                {
-                    'role': 'user',
-                    'content': f'Yolo v11l output: {res or "no lesions found"}'
-                }
-            ],
-            max_tokens=256,
-            temperature=0.2
-        )
-
-        return vis, comment_by_doctor.choices[0].message.content
-
-if __name__ == '__main__':
-    res = predict('sample2.heic')
-    print(res)
-
-    img = visualize(res)
-    cv2.imwrite('res.jpg', img)
+    return True, vis, comment_by_doctor.choices[0].message.content

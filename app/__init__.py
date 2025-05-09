@@ -377,7 +377,7 @@ TOOL_CALLS = [
         "type": "function",
         "function": {
             "name": "search",
-            "description": "Quick search for realtime information on the internet to answer the question directly. It is recommended to use this tool for the first time.",
+            "description": "Quick search for realtime information on the internet to answer the question directly. It is recommended to use this tool before using research tool. Please be aware that you need use this tool only when you need to search for information, not always",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -483,7 +483,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 )
             )
 
-            vis, comment = xray_lesion_detector.xray_dianose_agent(path, user_message)
+            is_xray, vis, comment = xray_lesion_detector.xray_diagnose_agent(path, user_message)
 
             if vis is not None:
                 template = '''
@@ -526,10 +526,10 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                         )
                     )
                 )
-
+            appended_string = "This image is " + ("an X-ray image." if is_xray else "not an X-ray image.")
             messages.append({
                 "role": "tool",
-                "content": comment,
+                "content": appended_string + comment,
                 "tool_call_id": call['id']
             })
 

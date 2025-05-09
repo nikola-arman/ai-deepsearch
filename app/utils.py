@@ -51,11 +51,11 @@ async def get_attachments(content: list[dict[str, str]]) -> list[str]:
         return []
 
     for item in content:
-        print("ITEM", item.keys())
+        logger.info(f"ITEM: {item.keys()}")
 
         if item.get('type', 'undefined') == 'file':
             file = item.get('file')
-            print("FILE", file.keys())
+            logger.info(f"FILE: {file.keys()}")
             data = file.get('file_data')
             filename = file.get('filename')
 
@@ -64,7 +64,7 @@ async def get_attachments(content: list[dict[str, str]]) -> list[str]:
 
         elif item.get('type', 'undefined') == 'image_url':
             image_url = item.get('image_url')
-            print("IMAGE URL", image_url.keys())
+            logger.info(f"IMAGE URL: {image_url.keys()}")
             name = image_url.get('name')
             url = image_url.get('url')
 
@@ -279,7 +279,6 @@ Response:
 import numpy as np
 from PIL import Image
 from io import BytesIO
-import cv2
 
 def image_to_base64_uri(image: np.ndarray) -> str:
     buffer = BytesIO()
@@ -287,14 +286,6 @@ def image_to_base64_uri(image: np.ndarray) -> str:
     image.save(buffer, format='JPEG')
     return f'data:image/jpeg;base64,{base64.b64encode(buffer.getvalue()).decode("utf-8")}'
 
+
 def random_str(n: int) -> str:
     return os.urandom(n // 2).hex()
-
-if __name__ == "__main__":
-    # Example usage
-    image = cv2.imread('/Users/macbookpro/Projects/medical-ai-deepsearch/45002E7C-7615-4B80-A163-F0F92EFF633E.png')
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    image = cv2.resize(image, (512, 512))
-    base64_uri = image_to_base64_uri(image)
-    print(base64_uri)
-    

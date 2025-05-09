@@ -377,8 +377,6 @@ def format_search_results(state: SearchState) -> str:
             results.extend(state.faiss_results)
 
         if state.bm25_results:
-            print(f"BM25 results: {len(state.bm25_results)}")
-
             # normalize the score of bm25 results to be between 0 and 1
             max_score = max(result.score for result in state.bm25_results)
             min_score = min(result.score for result in state.bm25_results)
