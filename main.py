@@ -60,10 +60,11 @@ async def main():
 
         with STDOUTCapture(StringIO()) as buffer:
             for chunk in prompt(messages):
+
                 if not chunk:
                     continue
                 
-                chunk = chunk[6:].decode("utf-8")
+                chunk = chunk.strip()[6:].decode("utf-8")
                 
                 if chunk == '[DONE]':
                     break
@@ -71,17 +72,14 @@ async def main():
                 json_chunk = json.loads(chunk)
                 choice = json_chunk['choices'][0]
 
-
                 role = choice['delta'].get('role')
                 content = choice['delta'].get('content')
                 reasoning_content = choice['delta'].get('reasoning_content')
 
                 if reasoning_content or role != 'assistant':
-                    # print_colored(reasoning_content, bcolors.OKCYAN)
                     pass
 
                 else:
-                    # print_colored(content, bcolors.WARNING)
                     assistant_message += content
 
             with open('logs.txt', 'a') as fp:
