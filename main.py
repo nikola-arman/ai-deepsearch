@@ -4,6 +4,16 @@ from app import prompt
 import asyncio
 import json
 from enum import Enum
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("app.log"),
+        logging.StreamHandler()
+    ]
+)
 
 class bcolors(str, Enum):
     HEADER = '\033[95m'
@@ -28,7 +38,7 @@ def print_colored(text, color: bcolors):
     print(f"{color}{text}{bcolors.ENDC}")
 
 from io import StringIO
-import sys 
+import sys
 
 class STDOUTCapture:
     def __init__(self, buffer: StringIO):
@@ -58,37 +68,28 @@ async def main():
         messages.append({"role": "user", "content": user_input})
         assistant_message = ''
 
-        with STDOUTCapture(StringIO()) as buffer:
-            for chunk in prompt(messages):
+        for chunk in prompt(messages):
 
-                if not chunk:
-                    continue
-                
-                chunk = chunk.strip()[6:].decode("utf-8")
-                
-                if chunk == '[DONE]':
-                    break
-                
-                json_chunk = json.loads(chunk)
-                choice = json_chunk['choices'][0]
+            if not chunk:
+                continue
+            
+            chunk = chunk.strip()[6:].decode("utf-8")
+            
+            if chunk == '[DONE]':
+                break
+            
+            json_chunk = json.loads(chunk)
+            choice = json_chunk['choices'][0]
 
-                role = choice['delta'].get('role')
-                content = choice['delta'].get('content')
-                reasoning_content = choice['delta'].get('reasoning_content')
+            role = choice['delta'].get('role')
+            content = choice['delta'].get('content')
+            reasoning_content = choice['delta'].get('reasoning_content')
 
-                if reasoning_content or role != 'assistant':
-                    pass
+            if reasoning_content or role != 'assistant':
+                pass
 
-                else:
-                    assistant_message += content
-
-            with open('logs.txt', 'a') as fp:
-                fp.write(f"User: {user_input}\n")
-                fp.write("\n")
-                fp.write(buffer._captured_output.getvalue())
-                fp.write("\n")
-                fp.write(f"Assistant: {assistant_message}\n")
-                fp.write("\n")
+            else:
+                assistant_message += content
 
         print("\nAssistant: ", assistant_message)
         messages.append({"role": "assistant", "content": assistant_message})
