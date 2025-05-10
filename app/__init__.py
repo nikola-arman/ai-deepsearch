@@ -7,7 +7,7 @@ import os
 from deepsearch.magic import retry
 
 os.environ['TAVILY_API_KEY'] = 'no-need'
-os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
+os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 os.environ["EXA_API_KEY"] = "no-need"
 
