@@ -73,23 +73,31 @@ async def main():
             if not chunk:
                 continue
             
-            chunk = chunk.strip()[6:].decode("utf-8")
-            
+            chunk = chunk.strip()[6:]
+
+            if isinstance(chunk, bytes):
+                chunk = chunk.decode("utf-8")
+
             if chunk == '[DONE]':
                 break
-            
-            json_chunk = json.loads(chunk)
-            choice = json_chunk['choices'][0]
 
-            role = choice['delta'].get('role')
-            content = choice['delta'].get('content')
-            reasoning_content = choice['delta'].get('reasoning_content')
+            try:
+                json_chunk = json.loads(chunk)
+                choice = json_chunk['choices'][0]
 
-            if reasoning_content or role != 'assistant':
-                pass
+                role = choice['delta'].get('role')
+                content = choice['delta'].get('content')
+                reasoning_content = choice['delta'].get('reasoning_content')
 
-            else:
-                assistant_message += content
+                if reasoning_content or role != 'assistant':
+                    pass
+
+                else:
+                    assistant_message += content
+            except json.JSONDecodeError:
+                assistant_message += chunk
+                logging.error(f"JSON decode error: {chunk}")
+                continue
 
         print("\nAssistant: ", assistant_message)
         messages.append({"role": "assistant", "content": assistant_message})
