@@ -76,6 +76,7 @@ async def run_deep_search_pipeline(
     query: str,
     max_iterations: int = 1,
     detailed_report: bool = False,
+    max_search_results_to_llm: int | None = None,
     response_uuid: str = str(uuid.uuid4()),
 ) -> AsyncGenerator[bytes, None]:
     """Run the multi-query, iterative deep search pipeline with reasoning agent."""
@@ -210,6 +211,8 @@ async def run_deep_search_pipeline(
                     for sublist in unique_results.values()
                     for item in sublist
                 ]
+                if max_search_results_to_llm:
+                    state.combined_results = state.combined_results[:max_search_results_to_llm]
 
                 logger.info(f"  Deduplicated to {len(state.combined_results)} unique results")
 
@@ -358,7 +361,7 @@ TOOL_CALLS = [
         "type": "function",
         "function": {
             "name": "research",
-            "description": "Research on a scientific topic deeper and more comprehensive. You are not allowed to use this tool for the first time. Use the search tool instead. Then, if user confirms that they need more information, use this tool.",
+            "description": "Research on a scientific topic deeper and more comprehensive. Only use this tool when the user asks you to deep dive into a topic, or when you have already confirmed with the user. Otherwise, use search tool",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -377,7 +380,7 @@ TOOL_CALLS = [
         "type": "function",
         "function": {
             "name": "search",
-            "description": "Quick search for realtime information on the internet to answer the question directly. It is recommended to use this tool before using research tool. Please be aware that you need use this tool only when you need to search for information, not always",
+            "description": "Quick search for realtime information on the internet to answer the question directly. It is recommended to use this tool before using research tool. This tool will need a long time period to run, so please only use this tool when you really need it. Otherwise, use your own knowledge.",
             "parameters": {
                 "type": "object",
                 "properties": {

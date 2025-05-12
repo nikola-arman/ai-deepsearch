@@ -530,16 +530,6 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
         [f"- {gap}" for gap in state.historical_knowledge_gaps]
     )
 
-    # Generate the analysis and reasoning
-    response = chain.invoke({
-        "original_query": state.original_query,
-        "iteration": state.current_iteration,
-        "search_results": formatted_results,
-        "previous_knowledge_gaps": formatted_previous_gaps,
-        "max_iterations": max_iterations,
-        "current_date": current_date
-    })
-
     with open("deep_reasoning_prompt.txt", "w") as f:
         f.write(reasoning_prompt.invoke({
             "original_query": state.original_query,
@@ -549,6 +539,16 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
             "max_iterations": max_iterations,
             "current_date": current_date
         }).to_string())
+
+    # Generate the analysis and reasoning
+    response = chain.invoke({
+        "original_query": state.original_query,
+        "iteration": state.current_iteration,
+        "search_results": formatted_results,
+        "previous_knowledge_gaps": formatted_previous_gaps,
+        "max_iterations": max_iterations,
+        "current_date": current_date
+    })
 
     # Extract the content if it's a message object
     if hasattr(response, 'content'):

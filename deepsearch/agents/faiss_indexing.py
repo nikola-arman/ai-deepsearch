@@ -4,6 +4,7 @@ import numpy as np
 import faiss
 import logging
 from langchain_openai import OpenAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 import re
 
 from deepsearch.models import SearchState, SearchResult
@@ -169,9 +170,32 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
                     str(text) if not isinstance(text, str) else text
                     for text in batch_texts
                 ]
+                text_splitter = RecursiveCharacterTextSplitter(
+                    # Set a really small chunk size, just to show.
+                    chunk_size=3000,
+                    chunk_overlap=20,
+                    length_function=len,
+                    is_separator_regex=False,
+                )
+                splitted_texts = text_splitter.create_documents(batch_texts)
 
                 # Get embeddings for the batch
-                batch_embeddings = embeddings.embed_documents(batch_texts)
+
+                # Log the embeddings cURL request
+                # logger.info(f"Embedding batch {batch_idx + 1}/{len(texts) // batch_size + 1} with {len(batch_texts)} texts")
+                # curl_request = f"curl -X POST {openai_api_base}/embeddings -H 'Content-Type: application/json' -d '{{\"model\": \"text-embedding-ada-002\", \"input\": {batch_texts}}}'"
+                # logger.info(f"cURL request: {curl_request}")
+
+                # batch_embeddings = embeddings.embed_documents(batch_texts)
+                batch_embeddings = []
+                for splitted_text in splitted_texts:
+                    # Generate embedding for each chunk
+                    try:
+                        embedding = embeddings.embed_documents([splitted_text.page_content])
+                        batch_embeddings.append(embedding[0])
+                    except Exception as e:
+                        logger.error(f"Error generating embedding for text: {str(e)}")
+                        continue
 
                 # Add each embedding and its associated data
                 for i, (text, embedding) in enumerate(zip(batch_texts, batch_embeddings)):

@@ -395,7 +395,7 @@ def is_xray_image(img_path: str) -> bool:
         base_url=os.getenv('VLM_BASE_URL'),
         api_key=os.getenv('VLM_API_KEY')
     )
-
+    logger.info("Initialize the VLM client")
     out = client.chat.completions.create(
         model=os.getenv('VLM_MODEL_ID', 'local-model'),
         messages=[
@@ -422,7 +422,7 @@ def is_xray_image(img_path: str) -> bool:
         max_tokens=10,
         temperature=0.2
     )
-
+    logger.info(f"Response from VLM: {out.choices[0].message.content}")
     msg_out = out.choices[0].message.content
     return 'yes' in msg_out.lower()
 
