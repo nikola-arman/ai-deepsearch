@@ -35,7 +35,7 @@ IMPORTANT INSTRUCTIONS:
 3. DO NOT end your response with phrases like "Do you want me to explain more?" or similar.
 4. Provide a complete, self-contained answer that stands on its own.
 5. Be confident and definitive in your response.
-6. Include in-text citations using the format [Author/Article, Year](PMID:$PMID) for each fact or claim. For example, [Smith et al., 2024](PMID:1234567890). The $PMID is the PubMed ID of the article, mentioned in each search result.
+6. Include in-text citations using the format [Author/Article, Year](PMID:$PMID) (for example [Xi et al.](PMID:$PMID)) for each fact or claim. For example, [Smith et al., 2024](PMID:1234567890). The $PMID is the PubMed ID of the article, mentioned in each search result.
 7. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID:1234567890) found that...")
 
 Answer:

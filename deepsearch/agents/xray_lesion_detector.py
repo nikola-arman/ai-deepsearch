@@ -9,6 +9,11 @@ import base64
 import io
 from PIL import Image
 import onnxruntime as ort
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+logger = logging.getLogger(__name__)
 
 
 try:
@@ -354,6 +359,7 @@ def quick_diagnose(result: PredictionResult) -> str:
 
 def visualize(result: PredictionResult) -> np.ndarray:
     image = Image.open(result.org_path)
+    logger.info("Visualizing image mode: {}".format(image.mode))
     image = image.convert('RGB')
     image = np.array(image)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -433,6 +439,9 @@ def xray_diagnose_agent(
         - comment_by_doctor: str, the comment by doctor
     """
     is_xray = is_xray_image(img_path)
+
+    logger.info(f"Image path: {img_path}")
+    logger.info(f"Image mode: {Image.open(img_path).mode}")
 
     if not is_xray:
         client = OpenAI(

@@ -49,8 +49,8 @@ INSTRUCTIONS:
   "search_complete": true/false,
   "reasoning": "Your explanation of why the search is complete or needs to continue"
 }}
-7. IMPORTANT: Include in-text citations using the markdown syntax "[Author/Article, Year](PMID:$PMID)" for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $PMID is the PubMed ID of the article, mentioned in each search result.
-8. For each citation, include a brief context about the source (e.g., "A study by  [Author/Article, Year](PMID:$PMID) found that...")
+7. IMPORTANT: Include in-text citations using the markdown syntax "[Author/Article, Year](PMID:$PMID)" (for example [Xi et al.](PMID:$PMID)) for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $PMID is the PubMed ID of the article, mentioned in each search result.
+8. For each citation, include a brief context about the source (e.g., "A study by  [Author/Article, Year](PMID:$PMID) (for example [Xi et al.](PMID:$PMID)) found that...")
 
 
 CRITICAL: Your entire response MUST be a valid, parseable JSON object and nothing else. Do not include any text before or after the JSON object. Do not include any explanation, markdown formatting, or code blocks around the JSON. The response must start with '{{' and end with '}}' and contain only valid JSON, include in-text citation for each fact or claim in correct format.
@@ -154,7 +154,7 @@ KEY POINTS IDENTIFIED DURING SEARCH:
 INSTRUCTIONS:
 1. Create a concise list of 5-7 bullet points that represent the most important findings and facts related to the query.
 2. Each point should be clear, specific, and directly relevant to answering the original query.
-3. IMPORTANT: Include in-text citations using the markdown syntax "[Author/Article, Year](PMID:$PMID)" for each fact or claim. Where the $PMID is the PubMed ID of the article, mentioned in the search results.
+3. IMPORTANT: Include in-text citations using the markdown syntax "[Author/Article, Year](PMID:$PMID)" (for example [Xi et al.](PMID:$PMID)) for each fact or claim. Where the $PMID is the PubMed ID of the article, mentioned in the search results.
 4. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID: 12331312) found that...")
 
 Format your response as a markdown list of bullet points ONLY:
@@ -188,7 +188,7 @@ Create a well-rounded, complete direct answer to the original query. The answer 
 6. Use line breaks between paragraphs for better readability
 7. Use **bold** for important terms and concepts
 8. Use *italics* for emphasis when appropriate
-9. IMPORTANT: Include in-text citations using the format "[Author/Article, Year](PMID:$PMID)" for each fact or claim. Where the $PMID is the PubMed ID of the article, mentioned in the search results (e.g., [Smith et al., 2024](PMID: 12331312))
+9. IMPORTANT: Include in-text citations using the format "[Author/Article, Year](PMID:$PMID)" (for example [Xi et al.](PMID:$PMID)) for each fact or claim. Where the $PMID is the PubMed ID of the article, mentioned in the search results (e.g., [Smith et al., 2024](PMID: 12331312))
 10. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID: 12331312) found that...")
 
 Your direct answer should be self-contained and provide a complete response to the original query.
@@ -258,7 +258,7 @@ Create rich, detailed content for the section "{section_heading}". Your content 
 6. Use **bold** for important terms and concepts
 7. Use *italics* for emphasis when appropriate
 8. Create subsections with ### heading level when needed to organize complex information
-9. IMPORTANT: Include in-text citations using the format "[Author/Article, Year](PMID:$PMID)" for each fact or claim. Where the $PMID is the PubMed ID of the original article (e.g., [Smith et al., 2024](PMID: 12331312))
+9. IMPORTANT: Include in-text citations using the format "[Author/Article, Year](PMID:$PMID)" (for example [Xi et al.](PMID:$PMID)) for each fact or claim. Where the $PMID is the PubMed ID of the original article (e.g., [Smith et al., 2024](PMID: 12331312))
 10. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID: 12331312) found that...")
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
@@ -887,7 +887,7 @@ def generate_final_answer_stream(
     )
 
     if not detailed:
-        answer = direct_answer + f"\n\nHere is what I found for {state.original_query}. Do you want me to deep dive into it?"
+        answer = direct_answer + f"\n\nHere is the information for your concern. Do you want me to deep dive into it?"
         yield ref_builder.embed_references(answer)
         return
     yield ref_builder.embed_references(direct_answer)
