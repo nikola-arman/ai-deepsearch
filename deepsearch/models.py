@@ -26,8 +26,9 @@ class SearchResult(BaseModel):
     url: str
     content: str
     score: Optional[float] = None
-    query: Optional[str] = None  # Track which query generated this result
+    query: Optional[str] = None  # Track which query generated this result    
     extracted_information: Optional[List[str]] = None
+    is_url_credible: Optional[bool] = None
     
     @model_validator(mode='before')
     @classmethod

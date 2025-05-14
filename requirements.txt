@@ -57,3 +57,4 @@ urllib3==2.4.0
 uvicorn==0.34.2
 xxhash==3.5.0
 zstandard==0.23.0
+scikit-learn

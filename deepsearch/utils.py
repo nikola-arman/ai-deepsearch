@@ -124,3 +124,13 @@ def escape_dollar_signs(text: str) -> str:
         Text with all dollar signs escaped
     """
     return text.replace('$', '\\$')
+
+
+def get_url_prefix(url: str) -> str:
+    """
+    Get the prefix of a URL
+    """
+    if 'https://' in url:
+        url = url.split('https://')[1]
+    url = url.split('/')[0]
+    return url

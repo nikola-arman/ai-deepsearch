@@ -1,3 +1,5 @@
+docker build . -t ai_deepsearch --pull
+
 docker run --rm -it \
     --network=network-agent-external  \
     -p 7000:80 \
