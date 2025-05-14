@@ -126,7 +126,7 @@ def escape_dollar_signs(text: str) -> str:
     return text.replace('$', '\\$')
 
 
-def get_url_prefix(url: str) -> str:
+def get_url_domain(url: str) -> str:
     """
     Get the prefix of a URL
     """

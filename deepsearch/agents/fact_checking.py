@@ -1,8 +1,9 @@
+import json
 from typing import Generator, List, Dict, Any, Set
 import logging
 from deepsearch.agents.faiss_indexing import init_embedding_model
 from deepsearch.models import SearchState, SearchResult
-from deepsearch.utils import get_url_prefix, to_chunk_data, wrap_thought
+from deepsearch.utils import get_url_domain, to_chunk_data, wrap_thought
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
 from langchain.prompts import PromptTemplate
 from collections import defaultdict
@@ -204,21 +205,21 @@ For each statement, analyze:
 4. The credibility of supporting/contradicting sources
 
 Format the response as a JSON object with these fields:
-{
+{{
     "statements": [
-        {
+        {{
             "statement": "original statement",
             "status": "verified" or "contradicted" or "unverified",
             "supporting_sources": ["url1", "url2", ...],
             "contradicting_sources": ["url3", "url4", ...],
             "confidence": "high" or "medium" or "low",
             "notes": "Additional observations about the verification"
-        }
+        }}
     ],
     "overall_status": "verified" or "partially_verified" or "contradicted" or "unverified",
     "overall_confidence": "high" or "medium" or "low",
     "overall_notes": "Summary of verification findings"
-}
+}}
 """
 
         # Format statements and sources for the prompt
@@ -387,7 +388,7 @@ def sources_url_validation(sources: List[SearchResult]) -> List[bool]:
         # Check if the source is a valid URL
         url_prefixes = []
         for source in sources:
-            url_prefixes.append(get_url_prefix(source.url))
+            url_prefixes.append(get_url_domain(source.url))
 
         url_prefixes = list(set(url_prefixes))
         
@@ -415,6 +416,8 @@ unknown-site.com: False
 
         # Get validation results from LLM
         results = llm.predict(validation_prompt.format(domains="\n".join(url_prefixes)))
+
+        print("source_url_validation results:", results)
         
         # Parse results into boolean list with robust error handling
         validation_map = {}
@@ -438,7 +441,7 @@ unknown-site.com: False
                     continue
         
         # If parsing failed for any domain, default to False
-        return [validation_map.get(get_url_prefix(source.url).lower(), False) for source in sources]
+        return [validation_map.get(get_url_domain(source.url).lower(), False) for source in sources]
         
     except Exception as e:
         logger.error(f"Error in sources url validation: {str(e)}", exc_info=True)
@@ -481,6 +484,10 @@ def fact_checking_agent(state: SearchState) -> Generator[bytes, None, SearchStat
         #             reduced_extracted_information.append(statement)
         #     source.extracted_information = reduced_extracted_information
 
+        is_urls_credible = sources_url_validation(state.combined_results)
+        for source, is_credible in zip(state.combined_results, is_urls_credible):
+            source.is_url_credible = is_credible
+
         # Initialize verification results
         state.verified_information = {
             "verified": [],
@@ -489,32 +496,47 @@ def fact_checking_agent(state: SearchState) -> Generator[bytes, None, SearchStat
         }
 
         for source in state.combined_results:
-            verification = verify_statements_of_source(source, state.combined_results)
-            for statement in verification["statements"]:                    
-                # Store verification results
-                if statement["status"] == "verified":
+            print("source_url:", source.url)
+            if source.is_url_credible:
+                for statement in source.extracted_information:
                     state.verified_information["verified"].append({
-                        "statement": statement["statement"],
-                        "confidence": statement["confidence"],
-                        "sources": statement["supporting_sources"],
-                        "notes": statement["notes"]
+                        "statement": statement,
+                        "confidence": "high",
+                        "sources": [source.url],
+                        "notes": f"Credible source domain: {get_url_domain(source.url)}"
                     })
-                elif statement["status"] == "contradicted":
-                    state.verified_information["contradicted"].append({
-                        "statement": statement["statement"],
-                        "confidence": statement["confidence"],
-                        "supporting_sources": statement["supporting_sources"],
-                        "contradicting_sources": statement["contradicting_sources"],
-                        "notes": statement["notes"]
-                    })
-                else:
-                    state.verified_information["unverified"].append({
-                        "statement": statement["statement"],
-                        "confidence": statement["confidence"],
-                        "sources": statement["supporting_sources"],
-                        "notes": statement["notes"]
-                    })
+            else:
+                try:
+                    verification = verify_statements_of_source(source, state.combined_results)
+                    print("verification:", json.dumps(verification, indent=2))
 
+                    for statement in verification["statements"]:                    
+                        # Store verification results
+                        if statement.get("status", "") == "verified":
+                            state.verified_information["verified"].append({
+                                "statement": statement.get("statement", ""),
+                                "confidence": statement.get("confidence", ""),
+                                "sources": statement.get("supporting_sources", []),
+                                "notes": statement.get("notes", "")
+                            })
+                        elif statement.get("status", "") == "contradicted":
+                            state.verified_information["contradicted"].append({
+                                "statement": statement.get("statement", ""),
+                                "confidence": statement.get("confidence", ""),
+                                "supporting_sources": statement.get("supporting_sources", []),
+                                "contradicting_sources": statement.get("contradicting_sources", []),
+                                "notes": statement.get("notes", "")
+                            })
+                        else:
+                            state.verified_information["unverified"].append({
+                                "statement": statement.get("statement", ""),
+                                "confidence": statement.get("confidence", ""),
+                                "sources": statement.get("supporting_sources", []),
+                                "notes": statement.get("notes", "")
+                            })
+                except Exception as e:
+                    logger.error(f"Error when fact checking source: {source.url}: {str(e)}", exc_info=True)
+                    continue
         yield to_chunk_data(
             wrap_thought(
                 "Fact checking agent: Complete",
