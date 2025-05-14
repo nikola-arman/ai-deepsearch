@@ -21,69 +21,6 @@ class ResearchIntent(BaseModel):
     research_query: str | None
 
 
-def detect_query_complexity(query: str) -> bool:
-    """
-    Analyze the query to determine if it requires a simple or complex search pipeline.
-
-    Args:
-        query: The user's query string
-
-    Returns:
-        bool: True if the query is complex and requires deep search, False if it's simple
-    """
-    # Initialize LLM for complexity analysis
-    llm = init_reasoning_llm()
-
-    # Create prompt for complexity analysis
-    complexity_prompt = """Analyze the following query and determine if it requires a simple or complex search approach.
-
-QUERY: {query}
-
-Consider the following factors:
-1. Does the query ask for a simple fact or definition that can be answered in a few sentences?
-2. Is the query open-ended or exploratory in nature?
-3. Does the query require comparing different perspectives or analyzing trends?
-4. Are there multiple sub-questions within the main query?
-
-Respond with a JSON object in this format:
-{{
-    "complexity": "simple" or "complex",
-    "reasoning": ["reason1", "reason2", ...],
-    "confidence": 0.0 to 1.0
-}}
-"""
-
-    # Create the prompt template
-    prompt_template = PromptTemplate(
-        input_variables=["query"],
-        template=complexity_prompt
-    )
-
-    # Create the chain
-    chain = prompt_template | llm
-
-    # Get the response
-    response = chain.invoke({"query": query})
-
-    # Extract the content if it's a message object
-    response_text = response.content if hasattr(response, 'content') else response
-
-    try:
-        analysis = json.loads(repair_json(response_text))
-
-        logger.info(f"Query complexity analysis: {analysis}")
-
-        print(f"Query complexity analysis: {analysis}")
-
-        # Return False for simple queries, True for complex ones
-        return analysis["complexity"].strip().lower() == "complex"
-
-    except Exception as e:
-        logger.error(f"Error parsing complexity analysis: {str(e)}")
-        # Default to treating as complex if parsing fails
-        return True
-
-
 def get_conversation_summary_prompt(conversation: list[dict[str, str]]) -> str:
     conversation_str = "\n".join([f"{message['role']}: {message['content']}" for message in conversation])
     
@@ -111,6 +48,7 @@ def get_conversation_summary(conversation: list[dict[str, str]]) -> str:
     
     return response.content
 
+
 DETECT_RESEARCH_INTENT_PROMPT = """
 You are an expert at detecting whether a user message is a research request or just casual conversation.
 
@@ -126,6 +64,8 @@ Return your response in this JSON format:
     "is_research_request": <true or false>,
     "research_query": <string or null>
 }}
+
+Return only the JSON object without any other text or comments.
 
 Examples:
 
@@ -178,7 +118,7 @@ def detect_research_intent(conversation_summary: str, user_last_message: str) ->
 
     print(f"Detect research intent response: {response.content}")
 
-    data = repair_json(response.content, return_objects=True)
+    data = curly_brackets_repair_json(response.content)
 
     return ResearchIntent.model_validate(data)
 
@@ -209,3 +149,18 @@ def reply_conversation(conversation_summary: str, user_last_message: str) -> str
     response = llm.invoke(messages)
 
     return response.content
+
+
+def curly_brackets_repair_json(text: str) -> dict:
+    """
+    Repair JSON from a string, only take the content between curly brackets.
+    """
+
+    # Find the first and last curly brackets
+    start = text.find('{')
+    end = text.rfind('}') + 1
+
+    # Extract the content between the curly brackets
+    content = text[start:end]
+
+    return repair_json(content, return_objects=True)

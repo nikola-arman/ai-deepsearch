@@ -1,261 +1,106 @@
-#!/usr/bin/env python3
-"""
-Main entry point for the DeepSearch application.
-"""
+from dotenv import load_dotenv; load_dotenv()
 
-import argparse
+from app import prompt
+import asyncio
+import json
+from enum import Enum
 import logging
-from dotenv import load_dotenv
-import os
-from typing import Dict, Any
-import concurrent.futures
-from deepsearch.models import SearchState, SearchResult
-from deepsearch.agents import (
-    tavily_search_agent,
-    faiss_indexing_agent,
-    bm25_search_agent,
-    query_expansion_agent,
-    deep_reasoning_agent
-)
 
-# Set up logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("app.log"),
+        logging.StreamHandler()
+    ]
 )
-logger = logging.getLogger("deepsearch")
 
-def process_single_query(query: str, iteration: int) -> SearchState:
-    """Process a single query in parallel."""
-    logger.info(f"  Processing query: {query}")
+class bcolors(str, Enum):
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    
+def print_colored(text, color: bcolors):
+    """
+    Print text in a specific color.
+    
+    Args:
+        text (str): The text to print.
+        color (bcolors): The color to use for printing.
+    """
 
-    # Create a temporary state for this query
-    temp_state = SearchState(
-        original_query=query  # Use the current query as the original query for this temp state
-    )
+    print(f"{color}{text}{bcolors.ENDC}")
 
-    # Step 3a: Tavily Search for this query
-    logger.info(f"    Performing web search...")
-    try:
-        temp_state = tavily_search_agent(temp_state)
-        # Tag results with the query that produced them
-        for result in temp_state.tavily_results:
-            result.query = query
-        logger.info(f"    Found {len(temp_state.tavily_results)} web results")
-    except Exception as e:
-        logger.error(f"    Error in web search: {str(e)}", exc_info=True)
+from io import StringIO
+import sys
 
-    # Step 3b: FAISS Indexing (semantic search) for this query
-    logger.info(f"    Performing semantic search...")
-    try:
-        temp_state = faiss_indexing_agent(temp_state)
-        # Tag results with the query that produced them
-        for result in temp_state.faiss_results:
-            result.query = query
-        logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
-    except Exception as e:
-        logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
+class STDOUTCapture:
+    def __init__(self, buffer: StringIO):
+        self._original_stdout = None
+        self._captured_output = buffer
+        
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        sys.stdout = self._captured_output
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        sys.stdout = self._original_stdout
 
-    # Step 3c: BM25 Search (keyword search) for this query
-    logger.info(f"    Performing keyword search...")
-    try:
-        temp_state = bm25_search_agent(temp_state)
-        # Tag results with the query that produced them
-        for result in temp_state.bm25_results:
-            result.query = query
-        logger.info(f"    Found {len(temp_state.bm25_results)} keyword results")
-    except Exception as e:
-        logger.error(f"    Error in keyword search: {str(e)}", exc_info=True)
+        if exc_type is not None:
+            return False
 
-    return temp_state
+        return True
 
-def run_deep_search_pipeline(query: str, max_iterations: int = 5) -> Dict[str, Any]:
-    """Run the multi-query, iterative deep search pipeline with reasoning agent."""
-    try:
-        # Initialize state
-        state = SearchState(original_query=query)
+async def main():
+    messages = []
 
-        # Instead of using query_expansion_agent, let the deep_reasoning_agent handle initial query generation
-        # This avoids potential conflicts and allows for better reasoning about query generation
-        logger.info("Step 1: Initial reasoning to analyze query and generate search queries...")
-        try:
-            # Initial call to deep_reasoning_agent will generate the queries
-            state = deep_reasoning_agent(state, max_iterations)
-            logger.info(f"  Generated {len(state.generated_queries)} initial search queries")
-        except Exception as e:
-            logger.error(f"  Error in initial reasoning: {str(e)}", exc_info=True)
-            # If reasoning fails, use just the original query
-            state.generated_queries = [state.original_query]
-            state.current_iteration = 1  # Ensure we don't skip the first iteration
+    print("Welcome to the chat! Ctrl+C to exit.")
+    
+    while True:
+        user_input = input("You: ")
+        messages.append({"role": "user", "content": user_input})
+        assistant_message = ''
 
-        # Iterative search loop
-        while not state.search_complete and state.current_iteration < max_iterations:
-            iteration = state.current_iteration
-            logger.info(f"Beginning search iteration {iteration}...")
+        for chunk in prompt(messages):
 
-            # Reset results for this iteration but keep accumulated results
-            previous_results = state.combined_results.copy() if state.combined_results else []
-            state.tavily_results = []
-            state.faiss_results = []
-            state.bm25_results = []
-            state.combined_results = []
+            if not chunk:
+                continue
+            
+            chunk = chunk.strip()[6:]
 
-            # Process queries in parallel
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                # Submit all query processing tasks
-                future_to_query = {
-                    executor.submit(process_single_query, query, iteration): query
-                    for query in state.generated_queries
-                }
+            if isinstance(chunk, bytes):
+                chunk = chunk.decode("utf-8")
 
-                # Collect results as they complete
-                for future in concurrent.futures.as_completed(future_to_query):
-                    query = future_to_query[future]
-                    try:
-                        temp_state = future.result()
-                        # Collect results from this query
-                        state.tavily_results.extend(temp_state.tavily_results)
-                        state.faiss_results.extend(temp_state.faiss_results)
-                        state.bm25_results.extend(temp_state.bm25_results)
-                        if temp_state.combined_results:
-                            state.combined_results.extend(temp_state.combined_results)
-                    except Exception as e:
-                        logger.error(f"Error processing query '{query}': {str(e)}", exc_info=True)
+            if chunk == '[DONE]':
+                break
 
-            # Add back previous results to ensure continuity
-            if state.combined_results:
-                # If we have combined results from this iteration, merge with previous
-                seen_urls = {result.url for result in state.combined_results}
-                for result in previous_results:
-                    if result.url not in seen_urls:
-                        state.combined_results.append(result)
-            else:
-                # No new combined results, use previous ones
-                state.combined_results = previous_results
-
-            # Make sure combined_results is populated even if BM25 didn't run
-            if not state.combined_results:
-                # Combine FAISS and Tavily results
-                state.combined_results = state.faiss_results + state.tavily_results
-
-            # Deduplicate combined results by URL
-            if state.combined_results:
-                unique_results = {}
-                for result in state.combined_results:
-                    # Keep the highest scoring result for each URL
-                    if result.url not in unique_results or (result.score is not None and
-                        (unique_results[result.url].score is None or result.score > unique_results[result.url].score)):
-                        unique_results[result.url] = result
-
-                state.combined_results = list(unique_results.values())
-                logger.info(f"  Deduplicated to {len(state.combined_results)} unique results")
-
-            # Step 4: Deep Reasoning - analyze results and decide whether to continue
-            logger.info(f"  Analyzing search results and determining next steps...")
             try:
-                state = deep_reasoning_agent(state, max_iterations)
-                logger.info(f"  Search complete: {state.search_complete}")
-                if not state.search_complete:
-                    logger.info(f"  Knowledge gaps identified: {len(state.knowledge_gaps)}")
-                    logger.info(f"  New queries generated: {len(state.generated_queries)}")
-            except Exception as e:
-                logger.error(f"  Error in deep reasoning: {str(e)}", exc_info=True)
-                # If reasoning fails, stop the search to avoid infinite loops
-                state.search_complete = True
-                state.final_answer = "I'm sorry, but I couldn't properly analyze the search results due to a technical issue. Please try again with a different query."
-                state.confidence_score = 0.1
+                json_chunk = json.loads(chunk)
+                choice = json_chunk['choices'][0]
 
-        # Prepare the response
-        if not state.search_complete:
-            # If we exited the loop due to max iterations, generate the final answer
-            logger.info("Maximum iterations reached, generating final answer...")
-            try:
-                from deepsearch.agents.deep_reasoning import generate_final_answer
-                state = generate_final_answer(state)
-            except Exception as e:
-                logger.error(f"Error generating final answer: {str(e)}", exc_info=True)
-                state.final_answer = "I reached the maximum number of search iterations but couldn't generate a comprehensive answer. Here's what I found: " + "\n".join([f"- {point}" for point in state.key_points])
-                state.confidence_score = 0.5
+                role = choice['delta'].get('role')
+                content = choice['delta'].get('content')
+                reasoning_content = choice['delta'].get('reasoning_content')
 
-        # Return the results
-        sources = []
-        if state.combined_results:
-            for res in state.combined_results[:5]:  # Limit to 5 sources
-                sources.append({
-                    "title": res.title,
-                    "url": res.url
-                })
+                if reasoning_content or role != 'assistant':
+                    pass
 
-        # Extract components from the final answer if available
-        answer = state.final_answer
-        key_points = state.key_points if state.key_points else []
-        detailed_notes = state.detailed_notes if state.detailed_notes else None
+                else:
+                    assistant_message += content
+            except json.JSONDecodeError:
+                assistant_message += chunk
+                logging.error(f"JSON decode error: {chunk}")
+                continue
 
-        return {
-            "original_query": state.original_query,
-            "generated_queries": state.generated_queries,
-            "iterations": state.current_iteration,
-            "answer": answer,
-            "key_points": key_points,
-            "detailed_notes": detailed_notes,
-            "confidence": state.confidence_score,
-            "sources": sources
-        }
-    except Exception as e:
-        # Handle any unexpected errors
-        logger.error(f"Unexpected error in deep search pipeline: {str(e)}", exc_info=True)
-        return {
-            "original_query": query,
-            "answer": "An unexpected error occurred while processing your query. Please try again later.",
-            "confidence": 0.0,
-            "sources": []
-        }
-
-def main():
-    """Main entry point for the application."""
-    # Load environment variables
-    load_dotenv()
-
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description="DeepSearch: A multi-agent deep search system")
-    parser.add_argument("query", type=str, help="The query to search for")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
-    parser.add_argument("--show-confidence", "-c", action="store_true", help="Show confidence score")
-    parser.add_argument("--max-iterations", "-i", type=int, default=3, help="Maximum number of search iterations")
-
-    args = parser.parse_args()
-
-    # Run the workflow
-    print(f"Searching for: {args.query}\n")
-    print("Processing... (this may take a while depending on your hardware)\n")
-
-    result = run_deep_search_pipeline(args.query, args.max_iterations)
-
-    # Print the results
-    print("\n" + "="*80)
-    print("SEARCH RESULTS")
-    print("="*80)
-
-    print(f"\nQuery: {result['original_query']}")
-
-    if args.verbose:
-        print(f"\nSearch iterations: {result['iterations']}")
-        print("\nGenerated queries:")
-        for i, query in enumerate(result['generated_queries']):
-            if query != result['original_query']:
-                print(f"  - {query}")
-
-    print("\n" + result['answer'])
-
-    # Only show confidence if explicitly requested
-    if args.show_confidence:
-        print(f"\nConfidence: {result['confidence']:.2f}")
-
-    if args.verbose:
-        print("\nSources:")
-        for i, source in enumerate(result['sources']):
-            print(f"  {i+1}. {source['title']} - {source['url']}")
-
+        print("\nAssistant: ", assistant_message)
+        messages.append({"role": "assistant", "content": assistant_message})
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -7,7 +7,7 @@ import os
 from deepsearch.magic import retry
 
 os.environ['TAVILY_API_KEY'] = 'no-need'
-os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
+os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 os.environ["EXA_API_KEY"] = "no-need"
 
@@ -25,7 +25,7 @@ from deepsearch.agents import (
     exa_search_agent,
 )
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
-from app.utils import detect_query_complexity, detect_research_intent, get_conversation_summary, reply_conversation
+from app.utils import detect_research_intent, get_conversation_summary, reply_conversation
 
 from json_repair import repair_json
 import json
