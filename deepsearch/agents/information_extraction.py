@@ -37,9 +37,9 @@ Extract the following information that is related to the query: {query}
 4. Any quoted statements
 
 Instructions:
-- Phrase each item as a complete, standalone sentence that clearly conveys the information without requiring additional context.
+- Phrase each item as a complete, standalone sentence that clearly conveys the information without requiring additional context. Use complete phrases when referring to specific objects or concepts.
 - Do not include duplicate or overly similar statements.
-- Only include information that appears explicitly in the content.
+- Only include information that appears explicitly in the content and is relevant to the query. Do not include information about the source itself.
 - Quotes must be word-for-word and properly attributed.
 - If no relevant information is found, return an empty list.
 
