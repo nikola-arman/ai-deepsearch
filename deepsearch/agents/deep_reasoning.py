@@ -651,7 +651,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     if state.combined_results:
         for result in state.combined_results:
             statements_str = '\n'.join([f"- {statement}" for statement in result.extracted_information])
-            search_context += f"Title: {result.title}\nURL: {result.url}\nStatements: {statements_str}\n\n"
+            search_context += f"Title: {result.title}\nURL: {result.url}\nStatements:\n{statements_str}\n\n"
 
     # if state.verified_information:
     #     search_context += f"Verified Information\n\n"
