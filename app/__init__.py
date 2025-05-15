@@ -252,20 +252,20 @@ JSON response:
             yield to_chunk_data(wrap_step_finish(information_extraction_uuid, f"An error occurred", str(e), is_error=True))
 
         # Step 6: Fact Checking
-        logger.info("Step 6: Verifying extracted information...")
-        fact_checking_uuid = str(uuid.uuid4())
-        yield to_chunk_data(wrap_step_start(fact_checking_uuid, "Verifying extracted information"))
-        try:
-            state = yield from fact_checking_agent(state)
-            logger.info(f"  Verified {len(state.verified_information['verified'])} statements")
-            yield to_chunk_data(wrap_step_finish(fact_checking_uuid, 
-                f"Verified {len(state.verified_information['verified'])} statements, "
-                f"found {len(state.verified_information['contradicted'])} contradictions, "
-                f"and {len(state.verified_information['unverified'])} unverified statements"
-            ))
-        except Exception as e:
-            logger.error(f"  Error in fact checking: {str(e)}", exc_info=True)
-            yield to_chunk_data(wrap_step_finish(fact_checking_uuid, f"An error occurred", str(e), is_error=True))
+        # logger.info("Step 6: Verifying extracted information...")
+        # fact_checking_uuid = str(uuid.uuid4())
+        # yield to_chunk_data(wrap_step_start(fact_checking_uuid, "Verifying extracted information"))
+        # try:
+        #     state = yield from fact_checking_agent(state)
+        #     logger.info(f"  Verified {len(state.verified_information['verified'])} statements")
+        #     yield to_chunk_data(wrap_step_finish(fact_checking_uuid, 
+        #         f"Verified {len(state.verified_information['verified'])} statements, "
+        #         f"found {len(state.verified_information['contradicted'])} contradictions, "
+        #         f"and {len(state.verified_information['unverified'])} unverified statements"
+        #     ))
+        # except Exception as e:
+        #     logger.error(f"  Error in fact checking: {str(e)}", exc_info=True)
+        #     yield to_chunk_data(wrap_step_finish(fact_checking_uuid, f"An error occurred", str(e), is_error=True))
 
         # Step 7: LLM Reasoning
         logger.info("Step 7: Generating answer...")
@@ -543,14 +543,14 @@ def run_deep_search_pipeline(
                 logger.error(f"    Error in information extraction: {str(e)}", exc_info=True)
 
             # Step 7: Fact Checking for this query
-            logger.info(f"    Verifying extracted information...")
-            try:
-                state = yield from fact_checking_agent(state)
-                logger.info(f"    Verified {len(state.verified_information['verified'])} statements, "
-                            f"found {len(state.verified_information['contradicted'])} contradictions, "
-                            f"and {len(state.verified_information['unverified'])} unverified statements")
-            except Exception as e:
-                logger.error(f"    Error in fact checking: {str(e)}", exc_info=True)
+            # logger.info(f"    Verifying extracted information...")
+            # try:
+            #     state = yield from fact_checking_agent(state)
+            #     logger.info(f"    Verified {len(state.verified_information['verified'])} statements, "
+            #                 f"found {len(state.verified_information['contradicted'])} contradictions, "
+            #                 f"and {len(state.verified_information['unverified'])} unverified statements")
+            # except Exception as e:
+            #     logger.error(f"    Error in fact checking: {str(e)}", exc_info=True)
 
             # Add back previous results to ensure continuity
             if state.combined_results:

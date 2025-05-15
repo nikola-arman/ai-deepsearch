@@ -646,13 +646,18 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     search_details = format_search_details(state)
 
     # Format search context from combined results
-    search_context = ""
+    search_context = "Search Context:\n"
 
-    if state.verified_information:
-        search_context += f"Verified Information\n\n"
-        for result in state.verified_information["verified"]:
-            source = (f"{result['title']} ({result['source']})")
-            search_context += f"Statement: {result['statement']}\nSource: {source}\nVerification Notes: {result['notes']}\n\n"
+    if state.combined_results:
+        for result in state.combined_results:
+            statements_str = '\n'.join([f"- {statement}" for statement in result.extracted_information])
+            search_context += f"Title: {result.title}\nURL: {result.url}\nStatements: {statements_str}\n\n"
+
+    # if state.verified_information:
+    #     search_context += f"Verified Information\n\n"
+    #     for result in state.verified_information["verified"]:
+    #         source = (f"{result['title']} ({result['source']})")
+    #         search_context += f"Statement: {result['statement']}\nSource: {source}\nVerification Notes: {result['notes']}\n\n"
 
     print("search_context:", search_context)
 
