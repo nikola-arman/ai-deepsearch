@@ -14,6 +14,3 @@ env RETRIEVER="tavily"
 env PUBMED_EMAIL="daniel@bvm.network"
 env TAVILY_API_KEY="tvly-hahaha"
 env FORWARD_ALL_MESSAGES=1
-
-env VLM_BASE_URL="https://mac5-9090.eternalai.org/v1"
-env VLM_API_KEY="d50b6ba5169ea538a71fe7b0685b755823a3746934fa3cc4k"
