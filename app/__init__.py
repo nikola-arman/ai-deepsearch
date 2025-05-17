@@ -1,4 +1,3 @@
-import eai_http_middleware
 import logging
 from dotenv import load_dotenv
 
@@ -598,7 +597,6 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                     detailed_report=True,
                 ):
                     yield chunk
-
                 return
             elif _name == "search":
 

@@ -8,9 +8,5 @@ copy app app
 copy deepsearch deepsearch
 copy system_prompt.txt system_prompt.txt
 
-env ETERNALAI_MCP_PROXY_URL="http://84532-proxy/prompt"
-env PROXY_SCOPE="*api.tavily.com*"
-env RETRIEVER="tavily"
 env PUBMED_EMAIL="daniel@bvm.network"
-env TAVILY_API_KEY="tvly-hahaha"
 env FORWARD_ALL_MESSAGES=1
