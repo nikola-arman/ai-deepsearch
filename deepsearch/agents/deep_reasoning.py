@@ -9,6 +9,7 @@ import datetime  # Add import for datetime module
 from deepsearch.models import SearchState, SearchResult
 import datetime
 import json_repair
+from copy import deepcopy
 
 # Set up logging
 logger = logging.getLogger("deepsearch.deep_reasoning")
@@ -49,9 +50,9 @@ INSTRUCTIONS:
   "search_complete": true/false,
   "reasoning": "Your explanation of why the search is complete or needs to continue"
 }}
-7. IMPORTANT: Include in-text citations using the markdown syntax "[Author/Article, Year](PMID:$PMID)" (for example [Xi et al.](PMID:$PMID)) for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $PMID is the PubMed ID of the article, mentioned in each search result.
-8. For each citation, include a brief context about the source (e.g., "A study by  [Author/Article, Year](PMID:$PMID) (for example [Xi et al.](PMID:$PMID)) found that...")
-
+7. Always include in-text citations using the markdown syntax "[Author/Article, Year](PMID: $PMID)" for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $PMID, Author, Article and Year are all mentioned in the SEARCH RESULTS.
+8. For each citation, include a brief context about the source (e.g., "A study by  [Author/Article, Year](PMID: $PMID) found that...")
+9. Only cite the article in the search results, do not invent citations.
 
 CRITICAL: Your entire response MUST be a valid, parseable JSON object and nothing else. Do not include any text before or after the JSON object. Do not include any explanation, markdown formatting, or code blocks around the JSON. The response must start with '{{' and end with '}}' and contain only valid JSON, include in-text citation for each fact or claim in correct format.
 
@@ -154,15 +155,16 @@ KEY POINTS IDENTIFIED DURING SEARCH:
 INSTRUCTIONS:
 1. Create a concise list of 5-7 bullet points that represent the most important findings and facts related to the query.
 2. Each point should be clear, specific, and directly relevant to answering the original query.
-3. IMPORTANT: Include in-text citations using the markdown syntax "[Author/Article, Year](PMID:$PMID)" (for example [Xi et al.](PMID:$PMID)) for each fact or claim. Where the $PMID is the PubMed ID of the article, mentioned in the search results.
-4. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID: 12331312) found that...")
+3. Always include in-text citations using the markdown syntax "[Author/Article, Year](PMID: $PMID)" for each fact or claim. Where the $PMID, Author, Article and year are all mentioned in KEY POINTS IDENTIFIED DURING SEARCH.
+4. For each citation, include a brief context about the source (e.g., "A study by [Author/Article, Year](PMID: $PMID) found that...")
+5. Only cite the article in the search results, do not invent citations.
 
 Format your response as a markdown list of bullet points ONLY:
 - Key point 1
 - Key point 2
 ...
 
-Do not include any introduction, explanation, or conclusion outside of the bullet points.
+IMPORTANT: Do not include any introduction, explanation, or conclusion outside of the bullet points.
 
 /no_think
 """
@@ -188,8 +190,9 @@ Create a well-rounded, complete direct answer to the original query. The answer 
 6. Use line breaks between paragraphs for better readability
 7. Use **bold** for important terms and concepts
 8. Use *italics* for emphasis when appropriate
-9. IMPORTANT: Include in-text citations using the format "[Author/Article, Year](PMID:$PMID)" (for example [Xi et al.](PMID:$PMID)) for each fact or claim. Where the $PMID is the PubMed ID of the article, mentioned in the search results (e.g., [Smith et al., 2024](PMID: 12331312))
-10. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID: 12331312) found that...")
+9. Always include in-text citations using the format "[Author/Article, Year](PMID: $PMID)" for each fact or claim. Where the PMID, Auhtor, Title, Year are all mentioned in the KEY POINTS.
+10. For each citation, include a brief context about the source (e.g., "A study by [Author/Article, Year](PMID: $PMID) found that...")
+11. Only cite the article if it is presented in the listed information above, do not invent citations. 
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, or section markers.
@@ -258,8 +261,9 @@ Create rich, detailed content for the section "{section_heading}". Your content 
 6. Use **bold** for important terms and concepts
 7. Use *italics* for emphasis when appropriate
 8. Create subsections with ### heading level when needed to organize complex information
-9. IMPORTANT: Include in-text citations using the format "[Author/Article, Year](PMID:$PMID)" (for example [Xi et al.](PMID:$PMID)) for each fact or claim. Where the $PMID is the PubMed ID of the original article (e.g., [Smith et al., 2024](PMID: 12331312))
-10. For each citation, include a brief context about the source (e.g., "A study by [Smith et al., 2024](PMID: 12331312) found that...")
+9. Always include in-text citations using the format "[Author/Article, Year](PMID: $PMID)" for each fact or claim. Where the $PMID, Author, Title, Year are all mentioned in the KEY POINTS, DIRECT ANSWER.
+10. For each citation, include a brief context about the source (e.g., "A study by [Author/Article, Year](PMID: $PMID) found that...")
+11. Only cite the article if it is presented in the listed information above, do not invent citations. 
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
@@ -422,8 +426,8 @@ def format_search_results(state: SearchState) -> str:
         if len(results[0].authors) > 0:
             first_author = results[0].authors[0]
 
-            if first_author.firstname and first_author.lastname:
-                first_author_name = first_author.firstname or first_author.lastname
+            if first_author.firstname:
+                first_author_name = first_author.firstname
 
                 if first_author_name:
                     authors = first_author_name \
@@ -731,7 +735,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
 class ReferenceBuilder:
     def __init__(self, state: SearchState):
         self.state = state
-        self.citing_pat = re.compile(r'\[.*\]\(PMID:\s?(\d+)\)')
+        self.citing_pat = re.compile(r'\(PMID:\s*(\d+)\)')
 
         self.sorted_results = sorted(
             state.combined_results,
@@ -762,24 +766,26 @@ class ReferenceBuilder:
             in enumerate(list(self.cited_pmids))
         )
 
-    def embed_references(self, answer: str) -> str:
+    def embed_references(self, _answer: str) -> str:
+        answer = deepcopy(_answer)
         cited_pmids = set([])
-        for line in answer.split('\n'):
-            match = self.citing_pat.search(line)
-            if match:
-                cited_pmids.add(match.group(1))
+        
+        matches = self.citing_pat.findall(answer)
+        
+        for pmid in matches:
+            cited_pmids.add(pmid)
 
         for pmid in cited_pmids:
             if pmid in self.searched_pmids:
                 answer = re.sub(
-                    r'\[(.*)\]\(PMID:\s?(\d+)\)',
-                    r'[\1](https://pubmed.ncbi.nlm.nih.gov/\2)',
+                    rf'\[(.*?)\]\s*\(PMID:\s*{re.escape(pmid)}\)',
+                    rf'[\1](https://pubmed.ncbi.nlm.nih.gov/{pmid})',
                     answer
                 )
 
                 answer = re.sub(
-                    r'PMID:\s?(\d+)',
-                    r'[\1](https://pubmed.ncbi.nlm.nih.gov/\1)',
+                    rf'PMID:\s*({re.escape(pmid)})',
+                    f'[{pmid}](https://pubmed.ncbi.nlm.nih.gov/{pmid})',
                     answer
                 )
 
@@ -819,38 +825,32 @@ def generate_final_answer_stream(
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
 
     # Stage 1: Generate refined key points
-    key_points_llm = init_reasoning_llm(temperature=0.2)
-    key_points_prompt = PromptTemplate(
-        input_variables=["original_query", "search_details", "key_points"],
-        template=KEY_POINTS_TEMPLATE
-    )
-    key_points_chain = key_points_prompt | key_points_llm
-
-    key_points_response = key_points_chain.invoke({
-        "original_query": state.original_query,
-        "search_details": search_details,
-        "key_points": initial_key_points
-    })
-
-    if log_stages:
-        with open("key_points_prompt.txt", "w") as f:
-            f.write(key_points_prompt.invoke({
-                "original_query": state.original_query,
-                "search_details": search_details,
-                "key_points": initial_key_points
-            }).to_string())
-
-    # Extract the content if it's a message object
-    key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
-    logger.info("Generated key points for final answer")
+    
     if detailed:
-        yield '## Key Points\n\n'
+        key_points_llm = init_reasoning_llm(temperature=0.2)
+        key_points_prompt = PromptTemplate(
+            input_variables=["original_query", "search_details", "key_points"],
+            template=KEY_POINTS_TEMPLATE
+        )
+        key_points_chain = key_points_prompt | key_points_llm
 
-        for kp in key_points.split('\n'):
-            kp = kp.strip()
+        key_points_response = key_points_chain.invoke({
+            "original_query": state.original_query,
+            "search_details": search_details,
+            "key_points": initial_key_points
+        })
 
-            if kp:
-                yield ref_builder.embed_references(kp) + '\n'
+        # Extract the content if it's a message object
+        key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
+        logger.info("Generated key points for final answer")
+        if detailed:
+            yield '## Key Points\n\n'
+
+            for kp in key_points.split('\n'):
+                kp = kp.strip()
+
+                if kp:
+                    yield ref_builder.embed_references(kp) + '\n'
 
 
     # Stage 2: Generate direct answer
@@ -858,7 +858,7 @@ def generate_final_answer_stream(
         yield '\n'
         yield '## Direct Answer\n\n'
 
-    direct_answer_llm = init_reasoning_llm(temperature=0.3)
+    direct_answer_llm = init_reasoning_llm(temperature=0.2)
     direct_answer_prompt = PromptTemplate(
         input_variables=["original_query", "key_points", "search_details"],
         template=DIRECT_ANSWER_TEMPLATE
@@ -867,7 +867,7 @@ def generate_final_answer_stream(
 
     direct_answer_response = direct_answer_chain.invoke({
         "original_query": state.original_query,
-        "key_points": key_points,
+        "key_points": initial_key_points,
         "search_details": search_details
     })
 
@@ -875,7 +875,7 @@ def generate_final_answer_stream(
         with open("direct_answer_prompt.txt", "w") as f:
             f.write(direct_answer_prompt.invoke({
                 "original_query": state.original_query,
-                "key_points": key_points,
+                "key_points": initial_key_points,
                 "search_details": search_details
             }).to_string())
 
@@ -886,17 +886,19 @@ def generate_final_answer_stream(
         else direct_answer_response
     )
 
+    answer = direct_answer + f"\n\nHere is the information for your concern. Do you want me to deep dive into it?"
+    yield ref_builder.embed_references(answer)
+
+    print('\n\nHallucinated PMIDs:', ref_builder.hallucinated_pmids)
+
     if not detailed:
-        answer = direct_answer + f"\n\nHere is the information for your concern. Do you want me to deep dive into it?"
-        yield ref_builder.embed_references(answer)
         return
-    yield ref_builder.embed_references(direct_answer)
 
     # Stage 3: Generate detailed notes outline (section headings only)
     yield '\n'
     yield '## Detailed Notes\n\n'
 
-    outline_llm = init_reasoning_llm(temperature=0.3)
+    outline_llm = init_reasoning_llm(temperature=0.2)
     outline_prompt = PromptTemplate(
         input_variables=["original_query", "key_points", "direct_answer", "search_details"],
         template=DETAILED_NOTES_TEMPLATE
@@ -905,19 +907,10 @@ def generate_final_answer_stream(
 
     outline_response = outline_chain.invoke({
         "original_query": state.original_query,
-        "key_points": key_points,
+        "key_points": initial_key_points,
         "direct_answer": direct_answer,
         "search_details": search_details
     })
-
-    if log_stages:
-        with open("outline_prompt.txt", "w") as f:
-            f.write(outline_prompt.invoke({
-                "original_query": state.original_query,
-                "key_points": key_points,
-                "direct_answer": direct_answer,
-                "search_details": search_details
-            }).to_string())
 
     # Extract the content if it's a message object
     section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
@@ -949,20 +942,11 @@ def generate_final_answer_stream(
 
         section_response = section_chain.invoke({
             "original_query": state.original_query,
-            "key_points": key_points,
+            "key_points": initial_key_points,
             "direct_answer": direct_answer,
             "search_details": search_details,
             "section_heading": heading
         })
-        if log_stages:
-            with open(f'section_content_{heading}.txt', 'w') as f:
-                f.write(section_prompt.invoke({
-                    "original_query": state.original_query,
-                    "key_points": key_points,
-                    "direct_answer": direct_answer,
-                    "search_details": search_details,
-                    "section_heading": heading
-                }).to_string())
 
         # Extract the content if it's a message object
         section_content = section_response.content if hasattr(section_response, 'content') else section_response
@@ -995,6 +979,7 @@ def generate_final_answer_stream(
         yield ref_builder.embed_references(cleaned_content)
 
     logger.info("Generated all section content for detailed notes")
+    print('\n\nHallucinated PMIDs:', ref_builder.hallucinated_pmids)
 
     yield '\n'
     references = ref_builder.build()

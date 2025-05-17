@@ -286,8 +286,9 @@ def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indi
         # Create results using the best scores
         faiss_results = []
         for original_idx, score in sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]:
-            if original_idx < len(search_results):
+            if 0 < original_idx < len(search_results):
                 result = search_results[original_idx]
+
                 faiss_results.append(
                     SearchResult(
                         title=result.title,

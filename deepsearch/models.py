@@ -20,9 +20,9 @@ def sanitize_content(content) -> str:
 
 class AuthorInfo(BaseModel):
     collective: Optional[str] = None
-    lastname: Optional[str] = None
+    # lastname: Optional[str] = None
     firstname: Optional[str] = None
-    initials: Optional[str] = None
+    # initials: Optional[str] = None
 
 class SearchResult(BaseModel):
     """Represents a single search result."""

@@ -3,7 +3,7 @@ import logging
 from dotenv import load_dotenv
 
 
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 import os
 
@@ -110,8 +110,6 @@ async def run_deep_search_pipeline(
 
         # Iterative search loop
         while not state.search_complete and state.current_iteration < max_iterations:
-            iteration = state.current_iteration
-            logger.info(f"Beginning search iteration {iteration}...")
 
             # Reset results for this iteration but keep accumulated results
             previous_results = state.combined_results.copy() if state.combined_results else []
@@ -319,7 +317,7 @@ async def run_deep_search_pipeline(
                 )
 
                 state.confidence_score = 0.5
-        else:
+        elif not state.final_answer:
             yield await to_chunk_data(
                 await wrap_thinking_chunk(
                     response_uuid,
@@ -339,6 +337,20 @@ async def run_deep_search_pipeline(
                         chunk
                     )
                 )
+        else:
+            yield await to_chunk_data(
+                await wrap_thinking_chunk(
+                    response_uuid,
+                    f'Search complete: {state.search_complete}\n'
+                )
+            )
+
+            yield await to_chunk_data(
+                await wrap_chunk(
+                    response_uuid,
+                    state.final_answer
+                )
+            )
 
     except Exception:
         yield await to_chunk_data(
