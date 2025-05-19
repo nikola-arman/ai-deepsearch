@@ -4,7 +4,7 @@ certifi==2025.1.31
 charset-normalizer==3.4.1
 click==8.1.8
 distro==1.9.0
-eai_http_middleware @ git+https://github.com/daniel-bvm/http-middleware@8b4f7718539200dbd24c7c9c907889144727426d
+eai_http_middleware @ git+https://github.com/daniel-bvm/http-middleware
 exa-py==1.12.1
 faiss-cpu==1.10.0
 fastapi==0.115.12
