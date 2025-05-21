@@ -190,7 +190,7 @@ async def wrap_thinking_chunk(uuid: str, raw: str) -> ChatCompletionStreamRespon
         choices=[
             dict(
                 index=0,
-                delta=dict(content=raw)
+                delta=dict(reasoning_content=raw)
             )
         ]
     )
