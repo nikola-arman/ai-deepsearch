@@ -103,7 +103,7 @@ async def run_deep_search_pipeline(
         yield await to_chunk_data(
             await wrap_thinking_chunk(
                 response_uuid,
-                f'Prepared {len(state.generated_queries)} search queries:\n'
+                f'Prepared {len(state.generated_queries)} search queries'
             )
         )
 
@@ -121,7 +121,7 @@ async def run_deep_search_pipeline(
                 yield await to_chunk_data(
                     await wrap_thinking_chunk(
                         response_uuid,
-                        f'Searching for {query}...\n'
+                        f'Searching for {query}...'
                     )
                 )
 
@@ -224,29 +224,29 @@ async def run_deep_search_pipeline(
                     yield await to_chunk_data(
                         await wrap_thinking_chunk(
                             response_uuid,
-                            f'Knowledge gaps identified:\n'
+                            'Knowledge gaps identified'
                         )
                     )
 
-                    for kg in state.knowledge_gaps:
-                        yield await to_chunk_data(
-                            await wrap_thinking_chunk(
-                                response_uuid,
-                                f'- {kg}\n'
-                            )
-                        )
+                    # for kg in state.knowledge_gaps:
+                    #     yield await to_chunk_data(
+                    #         await wrap_thinking_chunk(
+                    #             response_uuid,
+                    #             f'- {kg}\n'
+                    #         )
+                    #     )
+
+                    # yield await to_chunk_data(
+                    #     await wrap_thinking_chunk(
+                    #         response_uuid,
+                    #         '\n'
+                    #     )
+                    # )
 
                     yield await to_chunk_data(
                         await wrap_thinking_chunk(
                             response_uuid,
-                            '\n'
-                        )
-                    )
-
-                    yield await to_chunk_data(
-                        await wrap_thinking_chunk(
-                            response_uuid,
-                            f'New {len(state.generated_queries)} queries generated\n'
+                            f'New {len(state.generated_queries)} queries generated'
                         )
                     )
 
@@ -262,7 +262,7 @@ async def run_deep_search_pipeline(
                 yield await to_chunk_data(
                     await wrap_thinking_chunk(
                         response_uuid,
-                        f'Search complete: {state.search_complete}\n'
+                        f'Search complete: {state.search_complete}'
                     )
                 )
 
@@ -320,7 +320,7 @@ async def run_deep_search_pipeline(
             yield await to_chunk_data(
                 await wrap_thinking_chunk(
                     response_uuid,
-                    f'Search complete: {state.search_complete}\n'
+                    f'Search complete: {state.search_complete}'
                 )
             )
 
@@ -340,7 +340,7 @@ async def run_deep_search_pipeline(
             yield await to_chunk_data(
                 await wrap_thinking_chunk(
                     response_uuid,
-                    f'Search complete: {state.search_complete}\n'
+                    f'Search complete: {state.search_complete}'
                 )
             )
 
@@ -355,7 +355,7 @@ async def run_deep_search_pipeline(
         yield await to_chunk_data(
             await wrap_thinking_chunk(
                 response_uuid,
-                f'Search complete: {state.search_complete}\n'
+                f'Search complete: {state.search_complete}'
             )
         )
 
@@ -586,7 +586,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 yield await to_chunk_data(
                     await wrap_thinking_chunk(
                         response_uuid,
-                        f'Start researching on {_args["topic"]}\n'
+                        f'Start researching on {_args["topic"]}'
                     )
                 )
 
@@ -603,7 +603,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 yield await to_chunk_data(
                     await wrap_thinking_chunk(
                         response_uuid,
-                        f'Start searching on {_args["query"]}\n'
+                        f'Start searching on {_args["query"]}'
                     ),
                 )
                 async for chunk in run_deep_search_pipeline(

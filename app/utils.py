@@ -182,6 +182,7 @@ async def wrap_chunk(uuid: str, raw: str, role: str = 'assistant') -> ChatComple
 
 
 async def wrap_thinking_chunk(uuid: str, raw: str) -> ChatCompletionStreamResponse:
+    content = f"<think>{raw}</think>"
     return ChatCompletionStreamResponse(
         id=uuid,
         object='chat.completion.chunk',
@@ -190,7 +191,7 @@ async def wrap_thinking_chunk(uuid: str, raw: str) -> ChatCompletionStreamRespon
         choices=[
             dict(
                 index=0,
-                delta=dict(reasoning_content=raw)
+                delta=dict(content=content)
             )
         ]
     )
