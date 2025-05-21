@@ -422,6 +422,7 @@ def is_xray_image(img_path: str) -> bool:
         max_tokens=10,
         temperature=0.2
     )
+
     logger.info(f"Response from LLM: {out.choices[0].message.content}")
     msg_out = out.choices[0].message.content
     return 'yes' in msg_out.lower()
