@@ -211,10 +211,19 @@ async def run_deep_search_pipeline(
                 if max_search_results_to_llm:
                     state.combined_results = state.combined_results[:max_search_results_to_llm]
 
-                logger.info(f"  Deduplicated to {len(state.combined_results)} unique results")
+                logger.info(f"Deduplicated to {len(state.combined_results)} unique results")
 
             # Step 5: Deep Reasoning - analyze results and decide whether to continue
-            logger.info(f"  Analyzing search results and determining next steps...")
+            logger.info("Analyzing search results and determining next steps...")
+            yield await to_chunk_data(
+                await wrap_thinking_chunk(
+                    response_uuid,
+                    (
+                        f"🧠 Analyzing {len(state.combined_results)} search results and determining "
+                        "whether to continue searching..."
+                    ),
+                ),
+            )
 
             try:
                 state = await async_deep_reasoning_agent(state, max_iterations)
