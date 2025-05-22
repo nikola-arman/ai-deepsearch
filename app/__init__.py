@@ -103,8 +103,8 @@ async def run_deep_search_pipeline(
         yield await to_chunk_data(
             await wrap_thinking_chunk(
                 response_uuid,
-                f'Prepared {len(state.generated_queries)} search queries'
-            )
+                f"💡 Prepared {len(state.generated_queries)} search queries",
+            ),
         )
 
         # Iterative search loop
@@ -121,8 +121,8 @@ async def run_deep_search_pipeline(
                 yield await to_chunk_data(
                     await wrap_thinking_chunk(
                         response_uuid,
-                        f'Searching for {query}...'
-                    )
+                        f"🔎 Searching for {query}...",
+                    ),
                 )
 
                 # Create a temporary state for this query
@@ -131,7 +131,7 @@ async def run_deep_search_pipeline(
                 )
 
                 # Step 2: PubMed Search for this query
-                logger.info(f"    Performing PubMed search...")
+                logger.info("Performing PubMed search...")
                 try:
                     temp_state = await async_pubmed_search_agent(temp_state)
                     # Tag results with the query that produced them
@@ -224,8 +224,8 @@ async def run_deep_search_pipeline(
                     yield await to_chunk_data(
                         await wrap_thinking_chunk(
                             response_uuid,
-                            'Knowledge gaps identified'
-                        )
+                            "🧐 Knowledge gaps identified",
+                        ),
                     )
 
                     # for kg in state.knowledge_gaps:
@@ -246,8 +246,8 @@ async def run_deep_search_pipeline(
                     yield await to_chunk_data(
                         await wrap_thinking_chunk(
                             response_uuid,
-                            f'New {len(state.generated_queries)} queries generated'
-                        )
+                            f"✨ New {len(state.generated_queries)} queries generated",
+                        ),
                     )
 
                     logger.info(f"  Knowledge gaps identified: {len(state.knowledge_gaps)}")
@@ -259,11 +259,12 @@ async def run_deep_search_pipeline(
                 state.search_complete = True
                 state.final_answer = "I'm sorry, but I couldn't properly analyze the search results due to a technical issue. Please try again with a different query."
 
+                icon = "✅" if state.search_complete else "❌"
                 yield await to_chunk_data(
                     await wrap_thinking_chunk(
                         response_uuid,
-                        f'Search complete: {state.search_complete}'
-                    )
+                        f"{icon} Search complete: {state.search_complete}",
+                    ),
                 )
 
                 yield await to_chunk_data(
@@ -317,11 +318,12 @@ async def run_deep_search_pipeline(
 
                 state.confidence_score = 0.5
         elif not state.final_answer:
+            icon = "✅" if state.search_complete else "❌"
             yield await to_chunk_data(
                 await wrap_thinking_chunk(
                     response_uuid,
-                    f'Search complete: {state.search_complete}'
-                )
+                    f"{icon} Search complete: {state.search_complete}",
+                ),
             )
 
             from deepsearch.agents.deep_reasoning import generate_final_answer_stream
@@ -337,11 +339,12 @@ async def run_deep_search_pipeline(
                     )
                 )
         else:
+            icon = "✅" if state.search_complete else "❌"
             yield await to_chunk_data(
                 await wrap_thinking_chunk(
                     response_uuid,
-                    f'Search complete: {state.search_complete}'
-                )
+                    f"{icon} Search complete: {state.search_complete}",
+                ),
             )
 
             yield await to_chunk_data(
@@ -352,11 +355,12 @@ async def run_deep_search_pipeline(
             )
 
     except Exception:
+        icon = "✅" if state.search_complete else "❌"
         yield await to_chunk_data(
             await wrap_thinking_chunk(
                 response_uuid,
-                f'Search complete: {state.search_complete}'
-            )
+                f"{icon} Search complete: {state.search_complete}",
+            ),
         )
 
         yield await to_chunk_data(
@@ -493,8 +497,8 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
             yield await to_chunk_data(
                 await wrap_thinking_chunk(
                     response_uuid,
-                    f'Diagnosing: {file_basename}'
-                )
+                    f"🩺 Diagnosing: {file_basename}",
+                ),
             )
 
             is_xray, vis, comment = xray_lesion_detector.xray_diagnose_agent(path, user_message)
@@ -586,7 +590,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 yield await to_chunk_data(
                     await wrap_thinking_chunk(
                         response_uuid,
-                        f'Start researching on {_args["topic"]}'
+                        f'🔬 Start researching on {_args["topic"]}'
                     )
                 )
 
@@ -603,7 +607,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 yield await to_chunk_data(
                     await wrap_thinking_chunk(
                         response_uuid,
-                        f'Start searching on {_args["query"]}'
+                        f'🔬 Start searching on {_args["query"]}'
                     ),
                 )
                 async for chunk in run_deep_search_pipeline(
