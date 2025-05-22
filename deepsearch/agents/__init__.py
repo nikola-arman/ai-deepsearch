@@ -11,7 +11,6 @@ from deepsearch.agents.deep_reasoning import deep_reasoning_agent, generate_fina
 from deepsearch.agents.brave_search import brave_search_agent
 from deepsearch.agents.information_extraction import information_extraction_agent
 from deepsearch.agents.fact_checking import fact_checking_agent
-from deepsearch.agents.exa_search import exa_search_agent
 
 __all__ = [
     "tavily_search_agent",
@@ -24,5 +23,4 @@ __all__ = [
     "brave_search_agent",
     "information_extraction_agent",
     "fact_checking_agent",
-    "exa_search_agent",
 ]

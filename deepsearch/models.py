@@ -23,7 +23,7 @@ import uuid
 
 class SearchResult(BaseModel):
     """Represents a single search result."""
-    id: str = Field(default_factory=lambda: str(uuid.uuid4())[-4:])
+    id: int = Field(default_factory=lambda: uuid.uuid4().int & 0xFFFFFF)
     title: str
     url: str
     content: str
@@ -44,7 +44,7 @@ class SearchResult(BaseModel):
     
     @model_validator(mode='after')
     def validate_id(self):
-        self.id = hash(self.url)[-4:]
+        self.id = hash(self.url) & 0xFFFFFF
         return self
 
 class SearchState(BaseModel):

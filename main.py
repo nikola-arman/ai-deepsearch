@@ -7,11 +7,11 @@ from enum import Enum
 import logging
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.FileHandler("app.log"),
-        logging.StreamHandler()
+        # logging.StreamHandler()
     ]
 )
 
@@ -63,7 +63,13 @@ async def main():
 
     print("Welcome to the chat! Ctrl+C to exit.")
     
-    user_messages = []
+    user_messages = [
+        "research about bitcoin price change during last year",
+        "for investment",
+        "summarize the research in less than 5 bullet points",
+        "what should I do?",
+
+    ]
     user_messages_it = iter(user_messages)
     
     while True:
@@ -71,7 +77,9 @@ async def main():
         
         if not user_input:
             user_input = input("You: ")
-        
+        else:
+            print(f"User: {user_input}")
+
         messages.append({"role": "user", "content": user_input})
         assistant_message = ''
 
@@ -80,10 +88,11 @@ async def main():
             if not chunk:
                 continue
             
-            chunk = chunk.strip()[6:]
+            chunk = chunk
 
             if isinstance(chunk, bytes):
                 chunk = chunk.decode("utf-8")
+                chunk = chunk[6:]
 
             if chunk == '[DONE]':
                 break
@@ -97,16 +106,17 @@ async def main():
                 reasoning_content = choice['delta'].get('reasoning_content')
 
                 if reasoning_content or role != 'assistant':
-                    pass
+                    print(reasoning_content or content)
 
                 else:
-                    assistant_message += content
+                    print(content, end='', flush=True)
+                    
             except json.JSONDecodeError:
                 assistant_message += chunk
-                logging.error(f"JSON decode error: {chunk}")
+                print(chunk, end='', flush=True)
                 continue
 
-        print("\nAssistant: ", assistant_message)
+        # print("\nAssistant: ", assistant_message)
         messages.append({"role": "assistant", "content": assistant_message})
 
 if __name__ == "__main__":

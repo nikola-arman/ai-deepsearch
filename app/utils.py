@@ -189,7 +189,7 @@ async def preserve_upload_file(file_data_uri: str, file_name: str, preserve_atta
         logger.error(f"Failed to preserve upload file: {e}")
         return None
 
-async def get_attachments(content: list[dict[str, str]]) -> list[str]:
+def get_attachments(content: list[dict[str, str]]) -> list[str]:
     attachments = []
 
     if isinstance(content, str):
@@ -218,7 +218,7 @@ async def get_attachments(content: list[dict[str, str]]) -> list[str]:
 
     return attachments
 
-async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, preserve_attachments: bool = False) -> list[dict[str, str]]:
+def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, preserve_attachments: bool = False) -> list[dict[str, str]]:
     refined_messages = []
 
     has_system_prompt = False
@@ -229,6 +229,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
         if isinstance(message, dict) and message.get('role', 'undefined') == 'system':
             message['content'] += f'\n{system_prompt}'
             has_system_prompt = True
+            refined_messages.append(message)
             continue
 
         if isinstance(message, dict) \
@@ -248,7 +249,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
                     if 'file_data' in file_item and 'filename' in file_item:
 
 
-                        file_path = await preserve_upload_file(
+                        file_path = preserve_upload_file(
                             file_item.get('file_data', ''),
                             file_item.get('filename', ''),
                             preserve_attachments
@@ -261,7 +262,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
                     file_item = item.get('image_url', {})
 
                     if 'url' in file_item:
-                        file_path = await preserve_upload_file(
+                        file_path = preserve_upload_file(
                             file_item.get('url', ''),
                             file_item.get('name', f'image_{len(attachments)}.jpg'),
                             preserve_attachments
@@ -298,7 +299,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
     return refined_messages
 
 
-async def refine_assistant_message(
+def refine_assistant_message(
     assistant_message: dict[str, str]
 ) -> dict[str, str]:
 

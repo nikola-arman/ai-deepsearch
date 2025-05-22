@@ -15,10 +15,9 @@ def wrap_thought(thought: str, thought_details: str = None, uuid_str: str = None
 
     if thought_details:
         template = f'''
-<i>{thought}</i>
 <details>
     <summary>
-    Details:
+    {thought}
     </summary>
     <p>
     {thought_details}
@@ -26,9 +25,7 @@ def wrap_thought(thought: str, thought_details: str = None, uuid_str: str = None
 </details>
 '''
     else:
-        template = f'''
-<i>{thought}</i>
-'''
+        template = f'''\n<pre>\n{thought}\n</pre>\n'''
 
     return ChatCompletionStreamResponse(
         id=uuid_str,
@@ -39,7 +36,7 @@ def wrap_thought(thought: str, thought_details: str = None, uuid_str: str = None
             dict(
                 index=0,
                 delta=dict(
-                    reasoning_content=template,
+                    content=template,
                     role='tool'
                 ),
             )
@@ -131,3 +128,21 @@ def get_url_domain(url: str) -> str:
         url = url.split('https://')[1]
     url = url.split('/')[0]
     return url
+
+
+def wrap_chunk(uuid: str, raw: str, role: str = 'assistant') -> ChatCompletionStreamResponse:
+    return ChatCompletionStreamResponse(
+        id=uuid,
+        object='chat.completion.chunk',
+        created=int(time.time()),
+        model='unspecified',
+        choices=[
+            dict(
+                index=0,
+                delta=dict(
+                    content=raw,
+                    role=role
+                )
+            )
+        ]
+    )

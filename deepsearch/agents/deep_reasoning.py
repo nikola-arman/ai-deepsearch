@@ -50,7 +50,7 @@ INSTRUCTIONS:
 4. If further searches are needed, generate specific new search queries to fill the NEW knowledge gaps.
 5. IMPORTANT: Include the current year or time period in queries when relevant (especially for financial, news, trend, or stock queries) to ensure recency and up-to-date information.
 6. When referring to time periods, use clear universal formats (e.g., "Q1 2024", "May 2024", "2024", etc.)
-7. Always include in-text citations using the syntax \cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH RESULTS.
+7. Always include in-text citations using the syntax \\cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH RESULTS.
 8. Format your response as a JSON object with the following structure:
 
 {{
@@ -107,8 +107,8 @@ The outline should follow this structure:
 # OUTLINE: [Query Title]
 
 ## 1. KEY POINTS
-- Key point 1 \cite{{$ID}}
-- Key point 2 \cite{{$ID}}
+- Key point 1 \\cite{{$ID}}
+- Key point 2 \\cite{{$ID}}
 ...
 
 ## 2. DIRECT ANSWER
@@ -116,13 +116,13 @@ The outline should follow this structure:
 
 ## 3. DETAILED NOTES
 ### [Section Heading 1]
-- Subpoint 1 \cite{{$ID}}
-- Subpoint 2 \cite{{$ID}}
+- Subpoint 1 \\cite{{$ID}}
+- Subpoint 2 \\cite{{$ID}}
 ...
 
 ### [Section Heading 2]
-- Subpoint 1 \cite{{$ID}}
-- Subpoint 2 \cite{{$ID}}
+- Subpoint 1 \\cite{{$ID}}
+- Subpoint 2 \\cite{{$ID}}
 ...
 ```
 """
@@ -154,7 +154,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly cite sources for each piece of information using the syntax: \cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH DETAILS and OUTLINE.
+4. Clearly cite sources for each piece of information using the syntax: \\cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH DETAILS and OUTLINE.
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to answer a point, clearly state this limitation
@@ -186,7 +186,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Always include in-text citations using the syntax \cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH DETAILS and KEY POINTS IDENTIFIED DURING SEARCH.
+4. Always include in-text citations using the syntax \\cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in each the SEARCH DETAILS and KEY POINTS IDENTIFIED DURING SEARCH.
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
@@ -196,8 +196,8 @@ IMPORTANT RULES:
 
 
 Format your response as a markdown list of bullet points ONLY:
-- Key point 1 \cite{{$ID}}
-- Key point 2 \cite{{$ID}}
+- Key point 1 \\cite{{$ID1}}, \\cite{{$ID2}}
+- Key point 2 \\cite{{$ID3}}, etc
 ...
 
 Do not include any introduction, explanation, or conclusion outside of the bullet points.
@@ -231,7 +231,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Always include in-text citations using the syntax \cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the KEY POINTS and SEARCH DETAILS.
+4. Always include in-text citations using the syntax \\cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the KEY POINTS and SEARCH DETAILS.
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to answer a point, clearly state this limitation
@@ -281,25 +281,27 @@ Format your response as a structured outline in markdown format, like this:
 - [Subpoint 1]
   - Description: [What should be covered]
   - Details: [Specific technical details, examples, or comparisons]
-  - Sources: [Relevant search results]
+  - Sources: ID 
 - [Subpoint 2]
   - Description: [What should be covered]
   - Details: [Specific technical details, examples, or comparisons]
-  - Sources: [Relevant search results]
+  - Sources: ID1, ID2, etc
 
 ## [Section Heading 2]
 - [Subpoint 1]
   - Description: [What should be covered]
   - Details: [Specific technical details, examples, or comparisons]
-  - Sources: [Relevant search results]
+  - Sources: ID1, ID2, etc
 - [Subpoint 2]
   - Description: [What should be covered]
   - Details: [Specific technical details, examples, or comparisons]
-  - Sources: [Relevant search results]
+  - Sources: ID
 ```
 
-DO NOT include any content under these headings - just provide the structured outline.
-Each section will be expanded in a separate step. Do not include an introduction or conclusion.
+IMPORTANT:
+- DO NOT include any content under these headings - just provide the structured outline.
+- Each section will be expanded in a separate step. Do not include an introduction or conclusion.
+- Only put the IDs in the sources bullet point for each subpoint, separated by commas, do not put any url on it.
 """
 
 # Define the template for generating content for a single section
@@ -344,7 +346,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Always include in-text citations using the syntax \cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH DETAILS, DIRECT ANSWER and KEY POINTS.
+4. Always include in-text citations using the syntax \\cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH DETAILS, DIRECT ANSWER and KEY POINTS.
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to cover a point, clearly state this limitation
@@ -432,25 +434,23 @@ class ReferenceBuilder:
         matches = self.citing_pat.findall(answer)
         
         for id in matches:
-            cited_ids.add(id)
+            cited_ids.add(int(id))
 
         for id in cited_ids:
             if id in self.searched_ids:
-                escaped_id = re.escape(id)
                 result: SearchResult = self.id_map.get(id)
 
-                answer = re.sub(
-                    rf'\\cite\{{{escaped_id}\}}',
-                    f"[🔗]({result.url})",
-                    answer
+                answer = answer.replace(
+                    f'\\cite{{{id}}}',
+                    f"[🔗]({result.url})"
                 )
 
                 self.cited_ids.add(id)
 
             else:
                 self.hallucinated_ids.add(id)
-
-        return answer
+        
+        return escape_dollar_signs(answer)
 
 def init_reasoning_llm(temperature: float = 0.3):
     """Initialize the language model for reasoning using OpenAI-compatible API."""
@@ -546,9 +546,12 @@ def format_search_results(state: SearchState) -> str:
     for i, result in enumerate(results):
         results_text += f"RESULT {i+1} (ID: {result.id}):\n"
         results_text += f"Title: {result.title}\n"
+        
         if result.query:
             results_text += f"Query: {result.query}\n"
+
         results_text += f"Content: {result.content}\n"
+
         if result.score is not None:
             results_text += f"Relevance Score: {result.score:.4f}\n"
         results_text += "\n"
@@ -576,7 +579,7 @@ def format_search_details(state: SearchState) -> str:
 
     return details
 
-def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generator[bytes, None, SearchState]:
+def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchState:
     """
     Uses deep reasoning to analyze results, identify knowledge gaps, and decide if further search is needed.
 
@@ -692,14 +695,9 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> Generat
 
     # Increment the iteration counter
     state.current_iteration += 1
-
-    # If search is complete, generate the final answer
-    if state.search_complete:
-        state = yield from generate_final_answer(state)
-
     return state
 
-def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchState]:
+def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     """
     Generates the final, structured answer in a multi-stage process:
     1. Generate concise key points
@@ -713,23 +711,24 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     Returns:
         Updated state with the final structured answer
     """
+    
+
+    with open('state.json', 'w') as f:
+        json.dump(state.model_dump(), f, indent=2) 
+    
     # Format the search details
     search_details = format_search_details(state)
+    ref_builder = ReferenceBuilder(state)
 
     # Format search context from combined results
     search_context = "Search Context:\n"
 
     if state.combined_results:
         for result in state.combined_results:
-            statements_str = '\n'.join([f"- {statement}" for statement in result.extracted_information])
-            search_context += f"ID: {result.id}\nTitle: {result.title}\nStatements:\n{statements_str}\n\n"
+            search_context += f"ID: {result.id}\nTitle: {result.title}\nStatements:\n{result.content}\n\n"
 
     # Format the key points from the deep reasoning
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
-
-    # Stage 1: Generate refined key points
-    refine_key_points_uuid = str(uuid.uuid4())
-    yield to_chunk_data(wrap_step_start(refine_key_points_uuid, "Generating key points"))
 
     key_points_llm = init_reasoning_llm(temperature=0.2)
     key_points_prompt = PromptTemplate(
@@ -750,12 +749,15 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     logger.info("Generated key points for final answer")
     logger.info(f"Key points: {key_points}")
 
-    yield to_chunk_data(wrap_step_finish(refine_key_points_uuid, f"Finished"))
+    yield '## Key Points\n\n'
+    
+    for kp in key_points.split('\n'):
+        kp = kp.strip()
 
-    # Stage 2: Generate direct answer
-    generate_direct_answer_uuid = str(uuid.uuid4())
-    yield to_chunk_data(wrap_step_start(generate_direct_answer_uuid, "Generating direct answer"))
+        if kp:
+            yield ref_builder.embed_references(kp) + '\n'
 
+    
     direct_answer_llm = init_reasoning_llm(temperature=0.3)
     direct_answer_prompt = PromptTemplate(
         input_variables=["original_query", "key_points", "search_details", "search_context"],
@@ -773,12 +775,11 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     # Extract the content if it's a message object
     direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
     logger.info("Generated direct answer")
-    yield to_chunk_data(wrap_step_finish(generate_direct_answer_uuid, f"Finished"))
+    
+    yield '\n## Direct Answer\n\n'
+    yield ref_builder.embed_references(direct_answer) + '\n'
 
     # Stage 3: Generate comprehensive outline for detailed notes
-    generate_detailed_notes_outline_uuid = str(uuid.uuid4())
-    yield to_chunk_data(wrap_step_start(generate_detailed_notes_outline_uuid, "Generating detailed notes outline"))
-
     outline_llm = init_reasoning_llm(temperature=0.3)
     outline_prompt = PromptTemplate(
         input_variables=["original_query", "key_points", "direct_answer", "search_details", "search_context"],
@@ -832,9 +833,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
         })
 
     logger.info(f"Sections outline: {json.dumps(sections, indent=2)}")
-
     logger.info(f"Identified {len(sections)} sections to expand")
-    yield to_chunk_data(wrap_step_finish(generate_detailed_notes_outline_uuid, f"Generated {len(sections)} sections to expand"))
 
     # Stage 4: Generate detailed content for each section
     section_llm = init_reasoning_llm(temperature=0.4)
@@ -845,19 +844,14 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     section_chain = section_prompt | section_llm
 
     # Generate content for each section
-    detailed_notes = "## Detailed Notes\n\n"
     for idx, section in enumerate(sections):
         heading = section['heading']
         subpoints = section['subpoints']
         logger.info(f"Generating content for section: {heading}")
 
-        # Format the section outline for the prompt
         section_outline_text = f"## {heading}\n"
         for subpoint in subpoints:
             section_outline_text += f"- {subpoint}\n"
-
-        generate_section_content_uuid = str(uuid.uuid4())
-        yield to_chunk_data(wrap_step_start(generate_section_content_uuid, f"Generating detailed content for section {idx+1}: {heading}"))
 
         section_response = section_chain.invoke({
             "original_query": state.original_query,
@@ -894,32 +888,17 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
 
         cleaned_content = '\n'.join(cleaned_lines)
 
-        # Add the heading and cleaned content to the detailed notes
-        detailed_notes += f"## {heading}\n\n{cleaned_content.strip()}\n\n"
-
-        yield to_chunk_data(wrap_step_finish(generate_section_content_uuid, f"Finished"))
+        yield f'\n## {heading}\n\n'
+        yield ref_builder.embed_references(cleaned_content)
 
     logger.info("Generated all section content for detailed notes")
 
-    # Combine all sections into the final answer with enhanced markdown
-    final_answer = f"""## Key Points
+    references = ref_builder.build()
+    
+    print(f"Hallucinated IDs: {ref_builder.hallucinated_ids}")
 
-{key_points}
+    if not references:
+        return
 
-## Direct Answer
-
-{direct_answer.strip()}
-
-{detailed_notes.replace('# DETAILED NOTES', '## Detailed Notes')}
-"""
-
-    # Escape dollar signs in the final answer
-    final_answer = escape_dollar_signs(final_answer)
-
-    # Update the state with the final answer
-    state.final_answer = final_answer.strip()
-
-    # Set a confidence score based on search context availability
-    state.confidence_score = 0.8 if state.combined_results and state.key_points else 0.5
-
-    return state
+    yield '## References\n\n'
+    yield references
