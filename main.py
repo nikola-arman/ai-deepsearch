@@ -63,8 +63,15 @@ async def main():
 
     print("Welcome to the chat! Ctrl+C to exit.")
     
+    user_messages = []
+    user_messages_it = iter(user_messages)
+    
     while True:
-        user_input = input("You: ")
+        user_input = next(user_messages_it, None)
+        
+        if not user_input:
+            user_input = input("You: ")
+        
         messages.append({"role": "user", "content": user_input})
         assistant_message = ''
 

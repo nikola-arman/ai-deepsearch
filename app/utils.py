@@ -1,6 +1,8 @@
 import os
 
 from pydantic import BaseModel
+import datetime
+import base64
 
 os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
@@ -35,15 +37,6 @@ def get_conversation_summary_prompt(conversation: list[dict[str, str]]) -> str:
 
 
 def get_conversation_summary(conversation: list[dict[str, str]]) -> str:
-    if len(conversation) < 5:
-        return "\n\n".join([
-            "{role}: {content}".format(
-                role=message['role'], 
-                content=str(message['content'])
-            )
-            for message in conversation]
-        )
-
     prompt = get_conversation_summary_prompt(conversation)
 
     messages = [
@@ -173,3 +166,143 @@ def curly_brackets_repair_json(text: str) -> dict:
     content = text[start:end]
 
     return repair_json(content, return_objects=True)
+
+async def preserve_upload_file(file_data_uri: str, file_name: str, preserve_attachments: bool = False) -> str:
+    os.makedirs(os.path.join(os.getcwd(), 'uploads'), exist_ok=True)
+
+    file_data_base64 = file_data_uri.split(',')[-1]
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+
+    try:
+        file_path = os.path.join(os.getcwd(), 'uploads', f"{timestamp}_{file_name}")
+
+        if not preserve_attachments:
+            return file_path
+
+        file_data = base64.b64decode(file_data_base64)
+
+        with open(file_path, 'wb') as f:
+            f.write(file_data)
+
+        return file_path
+    except Exception as e:
+        logger.error(f"Failed to preserve upload file: {e}")
+        return None
+
+async def get_attachments(content: list[dict[str, str]]) -> list[str]:
+    attachments = []
+
+    if isinstance(content, str):
+        return []
+
+    for item in content:
+        logger.info(f"ITEM: {item.keys()}")
+
+        if item.get('type', 'undefined') == 'file':
+            file = item.get('file')
+            logger.info(f"FILE: {file.keys()}")
+            data = file.get('file_data')
+            filename = file.get('filename')
+
+            if data and filename:
+                attachments.append((data, filename))
+
+        elif item.get('type', 'undefined') == 'image_url':
+            image_url = item.get('image_url')
+            logger.info(f"IMAGE URL: {image_url.keys()}")
+            name = image_url.get('name')
+            url = image_url.get('url')
+
+            if url and name:
+                attachments.append((url, name))
+
+    return attachments
+
+async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, preserve_attachments: bool = False) -> list[dict[str, str]]:
+    refined_messages = []
+
+    has_system_prompt = False
+
+    for message in messages:
+        message: dict[str, str]
+
+        if isinstance(message, dict) and message.get('role', 'undefined') == 'system':
+            message['content'] += f'\n{system_prompt}'
+            has_system_prompt = True
+            continue
+
+        if isinstance(message, dict) \
+            and message.get('role', 'undefined') == 'user' \
+            and isinstance(message.get('content'), list):
+
+            content = message['content']
+            text_input = ''
+            attachments = []
+
+            for item in content:
+                if item.get('type', 'undefined') == 'text':
+                    text_input += item.get('text') or ''
+
+                elif item.get('type', 'undefined') == 'file':
+                    file_item = item.get('file', {})
+                    if 'file_data' in file_item and 'filename' in file_item:
+
+
+                        file_path = await preserve_upload_file(
+                            file_item.get('file_data', ''),
+                            file_item.get('filename', ''),
+                            preserve_attachments
+                        )
+
+                        if file_path:
+                            attachments.append(file_path)
+
+                elif item.get('type', 'undefined') == 'image_url':
+                    file_item = item.get('image_url', {})
+
+                    if 'url' in file_item:
+                        file_path = await preserve_upload_file(
+                            file_item.get('url', ''),
+                            file_item.get('name', f'image_{len(attachments)}.jpg'),
+                            preserve_attachments
+                        )
+
+                        if file_path:
+                            attachments.append(file_path)
+
+            if len(attachments) > 0:
+                text_input += f'\nAttachments:\n'
+                for attachment in attachments:
+                    text_input += f'- {attachment}\n'
+
+            refined_messages.append({
+                "role": "user",
+                "content": text_input
+            })
+
+        else:
+            refined_messages.append(message)
+
+    if not has_system_prompt and system_prompt != "":
+        refined_messages.insert(0, {
+            "role": "system",
+            "content": system_prompt
+        })
+
+    if isinstance(refined_messages[-1], str):
+        refined_messages[-1] = {
+            "role": "user",
+            "content": refined_messages[-1] + '\n/no_think'
+        }
+
+    return refined_messages
+
+
+async def refine_assistant_message(
+    assistant_message: dict[str, str]
+) -> dict[str, str]:
+
+    if 'content' in assistant_message:
+        assistant_message['content'] = assistant_message['content'] or ""
+
+    return assistant_message
