@@ -674,42 +674,30 @@ class GeneratorValue:
         return self.value
 
 
+TOOL_CALLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "research",
+            "description": "Research on a scientific topic deeper and more comprehensive. Only use this tool when the user asks you to deep dive into a topic, or when you have already confirmed with the user. Otherwise, use search tool",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The topic to research on"
+                    }
+                },
+                "required": ["topic"],
+                "additionalProperties": False
+            },
+            "strict": True
+        }
+    }
+]
+
 def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, None]:
     assert len(messages) > 0, "received empty messages"
 
     conversation_summary = retry(get_conversation_summary)(messages)
-    research_intent = retry(detect_research_intent)(conversation_summary, messages[-1]["content"])
-
-    logger.info(f"Research intent: {research_intent.model_dump_json()}")
-
-    if not research_intent.is_research_request:
-        yield retry(reply_conversation)(conversation_summary, messages[-1]["content"])
-        return
-
-    query = research_intent.research_query
-    twitter_search_needed = True
-
-    logger.info("Always using deep search pipeline")
-    res = yield from run_deep_search_pipeline(
-        query,
-        twitter_search_needed=twitter_search_needed,
-    )
-
-    final_resp = res["answer"]
-
-    if len(res["sources"]) > 0:
-        unique_results = {}
-        for result in res["sources"]:
-            key = result["url"]
-            if key not in unique_results:
-                unique_results[key] = result
-
-        res["sources"] = list(unique_results.values())
-        logger.info(f"  Deduplicated to {len(res['sources'])} unique sources")
-
-        final_resp += "\n## References:\n"
-
-        for item in res["sources"]:
-            final_resp += "- [{title}]({url})\n".format(**item)
-
-    yield final_resp
+    

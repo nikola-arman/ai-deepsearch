@@ -35,6 +35,15 @@ def get_conversation_summary_prompt(conversation: list[dict[str, str]]) -> str:
 
 
 def get_conversation_summary(conversation: list[dict[str, str]]) -> str:
+    if len(conversation) < 5:
+        return "\n\n".join([
+            "{role}: {content}".format(
+                role=message['role'], 
+                content=str(message['content'])
+            )
+            for message in conversation]
+        )
+
     prompt = get_conversation_summary_prompt(conversation)
 
     messages = [

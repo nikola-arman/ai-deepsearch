@@ -267,9 +267,10 @@ def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indi
         faiss_results = []
         for original_idx, score in sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]:
             if original_idx < len(search_results):
-                result = search_results[original_idx]
+                result: SearchResult = search_results[original_idx]
                 faiss_results.append(
                     SearchResult(
+                        id=result.id,
                         title=result.title,
                         url=result.url,
                         content=result.content,

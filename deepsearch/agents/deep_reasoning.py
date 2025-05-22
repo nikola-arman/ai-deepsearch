@@ -1,4 +1,4 @@
-from typing import Generator, List, Dict, Any, Tuple
+from typing import Generator, List, Dict, Any, Tuple, Optional
 import os
 import json
 import logging
@@ -9,6 +9,8 @@ from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 import re
 import datetime  # Add import for datetime module
+from copy import deepcopy
+import re
 
 from deepsearch.magic import retry
 from deepsearch.models import SearchState, SearchResult
@@ -48,7 +50,8 @@ INSTRUCTIONS:
 4. If further searches are needed, generate specific new search queries to fill the NEW knowledge gaps.
 5. IMPORTANT: Include the current year or time period in queries when relevant (especially for financial, news, trend, or stock queries) to ensure recency and up-to-date information.
 6. When referring to time periods, use clear universal formats (e.g., "Q1 2024", "May 2024", "2024", etc.)
-7. Format your response as a JSON object with the following structure:
+7. Always include in-text citations using the syntax \cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH RESULTS.
+8. Format your response as a JSON object with the following structure:
 
 {{
   "key_points": ["point 1", "point 2", "..."],
@@ -104,8 +107,8 @@ The outline should follow this structure:
 # OUTLINE: [Query Title]
 
 ## 1. KEY POINTS
-- [Key point 1] ([Source Title](source_url))
-- [Key point 2] ([Source Title](source_url))
+- Key point 1 \cite{{$ID}}
+- Key point 2 \cite{{$ID}}
 ...
 
 ## 2. DIRECT ANSWER
@@ -113,13 +116,13 @@ The outline should follow this structure:
 
 ## 3. DETAILED NOTES
 ### [Section Heading 1]
-- [Subpoint 1] ([Source Title](source_url))
-- [Subpoint 2] ([Source Title](source_url))
+- Subpoint 1 \cite{{$ID}}
+- Subpoint 2 \cite{{$ID}}
 ...
 
 ### [Section Heading 2]
-- [Subpoint 1] ([Source Title](source_url))
-- [Subpoint 2] ([Source Title](source_url))
+- Subpoint 1 \cite{{$ID}}
+- Subpoint 2 \cite{{$ID}}
 ...
 ```
 """
@@ -151,7 +154,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly cite sources for each piece of information using markdown hyperlinks: ([Source Title](source_url))
+4. Clearly cite sources for each piece of information using the syntax: \cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH DETAILS and OUTLINE.
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to answer a point, clearly state this limitation
@@ -183,7 +186,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly cite sources for each point using markdown hyperlinks: ([Source Title](source_url))
+4. Always include in-text citations using the syntax \cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH DETAILS and KEY POINTS IDENTIFIED DURING SEARCH.
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
@@ -193,8 +196,8 @@ IMPORTANT RULES:
 
 
 Format your response as a markdown list of bullet points ONLY:
-- Key point 1 ([Source Title](source_url))
-- Key point 2 ([Source Title](source_url))
+- Key point 1 \cite{{$ID}}
+- Key point 2 \cite{{$ID}}
 ...
 
 Do not include any introduction, explanation, or conclusion outside of the bullet points.
@@ -228,7 +231,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly cite sources for each piece of information using markdown hyperlinks: ([Source Title](source_url))
+4. Always include in-text citations using the syntax \cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the KEY POINTS and SEARCH DETAILS.
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to answer a point, clearly state this limitation
@@ -341,7 +344,7 @@ IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
 2. DO NOT make up or infer information not present in the search results
 3. If information is missing or unclear, note it as a limitation rather than making assumptions
-4. Clearly cite sources for each piece of information using markdown hyperlinks: ([Source Title](source_url))
+4. Always include in-text citations using the syntax \cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH DETAILS, DIRECT ANSWER and KEY POINTS.
 5. Use direct quotes from search results when appropriate
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to cover a point, clearly state this limitation
@@ -377,8 +380,77 @@ Analyze the original query and break it down into 5 distinct, focused search que
 Format your response as a JSON array of 5 strings representing the search queries:
 ["query1", "query2", "query3", "query4", "query5"]
 
-CRITICAL: Your entire response MUST be a valid, parseable JSON array and nothing else. Do not include any text before or after the JSON array. Do not include any explanation, markdown formatting, or code blocks around the JSON. The response must start with '[' and end with ']' and contain only valid JSON.
+CRITICAL: 
+- Your entire response MUST be a valid, parseable JSON array and nothing else. 
+- Do not include any text before or after the JSON array. 
+- Do not include any explanation, markdown formatting, or code blocks around the JSON. 
+- The response must start with '[' and end with ']' and contain only valid JSON.
 """
+
+
+class ReferenceBuilder:
+    def __init__(self, state: SearchState):
+        self.state = state
+        self.citing_pat = re.compile(r'\\cite\{(\d+)\}')
+
+        self.sorted_results = sorted(
+            state.combined_results,
+            key=lambda x: x.score if x.score is not None else 0,
+            reverse=True
+        )
+
+        self.searched_ids = set([])
+        self.hallucinated_ids = set([])
+        self.cited_ids = set([])
+        self.id_map = {}
+
+        # Add each source with its title and URL
+        for i, result in enumerate(self.sorted_results):
+            self.searched_ids.add(result.id)
+            self.id_map[result.id] = result
+
+    def backtrack(self, id: str) -> Optional[str]:
+        result: SearchResult = self.id_map.get(id)
+
+        if result is None:
+            return None
+
+        return f"[{result.title}]({result.url})" if result.url else f"{result.title}"
+
+    def build(self) -> str:
+        return "\n".join(
+            f"{i + 1}. {self.backtrack(id)}"
+            for i, id
+            in enumerate(list(self.cited_ids))
+            if self.backtrack(id) is not None
+        )
+
+    def embed_references(self, _answer: str) -> str:
+        answer = deepcopy(_answer)
+        cited_ids = set([])
+
+        matches = self.citing_pat.findall(answer)
+        
+        for id in matches:
+            cited_ids.add(id)
+
+        for id in cited_ids:
+            if id in self.searched_ids:
+                escaped_id = re.escape(id)
+                result: SearchResult = self.id_map.get(id)
+
+                answer = re.sub(
+                    rf'\\cite\{{{escaped_id}\}}',
+                    f"[🔗]({result.url})",
+                    answer
+                )
+
+                self.cited_ids.add(id)
+
+            else:
+                self.hallucinated_ids.add(id)
+
+        return answer
 
 def init_reasoning_llm(temperature: float = 0.3):
     """Initialize the language model for reasoning using OpenAI-compatible API."""
@@ -472,9 +544,8 @@ def format_search_results(state: SearchState) -> str:
 
     # Format each result with the query that produced it (if available)
     for i, result in enumerate(results):
-        results_text += f"RESULT {i+1}:\n"
+        results_text += f"RESULT {i+1} (ID: {result.id}):\n"
         results_text += f"Title: {result.title}\n"
-        results_text += f"URL: {result.url}\n"
         if result.query:
             results_text += f"Query: {result.query}\n"
         results_text += f"Content: {result.content}\n"
@@ -651,15 +722,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     if state.combined_results:
         for result in state.combined_results:
             statements_str = '\n'.join([f"- {statement}" for statement in result.extracted_information])
-            search_context += f"Title: {result.title}\nURL: {result.url}\nStatements:\n{statements_str}\n\n"
-
-    # if state.verified_information:
-    #     search_context += f"Verified Information\n\n"
-    #     for result in state.verified_information["verified"]:
-    #         source = (f"{result['title']} ({result['source']})")
-    #         search_context += f"Statement: {result['statement']}\nSource: {source}\nVerification Notes: {result['notes']}\n\n"
-
-    print("search_context:", search_context)
+            search_context += f"ID: {result.id}\nTitle: {result.title}\nStatements:\n{statements_str}\n\n"
 
     # Format the key points from the deep reasoning
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
@@ -667,6 +730,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
     # Stage 1: Generate refined key points
     refine_key_points_uuid = str(uuid.uuid4())
     yield to_chunk_data(wrap_step_start(refine_key_points_uuid, "Generating key points"))
+
     key_points_llm = init_reasoning_llm(temperature=0.2)
     key_points_prompt = PromptTemplate(
         input_variables=["original_query", "search_details", "key_points", "search_context"],
@@ -701,7 +765,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
 
     direct_answer_response = direct_answer_chain.invoke({
         "original_query": state.original_query,
-        "key_points": key_points,
+        "key_points": initial_key_points,
         "search_details": search_details,
         "search_context": search_context
     })
@@ -724,7 +788,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
 
     outline_response = outline_chain.invoke({
         "original_query": state.original_query,
-        "key_points": key_points,
+        "key_points": initial_key_points,
         "direct_answer": direct_answer,
         "search_details": search_details,
         "search_context": search_context
@@ -797,7 +861,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, SearchSt
 
         section_response = section_chain.invoke({
             "original_query": state.original_query,
-            "key_points": key_points,
+            "key_points": initial_key_points,
             "direct_answer": direct_answer,
             "search_details": search_details,
             "section_heading": heading,

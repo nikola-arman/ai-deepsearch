@@ -19,9 +19,11 @@ def sanitize_content(content) -> str:
         # For any other type, convert to string
         return str(content)
 
+import uuid
 
 class SearchResult(BaseModel):
     """Represents a single search result."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4())[-4:])
     title: str
     url: str
     content: str
@@ -34,10 +36,16 @@ class SearchResult(BaseModel):
     @classmethod
     def validate_content(cls, data):
         """Ensure content is always a string."""
-        if isinstance(data, dict) and 'content' in data:
-            data['content'] = sanitize_content(data['content'])
-        return data
+        if isinstance(data, dict):
+            if 'content' in data:
+                data['content'] = sanitize_content(data['content'])
 
+        return data
+    
+    @model_validator(mode='after')
+    def validate_id(self):
+        self.id = hash(self.url)[-4:]
+        return self
 
 class SearchState(BaseModel):
     """State for the search process."""

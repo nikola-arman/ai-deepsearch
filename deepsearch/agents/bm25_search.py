@@ -71,18 +71,26 @@ def bm25_search(query: str, bm25, valid_indices: List[int], search_results: List
 
         # Get the top k results
         top_indices = scored_indices[:top_k]
+        
+        if len(top_indices) == 0:
+            logger.warning("No valid BM25 results found")
+            return []
 
         # Map the results back to search results with scores
         bm25_results = []
+        max_score, min_score = max([score for _, score in top_indices]), min([score for _, score in top_indices])
+
         for idx, score in top_indices:
             if idx < len(search_results):
                 result = search_results[idx]
+                norm_score = (score - min_score) / (max_score - min_score) if max_score != min_score else 0 
                 bm25_results.append(
                     SearchResult(
+                        id=result.id,
                         title=result.title,
                         url=result.url,
                         content=result.content,
-                        score=float(score)
+                        score=float(norm_score)
                     )
                 )
 
