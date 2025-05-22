@@ -84,6 +84,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
         if isinstance(message, dict) and message.get('role', 'undefined') == 'system':
             message['content'] += f'\n{system_prompt}'
             has_system_prompt = True
+            refined_messages.append(message)
             continue
 
         if isinstance(message, dict) \
