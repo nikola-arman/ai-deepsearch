@@ -426,6 +426,19 @@ class ReferenceBuilder:
             in enumerate(list(self.cited_ids))
             if self.backtrack(id) is not None
         )
+        
+    def remove_hallucinations(self, _answer: str) -> str:
+        answer = deepcopy(_answer)
+        matches = self.citing_pat.findall(answer)
+
+        for id in matches:
+            if int(id) not in self.searched_ids:
+                answer = answer.replace(
+                    f'\\cite{{{id}}}',
+                    f""
+                )
+
+        return answer
 
     def embed_references(self, _answer: str) -> str:
         answer = deepcopy(_answer)
@@ -450,7 +463,7 @@ class ReferenceBuilder:
             else:
                 self.hallucinated_ids.add(id)
         
-        return escape_dollar_signs(answer)
+        return escape_dollar_signs(self.remove_hallucinations(answer))
 
 def init_reasoning_llm(temperature: float = 0.3):
     """Initialize the language model for reasoning using OpenAI-compatible API."""
@@ -729,6 +742,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
     # Format the key points from the deep reasoning
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
+    initial_key_points = ref_builder.remove_hallucinations(initial_key_points)
 
     key_points_llm = init_reasoning_llm(temperature=0.2)
     key_points_prompt = PromptTemplate(
