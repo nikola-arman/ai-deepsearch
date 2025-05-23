@@ -13,19 +13,16 @@ def wrap_thought(thought: str, thought_details: str = None, uuid_str: str = None
     if uuid_str is None:
         uuid_str = str(uuid.uuid4())
 
-    if thought_details:
-        template = f'''
+    template = f'''
 <details>
     <summary>
     {thought}
     </summary>
     <p>
-    {thought_details}
+    {thought_details or ""}
     </p>
 </details>
 '''
-    else:
-        template = f'''\n<pre>\n{thought}\n</pre>\n'''
 
     return ChatCompletionStreamResponse(
         id=uuid_str,

@@ -81,7 +81,7 @@ def sanitize_text_for_embedding(text):
         return str(text)
 
 
-def chunk_text(text: str, max_length: int = 1000) -> List[str]:
+def chunk_text(text: str, max_length: int = 2400) -> List[str]:
     """Split text into chunks of approximately max_length tokens.
 
     Args:
@@ -100,6 +100,7 @@ def chunk_text(text: str, max_length: int = 1000) -> List[str]:
     current_length = 0
 
     for sentence in sentences:
+        sentence = sentence.strip()[:max_length]
         sentence_length = len(sentence)
 
         if current_length + sentence_length <= max_length:

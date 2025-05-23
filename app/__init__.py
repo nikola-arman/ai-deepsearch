@@ -525,9 +525,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
             _args = json.loads(call.function.arguments)
 
             if _name == 'research':
-                yield to_chunk_data(
-                    wrap_thought(f'Start researching on {_args["topic"]}\n')
-                )
+                yield to_chunk_data(wrap_thought(f'Start researching on {_args["topic"]}'))
 
                 for chunk in run_deep_search_pipeline(
                     _args['topic'],
