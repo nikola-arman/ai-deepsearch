@@ -27,7 +27,7 @@ class SearchResult(BaseModel):
     title: str
     url: str
     content: str
-    score: Optional[float] = None
+    score: Optional[float] = Field(default=0.0)
     query: Optional[str] = None  # Track which query generated this result    
     extracted_information: Optional[List[str]] = None
     is_url_credible: Optional[bool] = None
@@ -39,6 +39,12 @@ class SearchResult(BaseModel):
         if isinstance(data, dict):
             if 'content' in data:
                 data['content'] = sanitize_content(data['content'])
+                
+            if 'score' in data:
+                try:
+                    data['score'] = float(data['score'])
+                except ValueError:
+                    data['score'] = 0.0
 
         return data
     

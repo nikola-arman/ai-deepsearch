@@ -400,16 +400,32 @@ def run_deep_search_pipeline(
             # Deduplicate combined results by URL
             if state.combined_results:
                 unique_results = {}
+
                 for result in state.combined_results:
-                    
-                    if result.score < 0.3:
+
+                    if isinstance(result.score, float) and result.score < 0.3:
                         continue
-                    
+
                     # Keep the highest scoring result for each URL
                     key = result.url + "\n" + result.content
+
                     if key not in unique_results or (result.score is not None and
                         (unique_results[key].score is None or result.score > unique_results[key].score)):
                         unique_results[key] = result
+
+                if len(unique_results) < 5:
+                    need = 5 - len(unique_results)
+                    
+                    for result in state.combined_results:
+                        if result.score is None:
+                            key = result.url + "\n" + result.content
+
+                            if key not in unique_results:
+                                unique_results[key] = result
+                                need -= 1 
+                                
+                        if not need:
+                            break
 
                 state.combined_results = list(unique_results.values())
                 logger.info(f"  Deduplicated to {len(state.combined_results)} unique results")
@@ -431,6 +447,10 @@ def run_deep_search_pipeline(
 
         logger.info("Generating final answer...")
         try:
+            if state.final_answer is not None:
+                yield state.final_answer
+                return
+
             from deepsearch.agents.deep_reasoning import generate_final_answer
 
             for msg in generate_final_answer(state):

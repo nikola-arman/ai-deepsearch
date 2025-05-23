@@ -429,7 +429,9 @@ class ReferenceBuilder:
         
     def remove_hallucinations(self, _answer: str) -> str:
         answer = deepcopy(_answer)
-        matches = self.citing_pat.findall(answer)
+
+        another_pat = re.compile(r'\\cite\{(.+)\}')
+        matches = self.citing_pat.findall(answer) + another_pat.findall(answer)
 
         for id in matches:
             if int(id) not in self.searched_ids:
@@ -914,5 +916,5 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     if not references:
         return
 
-    yield '## References\n\n'
+    yield '\n## References\n\n'
     yield references
