@@ -395,7 +395,6 @@ def is_xray_image(img_path: str) -> bool:
         base_url=os.getenv('LLM_BASE_URL'),
         api_key=os.getenv('LLM_API_KEY')
     )
-    logger.info("Initialize the LLM client")
     out = client.chat.completions.create(
         model=os.getenv('LLM_MODEL_ID', 'local-model'),
         messages=[
@@ -439,9 +438,6 @@ def xray_diagnose_agent(
         - comment_by_doctor: str, the comment by doctor
     """
     is_xray = is_xray_image(img_path)
-
-    logger.info(f"Image path: {img_path}")
-    logger.info(f"Image mode: {Image.open(img_path).mode}")
 
     if not is_xray:
         client = OpenAI(

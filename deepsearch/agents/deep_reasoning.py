@@ -192,7 +192,7 @@ Create a well-rounded, complete direct answer to the original query. The answer 
 8. Use *italics* for emphasis when appropriate
 9. Always include in-text citations using the format "[Author/Article, Year](PMID: $PMID)" for each fact or claim. Where the PMID, Auhtor, Title, Year are all mentioned in the KEY POINTS.
 10. For each citation, include a brief context about the source (e.g., "A study by [Author/Article, Year](PMID: $PMID) found that...")
-11. Only cite the article if it is presented in the listed information above, do not invent citations. 
+11. Only cite the article if it is presented in the listed information above, do not invent citations.
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, or section markers.
@@ -263,7 +263,7 @@ Create rich, detailed content for the section "{section_heading}". Your content 
 8. Create subsections with ### heading level when needed to organize complex information
 9. Always include in-text citations using the format "[Author/Article, Year](PMID: $PMID)" for each fact or claim. Where the $PMID, Author, Title, Year are all mentioned in the KEY POINTS, DIRECT ANSWER.
 10. For each citation, include a brief context about the source (e.g., "A study by [Author/Article, Year](PMID: $PMID) found that...")
-11. Only cite the article if it is presented in the listed information above, do not invent citations. 
+11. Only cite the article if it is presented in the listed information above, do not invent citations.
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
@@ -769,9 +769,9 @@ class ReferenceBuilder:
     def embed_references(self, _answer: str) -> str:
         answer = deepcopy(_answer)
         cited_pmids = set([])
-        
+
         matches = self.citing_pat.findall(answer)
-        
+
         for pmid in matches:
             cited_pmids.add(pmid)
 
@@ -825,7 +825,7 @@ def generate_final_answer_stream(
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
 
     # Stage 1: Generate refined key points
-    
+
     if detailed:
         key_points_llm = init_reasoning_llm(temperature=0.2)
         key_points_prompt = PromptTemplate(
@@ -886,8 +886,9 @@ def generate_final_answer_stream(
         else direct_answer_response
     )
 
-    answer = direct_answer + f"\n\nHere is the information for your concern. Do you want me to deep dive into it?"
-    yield ref_builder.embed_references(answer)
+    # answer = direct_answer + f"\n\nHere is the information for your concern. Do you want me to deep dive into it?"
+    # yield ref_builder.embed_references(answer)
+    yield ref_builder.embed_references(direct_answer)
 
     print('\n\nHallucinated PMIDs:', ref_builder.hallucinated_pmids)
 

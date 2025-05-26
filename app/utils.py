@@ -44,6 +44,7 @@ async def preserve_upload_file(file_data_uri: str, file_name: str, preserve_atta
         logger.error(f"Failed to preserve upload file: {e}")
         return None
 
+
 async def get_attachments(content: list[dict[str, str]]) -> list[str]:
     attachments = []
 
@@ -51,11 +52,9 @@ async def get_attachments(content: list[dict[str, str]]) -> list[str]:
         return []
 
     for item in content:
-        logger.info(f"ITEM: {item.keys()}")
 
         if item.get('type', 'undefined') == 'file':
             file = item.get('file')
-            logger.info(f"FILE: {file.keys()}")
             data = file.get('file_data')
             filename = file.get('filename')
 
@@ -64,7 +63,6 @@ async def get_attachments(content: list[dict[str, str]]) -> list[str]:
 
         elif item.get('type', 'undefined') == 'image_url':
             image_url = item.get('image_url')
-            logger.info(f"IMAGE URL: {image_url.keys()}")
             name = image_url.get('name')
             url = image_url.get('url')
 
@@ -72,6 +70,7 @@ async def get_attachments(content: list[dict[str, str]]) -> list[str]:
                 attachments.append((url, name))
 
     return attachments
+
 
 async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, preserve_attachments: bool = False) -> list[dict[str, str]]:
     refined_messages = []
@@ -102,8 +101,6 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
                 elif item.get('type', 'undefined') == 'file':
                     file_item = item.get('file', {})
                     if 'file_data' in file_item and 'filename' in file_item:
-
-
                         file_path = await preserve_upload_file(
                             file_item.get('file_data', ''),
                             file_item.get('filename', ''),
