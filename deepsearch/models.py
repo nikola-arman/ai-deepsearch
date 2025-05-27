@@ -42,8 +42,8 @@ class SearchResult(BaseModel):
                 
             if 'score' in data:
                 try:
-                    data['score'] = float(data['score'])
-                except ValueError:
+                    data['score'] = float(data['score'] or 0.0)
+                except Exception:
                     data['score'] = 0.0
 
         return data
