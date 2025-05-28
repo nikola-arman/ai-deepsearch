@@ -5,10 +5,13 @@ import base64
 from .models import ChatCompletionStreamResponse
 import time
 import json
-import uuid
 from typing import Any
 from PIL import Image
 from io import BytesIO
+import numpy as np
+
+
+logger = logging.getLogger(__name__)
 
 
 def heif_to_jpeg(file_data_uri: str) -> str:
@@ -20,7 +23,6 @@ def heif_to_jpeg(file_data_uri: str) -> str:
     img.save(buffer, format='JPEG')
     return buffer.getvalue()
 
-logger = logging.getLogger(__name__)
 
 async def preserve_upload_file(file_data_uri: str, file_name: str, preserve_attachments: bool = False) -> str:
     os.makedirs(os.path.join(os.getcwd(), 'uploads'), exist_ok=True)
@@ -275,9 +277,6 @@ Response:
         ]
     )
 
-import numpy as np
-from PIL import Image
-from io import BytesIO
 
 def image_to_base64_uri(image: np.ndarray) -> str:
     buffer = BytesIO()

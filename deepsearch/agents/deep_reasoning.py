@@ -890,7 +890,7 @@ def generate_final_answer_stream(
     # yield ref_builder.embed_references(answer)
     yield ref_builder.embed_references(direct_answer)
 
-    print('\n\nHallucinated PMIDs:', ref_builder.hallucinated_pmids)
+    # print('\n\nHallucinated PMIDs:', ref_builder.hallucinated_pmids)
 
     if not detailed:
         return
@@ -980,7 +980,7 @@ def generate_final_answer_stream(
         yield ref_builder.embed_references(cleaned_content)
 
     logger.info("Generated all section content for detailed notes")
-    print('\n\nHallucinated PMIDs:', ref_builder.hallucinated_pmids)
+    # print('\n\nHallucinated PMIDs:', ref_builder.hallucinated_pmids)s
 
     yield '\n'
     references = ref_builder.build()
