@@ -1,7 +1,7 @@
 from nikolasigmoid/py-agent-infra:latest
 
 copy requirements.txt requirements.txt
-run --mount=type=cache,target=/root/.cache/pip python -m pip install -r requirements.txt
+run python -m pip install -r requirements.txt
 
 copy app app
 copy deepsearch deepsearch
