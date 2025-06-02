@@ -447,7 +447,7 @@ def run_deep_search_pipeline(
 
         logger.info("Generating final answer...")
         try:
-            if state.final_answer is not None:
+            if state.final_answer:
                 yield state.final_answer
                 return
 

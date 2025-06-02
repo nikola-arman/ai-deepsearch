@@ -393,7 +393,6 @@ CRITICAL:
 class ReferenceBuilder:
     def __init__(self, state: SearchState):
         self.state = state
-        self.citing_pat = re.compile(r'\\cite\{(\d+)\}')
 
         self.sorted_results = sorted(
             state.combined_results,
@@ -403,7 +402,7 @@ class ReferenceBuilder:
 
         self.searched_ids = set([])
         self.hallucinated_ids = set([])
-        self.cited_ids = set([])
+        self.cited_ids: dict[int, int] = {} # id --> cited index
         self.id_map = {}
 
         # Add each source with its title and URL
@@ -420,52 +419,84 @@ class ReferenceBuilder:
         return f"[{result.title}]({result.url})" if result.url else f"{result.title}"
 
     def build(self) -> str:
+        xx = [(index, id) for id, index in self.cited_ids.items()]
+        xx.sort(key=lambda x: x[0])
+
         return "\n".join(
-            f"{i + 1}. {self.backtrack(id)}"
-            for i, id
-            in enumerate(list(self.cited_ids))
-            if self.backtrack(id) is not None
+            f"{i}. {self.backtrack(id)}"
+            for i, id in xx
         )
-        
+
     def remove_hallucinations(self, _answer: str) -> str:
         answer = deepcopy(_answer)
 
-        another_pat = re.compile(r'\\cite\{(.+)\}')
-        matches = self.citing_pat.findall(answer) + another_pat.findall(answer)
+        citing_pat = re.compile(r'\\cite\{(.*)\}')
+        matches = citing_pat.findall(answer)
 
-        for id in matches:
-            if int(id) not in self.searched_ids:
+        for cite_text in matches:
+            numbers_pat = re.compile(r'\d+')
+            ids = numbers_pat.findall(cite_text)
+            intext_citation = ''
+
+            for id in ids:
+                id = int(id)
+
+                if id in self.searched_ids:
+                    intext_citation += f'{id}, '
+
+            intext_citation = intext_citation.strip(', ')
+
+            if intext_citation:
                 answer = answer.replace(
-                    f'\\cite{{{id}}}',
+                    f'\\cite{{{cite_text}}}',
+                    f"\\cite{{{intext_citation}}}"
+                )
+
+            else:
+                answer = answer.replace(
+                    f'\\cite{{{cite_text}}}',
                     f""
                 )
 
-        return answer
+        return escape_dollar_signs(answer)
 
     def embed_references(self, _answer: str) -> str:
         answer = deepcopy(_answer)
-        cited_ids = set([])
 
-        matches = self.citing_pat.findall(answer)
+        citing_pat = re.compile(r'\\cite\{(.*)\}')
+        matches = citing_pat.findall(answer)
+
+        for cite_text in matches:
+            numbers_pat = re.compile(r'\d+')
+            ids = numbers_pat.findall(cite_text)
+            intext_citation = ''
         
-        for id in matches:
-            cited_ids.add(int(id))
+            for id in ids:
+                id = int(id)
 
-        for id in cited_ids:
-            if id in self.searched_ids:
-                result: SearchResult = self.id_map.get(id)
+                if id in self.searched_ids:
+                    result: SearchResult = self.id_map.get(id)
+                    idx = self.cited_ids.setdefault(id, len(self.cited_ids) + 1)
+                    intext_citation += f'[{idx}]({result.url}) '
 
+                else:
+                    self.hallucinated_ids.add(id)
+
+            intext_citation = intext_citation.strip()
+
+            if intext_citation:
                 answer = answer.replace(
-                    f'\\cite{{{id}}}',
-                    f"[🔗]({result.url})"
+                    f'\\cite{{{cite_text}}}',
+                    f"[{intext_citation}]"
                 )
 
-                self.cited_ids.add(id)
-
             else:
-                self.hallucinated_ids.add(id)
-        
-        return escape_dollar_signs(self.remove_hallucinations(answer))
+                answer = answer.replace(
+                    f'\\cite{{{cite_text}}}',
+                    f""
+                )
+
+        return escape_dollar_signs(answer)
 
 def init_reasoning_llm(temperature: float = 0.3):
     """Initialize the language model for reasoning using OpenAI-compatible API."""
@@ -729,7 +760,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     
 
     with open('state.json', 'w') as f:
-        json.dump(state.model_dump(), f, indent=2) 
+        f.write(json.dumps(state.model_dump(), indent=2, default=str))
     
     # Format the search details
     search_details = format_search_details(state)
