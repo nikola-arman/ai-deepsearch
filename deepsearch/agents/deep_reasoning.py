@@ -238,7 +238,7 @@ IMPORTANT RULES:
 8. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
 
 Your direct answer should be self-contained and provide a complete response to the original query.
-Do not include any headings, bullet points, or section markers.
+Do not include any headings, bullet points, final references listing, or section markers.
 """
 
 # Define the template for detailed notes generation
@@ -359,6 +359,8 @@ Start directly with the content. If you need subsections, use ### level headings
 
 Provide in-depth, authoritative content with specific facts, figures, and examples where possible,
 while strictly adhering to the information available in the search context and following the outline exactly.
+
+Do not list all references at the end of your answer, just put citations in-line.
 """
 
 # Define the template for initial query generation
@@ -477,12 +479,12 @@ class ReferenceBuilder:
                 if id in self.searched_ids:
                     result: SearchResult = self.id_map.get(id)
                     idx = self.cited_ids.setdefault(id, len(self.cited_ids) + 1)
-                    intext_citation += f'[{idx}]({result.url}) '
+                    intext_citation += f'[{idx}]({result.url}), '
 
                 else:
                     self.hallucinated_ids.add(id)
 
-            intext_citation = intext_citation.strip()
+            intext_citation = intext_citation.strip(", ")
 
             if intext_citation:
                 answer = answer.replace(
