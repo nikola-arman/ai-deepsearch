@@ -392,11 +392,11 @@ def is_xray_image(img_path: str) -> bool:
     system_prompt = 'you are classifying whether the image is a xray image or not. just answer "yes" or "no" in plain text.'
 
     client = OpenAI(
-        base_url=os.getenv('LLM_BASE_URL'),
-        api_key=os.getenv('LLM_API_KEY')
+        base_url=os.getenv('VLM_BASE_URL'),
+        api_key=os.getenv('VLM_API_KEY', 'not-needed')
     )
     out = client.chat.completions.create(
-        model=os.getenv('LLM_MODEL_ID', 'local-model'),
+        model=os.getenv('VLM_MODEL_ID', 'local-model'),
         messages=[
             {
                 'role': 'system',
@@ -441,8 +441,8 @@ def xray_diagnose_agent(
 
     if not is_xray:
         client = OpenAI(
-            base_url=os.getenv('LLM_BASE_URL'),
-            api_key=os.getenv('LLM_API_KEY')
+            base_url=os.getenv('VLM_BASE_URL'),
+            api_key=os.getenv('VLM_API_KEY', 'not-needed')
         )
 
         system_prompt = 'You are a healthcare master, you are reading and diagnosing an image for a user. Notice that the image can be a medical report, in-body, blood test report, skin, face, or other parts, and the problem can be lesions, fractures, etc. Keep the conversation concise. If it is medical or healthcare-related documents, or something like an in-body report, BMI report, prescription, etc, extract the content and summarize it. Otherwise, if the image is a body part, face, write a short medical diagnosis if something is wrong, or just answer "looking good!". Just  write diagnosis, no recommendation needed.'
@@ -454,7 +454,7 @@ def xray_diagnose_agent(
         image_uri = f'data:image/jpeg;base64,{base64.b64encode(b.getvalue()).decode("utf-8")}'
 
         comment_by_doctor = client.chat.completions.create(
-            model=os.getenv('LLM_MODEL_ID', 'local-model'),
+            model=os.getenv('VLM_MODEL_ID', 'local-model'),
             messages=[
                 {
                     'role': 'system',
