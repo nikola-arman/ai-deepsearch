@@ -3,6 +3,7 @@ import os
 from pydantic import BaseModel
 import datetime
 import base64
+import re
 
 os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL"))
@@ -307,3 +308,7 @@ def refine_assistant_message(
         assistant_message['content'] = assistant_message['content'] or ""
 
     return assistant_message
+
+def strip_thinking_content(content: str) -> str:
+    pat = re.compile(r"<thinking>.*?</thinking>", re.DOTALL | re.IGNORECASE)
+    return pat.sub("", content).strip()

@@ -452,9 +452,10 @@ def run_deep_search_pipeline(
                 return
 
             from deepsearch.agents.deep_reasoning import generate_final_answer
+            from .utils import strip_thinking_content
 
             for msg in generate_final_answer(state):
-                yield msg
+                yield strip_thinking_content(msg)
 
         except Exception as e:
             logger.error(f"  Error in final answer generation: {str(e)}", exc_info=True)
