@@ -311,4 +311,4 @@ def refine_assistant_message(
 
 def strip_thinking_content(content: str) -> str:
     pat = re.compile(r"<thinking>.*?</thinking>", re.DOTALL | re.IGNORECASE)
-    return pat.sub("", content).strip()
+    return pat.sub("", content).lstrip()
