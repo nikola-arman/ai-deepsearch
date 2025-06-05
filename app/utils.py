@@ -300,15 +300,15 @@ def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, pres
     return refined_messages
 
 
+def strip_thinking_content(content: str) -> str:
+    pat = re.compile(r"<thinking>.*?</thinking>", re.DOTALL | re.IGNORECASE)
+    return pat.sub("", content).lstrip()
+
 def refine_assistant_message(
     assistant_message: dict[str, str]
 ) -> dict[str, str]:
 
     if 'content' in assistant_message:
-        assistant_message['content'] = assistant_message['content'] or ""
+        assistant_message['content'] = strip_thinking_content(assistant_message['content'] or "")
 
     return assistant_message
-
-def strip_thinking_content(content: str) -> str:
-    pat = re.compile(r"<thinking>.*?</thinking>", re.DOTALL | re.IGNORECASE)
-    return pat.sub("", content).lstrip()
