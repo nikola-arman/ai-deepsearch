@@ -18,9 +18,7 @@ def wrap_thought(thought: str, thought_details: str = None, uuid_str: str = None
     <summary>
     {thought}
     </summary>
-    <p>
-    {thought_details or ""}
-    </p>
+
 </details>
 '''
 
