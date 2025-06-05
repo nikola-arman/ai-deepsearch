@@ -437,7 +437,7 @@ class ReferenceBuilder:
 
         for cite_text in matches:
             numbers_pat = re.compile(r'\d+')
-            ids = numbers_pat.findall(cite_text)
+            ids = set(numbers_pat.findall(cite_text))
             intext_citation = ''
 
             for id in ids:
@@ -470,7 +470,7 @@ class ReferenceBuilder:
 
         for cite_text in matches:
             numbers_pat = re.compile(r'\d+')
-            ids = numbers_pat.findall(cite_text)
+            ids = set(numbers_pat.findall(cite_text))
             intext_citation = ''
         
             for id in ids:
@@ -489,7 +489,7 @@ class ReferenceBuilder:
             if intext_citation:
                 answer = answer.replace(
                     f'\\cite{{{cite_text}}}',
-                    f"[{intext_citation}]"
+                    f"\\[{intext_citation}\\]"
                 )
 
             else:
