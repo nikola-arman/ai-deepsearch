@@ -222,11 +222,11 @@ def get_attachments(content: list[dict[str, str]]) -> list[str]:
 
 def strip_toolcall_noti(content: str) -> str:
     cleaned = re.sub(r"<details\b[^>]*>.*?</details>", "", content, flags=re.DOTALL | re.IGNORECASE)
-    return cleaned.strip()
+    return cleaned.lstrip(" \t")
 
 def strip_thinking_content(content: str) -> str:
     pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-    return pat.sub("", content).lstrip()
+    return pat.sub("", content).lstrip(" \t")
 
 def refine_chat_history(
     messages: list[dict[str, str]],
