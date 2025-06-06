@@ -925,7 +925,6 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     for idx, section in enumerate(sections):
         heading = section['heading']
         subpoints = section['subpoints']
-        logger.info(f"Generating content for section: {heading}")
 
         section_outline_text = f"## {heading}\n"
         for subpoint in subpoints:
@@ -935,6 +934,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         punctuations = string.punctuation + " \n\t"
 
         heading = heading.strip(punctuations)
+        logger.info(f"Generating content for section: {heading}")
 
         section_response = section_chain.invoke({
             "original_query": state.original_query,
