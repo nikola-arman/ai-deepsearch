@@ -360,6 +360,8 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
 
     loops = 0
 
+    # report = ''
+
     while completion.choices[0].message.tool_calls is not None and len(completion.choices[0].message.tool_calls) > 0:
         loops += 1
 
@@ -374,6 +376,16 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                     _args['topic'],
                     max_iterations=3,
                 ):
+                    # if isinstance(chunk, bytes):
+                    #     chunk_str = chunk.decode('utf-8')
+                    # else:
+                    #     chunk_str = str(chunk)
+                        
+                    # if "<action>" not in chunk_str:
+                    #     report += chunk_str
                     yield chunk
+
+                # with open('report.txt', 'w') as f:
+                #     f.write(report)
 
                 return
