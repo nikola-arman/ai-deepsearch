@@ -931,6 +931,11 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         for subpoint in subpoints:
             section_outline_text += f"- {subpoint}\n"
 
+        import string
+        punctuations = string.punctuation + " \n\t"
+
+        heading = heading.strip(punctuations)
+
         section_response = section_chain.invoke({
             "original_query": state.original_query,
             "key_points": initial_key_points,
@@ -967,7 +972,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
         cleaned_content = '\n'.join(cleaned_lines)
 
-        heading = ref_builder.embed_references(heading.strip("# \t"))
+        heading = ref_builder.embed_references(heading)
         yield f'\n## {heading}\n\n'
         logger.info(f"Cleaned content: {cleaned_content}")
         yield ref_builder.embed_references(cleaned_content)
