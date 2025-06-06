@@ -12,6 +12,8 @@ import datetime  # Add import for datetime module
 from copy import deepcopy
 import re
 
+import urllib
+
 from deepsearch.magic import retry
 from deepsearch.models import SearchState, SearchResult
 from deepsearch.utils import escape_dollar_signs
@@ -420,7 +422,10 @@ class ReferenceBuilder:
         if result is None:
             return None
 
-        return f"[{result.title}]({result.url})" if result.url else f"{result.title}"
+        url = urllib.parse.quote(result.url)
+        escaped_title = result.title.replace("[", "\\[").replace("]", "\\]")
+
+        return f"[{escaped_title}]({url})" if url else f"{result.title}"
 
     def build(self) -> str:
         xx = [(index, id) for id, index in self.cited_ids.items()]
@@ -483,7 +488,7 @@ class ReferenceBuilder:
                 if id in self.id_map:
                     result: SearchResult = self.id_map.get(id)
                     idx = self.cited_ids.setdefault(id, len(self.cited_ids) + 1)
-                    intext_citation += f'[{idx}]({result.url}), '
+                    intext_citation += f'[{idx}]({urllib.parse.quote(result.url)}), '
 
                 else:
                     self.hallucinated_ids.add(id)
