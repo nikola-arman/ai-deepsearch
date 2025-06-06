@@ -406,14 +406,12 @@ class ReferenceBuilder:
             reverse=True
         )
 
-        self.searched_ids = set([])
         self.hallucinated_ids = set([])
         self.cited_ids: dict[int, int] = {} # id --> cited index
         self.id_map = {}
 
         # Add each source with its title and URL
         for i, result in enumerate(self.sorted_results):
-            self.searched_ids.add(result.id)
             self.id_map[result.id] = result
 
     def backtrack(self, id: str) -> Optional[str]:
@@ -447,7 +445,7 @@ class ReferenceBuilder:
             for id in ids:
                 id = int(id)
 
-                if id in self.searched_ids:
+                if id in self.id_map:
                     intext_citation += f'{id}, '
 
             intext_citation = intext_citation.strip(', ')
@@ -480,7 +478,7 @@ class ReferenceBuilder:
             for id in ids:
                 id = int(id)
 
-                if id in self.searched_ids:
+                if id in self.id_map:
                     result: SearchResult = self.id_map.get(id)
                     idx = self.cited_ids.setdefault(id, len(self.cited_ids) + 1)
                     intext_citation += f'[{idx}]({result.url}), '
@@ -950,6 +948,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
         cleaned_content = '\n'.join(cleaned_lines)
 
+        heading = ref_builder.embed_references(heading.strip("# \t"))
         yield f'\n## {heading}\n\n'
         yield ref_builder.embed_references(cleaned_content)
 
