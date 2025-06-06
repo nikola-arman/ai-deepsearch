@@ -976,7 +976,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
     references = ref_builder.build()
     
-    print(f"Hallucinated IDs: {ref_builder.hallucinated_ids}")
+    logger.info(f"Hallucinated IDs: {ref_builder.hallucinated_ids}")
 
     if not references:
         return
