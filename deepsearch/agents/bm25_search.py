@@ -3,7 +3,6 @@ from rank_bm25 import BM25Okapi
 import re
 import logging
 from deepsearch.models import SearchState, SearchResult
-from deepsearch.utils import to_chunk_data, wrap_thought
 
 # Set up logging
 logger = logging.getLogger("deepsearch.bm25")

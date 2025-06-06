@@ -14,8 +14,12 @@ import re
 
 from deepsearch.magic import retry
 from deepsearch.models import SearchState, SearchResult
-from deepsearch.utils import to_chunk_data, wrap_step_finish, wrap_step_start, wrap_thought
 from deepsearch.utils import escape_dollar_signs
+
+
+def strip_thinking_content(content: str) -> str:
+    pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+    return pat.sub("", content).lstrip()
 
 # Set up logging
 logger = logging.getLogger("deepsearch.deep_reasoning")
@@ -547,6 +551,7 @@ def generate_initial_queries(original_query: str) -> List[str]:
 
     # Extract the content if it's a message object
     query_text = response.content if hasattr(response, 'content') else response
+    query_text = strip_thinking_content(query_text)
 
     # Clean up the response text
     query_text = query_text.strip()
@@ -699,6 +704,8 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     else:
         analysis_text = response
 
+    analysis_text = strip_thinking_content(analysis_text)
+
     def run_llm():
         analysis = json.loads(repair_json(analysis_text))
 
@@ -795,6 +802,8 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
     # Extract the content if it's a message object
     key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
+    key_points = strip_thinking_content(key_points)
+
     logger.info("Generated key points for final answer")
     logger.info(f"Key points: {key_points}")
 
@@ -823,6 +832,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
     # Extract the content if it's a message object
     direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
+    direct_answer = strip_thinking_content(direct_answer)
     logger.info("Generated direct answer")
     
     yield '\n## Direct Answer\n\n'
@@ -846,6 +856,8 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
     # Extract the content if it's a message object
     section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
+    section_outline = strip_thinking_content(section_outline)
+
     logger.info("Generated section outline for detailed notes")
     logger.info(f"Section outline: {section_outline}")
 
@@ -914,6 +926,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
         # Extract the content if it's a message object
         section_content = section_response.content if hasattr(section_response, 'content') else section_response
+        section_content = strip_thinking_content(section_content)
 
         # Process the content to remove any headings that match the current heading
         content_lines = section_content.split('\n')

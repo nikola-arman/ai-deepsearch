@@ -6,7 +6,7 @@ from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
 from deepsearch.models import SearchState
-from deepsearch.utils import escape_dollar_signs, to_chunk_data, wrap_thought
+from deepsearch.utils import escape_dollar_signs
 
 # Set up logging
 logger = logging.getLogger("deepsearch.reasoning")

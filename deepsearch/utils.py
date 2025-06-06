@@ -3,23 +3,19 @@ import json
 import uuid
 from .models_openai import ChatCompletionStreamResponse
 from pydantic import BaseModel
-from typing import Any
+from typing import Any, Optional
 
 def to_chunk_data(chunk: ChatCompletionStreamResponse) -> bytes:
     return ("data: " + json.dumps(chunk.model_dump()) + "\n\n").encode()
 
 
-def wrap_thought(thought: str, thought_details: str = None, uuid_str: str = None) -> ChatCompletionStreamResponse:
+def wrap_thought(thought: str, thought_details: str = None, uuid_str: Optional[str] = None) -> ChatCompletionStreamResponse:
     if uuid_str is None:
         uuid_str = str(uuid.uuid4())
 
     template = f'''
-<details>
-    <summary>
-    {thought}
-    </summary>
+<action>{thought}</action>
 
-</details>
 '''
 
     return ChatCompletionStreamResponse(

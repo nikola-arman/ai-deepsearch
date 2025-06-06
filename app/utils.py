@@ -301,7 +301,7 @@ def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, pres
 
 
 def strip_thinking_content(content: str) -> str:
-    pat = re.compile(r"<thinking>.*?</thinking>", re.DOTALL | re.IGNORECASE)
+    pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
     return pat.sub("", content).lstrip()
 
 def refine_assistant_message(

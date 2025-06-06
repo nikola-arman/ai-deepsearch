@@ -4,7 +4,6 @@ import os
 import logging
 import requests
 from deepsearch.models import SearchState, SearchResult
-from deepsearch.utils import to_chunk_data, wrap_thought
 
 # Set up logging
 logger = logging.getLogger("deepsearch.brave")
