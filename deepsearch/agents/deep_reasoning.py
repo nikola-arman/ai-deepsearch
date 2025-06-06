@@ -422,7 +422,7 @@ class ReferenceBuilder:
         if result is None:
             return None
 
-        url = urllib.parse.quote(result.url)
+        url = urllib.parse.quote(result.url, safe=":/?=")
         escaped_title = result.title.replace("[", "\\[").replace("]", "\\]")
 
         return f"[{escaped_title}]({url})" if url else f"{result.title}"
@@ -488,7 +488,7 @@ class ReferenceBuilder:
                 if id in self.id_map:
                     result: SearchResult = self.id_map.get(id)
                     idx = self.cited_ids.setdefault(id, len(self.cited_ids) + 1)
-                    intext_citation += f'[{idx}]({urllib.parse.quote(result.url)}), '
+                    intext_citation += f'[{idx}]({urllib.parse.quote(result.url, safe=":/?=")}), '
 
                 else:
                     self.hallucinated_ids.add(id)
