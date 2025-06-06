@@ -469,14 +469,16 @@ class ReferenceBuilder:
     def embed_references(self, _answer: str) -> str:
         answer = deepcopy(_answer)
 
-        citing_pat = re.compile(r'\\cite\{(.*)\}')
+        citing_pat = re.compile(r'\\cite\{([^\}]*)\}')
         matches = citing_pat.findall(answer)
+
+        logger.info(f"Matches: {matches}")
 
         for cite_text in matches:
             numbers_pat = re.compile(r'\d+')
             ids = set(numbers_pat.findall(cite_text))
             intext_citation = ''
-        
+
             for id in ids:
                 id = int(id)
 
@@ -597,7 +599,7 @@ def format_search_results(state: SearchState) -> str:
 
     # Format each result with the query that produced it (if available)
     for i, result in enumerate(results):
-        results_text += f"RESULT {i+1} (ID: {result.id}):\n"
+        results_text += f"ID: {result.id}\n"
         results_text += f"Title: {result.title}\n"
         
         if result.query:
@@ -688,25 +690,36 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     # Format the previous knowledge gaps
     formatted_previous_gaps = "None identified yet." if not state.historical_knowledge_gaps else "\n".join([f"- {gap}" for gap in state.historical_knowledge_gaps])
 
-    # Generate the analysis and reasoning
-    response = chain.invoke({
-        "original_query": state.original_query,
-        "iteration": state.current_iteration,
-        "search_results": formatted_results,
-        "previous_knowledge_gaps": formatted_previous_gaps,
-        "max_iterations": max_iterations,
-        "current_date": current_date
-    })
-
-    # Extract the content if it's a message object
-    if hasattr(response, 'content'):
-        analysis_text = response.content
-    else:
-        analysis_text = response
-
-    analysis_text = strip_thinking_content(analysis_text)
-
     def run_llm():
+        print("Analysis prompt:", json.dumps({ 
+            "prompt": reasoning_prompt.invoke({
+                "original_query": state.original_query,
+                "iteration": state.current_iteration,
+                "search_results": formatted_results,
+                "previous_knowledge_gaps": formatted_previous_gaps,
+                "max_iterations": max_iterations,
+                "current_date": current_date
+            }).model_dump()
+        }))
+
+        # Generate the analysis and reasoning
+        response = chain.invoke({
+            "original_query": state.original_query,
+            "iteration": state.current_iteration,
+            "search_results": formatted_results,
+            "previous_knowledge_gaps": formatted_previous_gaps,
+            "max_iterations": max_iterations,
+            "current_date": current_date
+        })
+
+        # Extract the content if it's a message object
+        if hasattr(response, 'content'):
+            analysis_text = response.content
+        else:
+            analysis_text = response
+
+        analysis_text = strip_thinking_content(analysis_text)
+
         analysis = json.loads(repair_json(analysis_text))
 
         # Update the state with the analysis results
@@ -767,12 +780,13 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         Updated state with the final structured answer
     """
     
-
     with open('state.json', 'w') as f:
-        f.write(json.dumps(state.model_dump(), indent=2, default=str))
+        json.dump(state.model_dump(), f, indent=2) 
     
     # Format the search details
     search_details = format_search_details(state)
+    logger.info(f"Search details: {search_details}")
+
     ref_builder = ReferenceBuilder(state)
 
     # Format search context from combined results
@@ -782,9 +796,14 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         for result in state.combined_results:
             search_context += f"ID: {result.id}\nTitle: {result.title}\nStatements:\n{result.content}\n\n"
 
+    logger.info(f"Search context: {search_context}")
+
     # Format the key points from the deep reasoning
     initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
+    logger.info(f"Initial key points: {initial_key_points}")
+
     initial_key_points = ref_builder.remove_hallucinations(initial_key_points)
+    logger.info(f"Initial key points after removing hallucinations: {initial_key_points}")
 
     key_points_llm = init_reasoning_llm(temperature=0.2)
     key_points_prompt = PromptTemplate(
@@ -951,6 +970,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         cleaned_content = '\n'.join(cleaned_lines)
 
         yield f'\n## {heading}\n\n'
+        logger.info(f"Cleaned content: {cleaned_content}")
         yield ref_builder.embed_references(cleaned_content)
 
     logger.info("Generated all section content for detailed notes")
