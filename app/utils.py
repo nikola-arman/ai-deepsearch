@@ -168,7 +168,7 @@ def curly_brackets_repair_json(text: str) -> dict:
 
     return repair_json(content, return_objects=True)
 
-async def preserve_upload_file(file_data_uri: str, file_name: str, preserve_attachments: bool = False) -> str:
+def preserve_upload_file(file_data_uri: str, file_name: str, preserve_attachments: bool = False) -> str:
     os.makedirs(os.path.join(os.getcwd(), 'uploads'), exist_ok=True)
 
     file_data_base64 = file_data_uri.split(',')[-1]
@@ -219,8 +219,24 @@ def get_attachments(content: list[dict[str, str]]) -> list[str]:
 
     return attachments
 
-def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, preserve_attachments: bool = False) -> list[dict[str, str]]:
+
+def strip_toolcall_noti(content: str) -> str:
+    cleaned = re.sub(r"<details\b[^>]*>.*?</details>", "", content, flags=re.DOTALL | re.IGNORECASE)
+    return cleaned.strip()
+
+def strip_thinking_content(content: str) -> str:
+    pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+    return pat.sub("", content).lstrip()
+
+def refine_chat_history(
+    messages: list[dict[str, str]],
+    system_prompt: str = '',
+    preserve_attachments: bool = False
+) -> list[dict[str, str]]:
     refined_messages = []
+
+    current_time_utc_str = datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    system_prompt += f'\nNote: Current time is {current_time_utc_str} UTC (only use this information when being asked or for searching purposes)'
 
     has_system_prompt = False
 
@@ -279,11 +295,16 @@ def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, pres
 
             refined_messages.append({
                 "role": "user",
-                "content": text_input
+                "content": strip_thinking_content(strip_toolcall_noti(text_input))
             })
 
         else:
-            refined_messages.append(message)
+            _message = {
+                "role": message.get('role', 'assistant'),
+                "content": strip_toolcall_noti(strip_thinking_content(message.get('content', '')))
+            }
+
+            refined_messages.append(_message)
 
     if not has_system_prompt and system_prompt != "":
         refined_messages.insert(0, {
@@ -300,9 +321,6 @@ def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, pres
     return refined_messages
 
 
-def strip_thinking_content(content: str) -> str:
-    pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-    return pat.sub("", content).lstrip()
 
 def refine_assistant_message(
     assistant_message: dict[str, str]
