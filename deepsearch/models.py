@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, model_validator
-
+import hashlib
 
 def sanitize_content(content) -> str:
     """Convert any content to a string appropriately."""
@@ -50,7 +50,7 @@ class SearchResult(BaseModel):
     
     @model_validator(mode='after')
     def validate_id(self):
-        self.id = hash(self.url) & 0xFFFFFF
+        self.id = int(hashlib.md5(self.url.encode()).hexdigest(), 16) & 0xFFFFFF
         return self
 
 class SearchState(BaseModel):
