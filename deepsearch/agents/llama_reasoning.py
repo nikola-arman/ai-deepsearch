@@ -158,7 +158,7 @@ def llama_reasoning_agent(state: SearchState) -> SearchState:
     else:
         answer = response
 
-    answer = escape_dollar_signs(answer)
+    # answer = escape_dollar_signs(answer)
    
     # Calculate confidence score
     confidence = calculate_confidence(answer)

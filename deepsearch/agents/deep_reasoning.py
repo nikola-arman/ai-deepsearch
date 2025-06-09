@@ -467,7 +467,8 @@ class ReferenceBuilder:
                     f""
                 )
 
-        return escape_dollar_signs(answer)
+        # return escape_dollar_signs(answer)
+        return answer
 
     def embed_references(self, _answer: str) -> str:
         answer = deepcopy(_answer)
@@ -507,7 +508,9 @@ class ReferenceBuilder:
                     f""
                 )
 
-        return escape_dollar_signs(answer)
+        # return escape_dollar_signs(answer)
+        return answer
+
 
 def init_reasoning_llm(temperature: float = 0.3):
     """Initialize the language model for reasoning using OpenAI-compatible API."""
