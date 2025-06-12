@@ -22,6 +22,7 @@ from deepsearch.agents import (
     brave_search_agent,
     information_extraction_agent,
     fact_checking_agent,
+    search_tavily
 )
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
 from app.utils import detect_research_intent, get_conversation_summary, reply_conversation
@@ -315,6 +316,25 @@ TOOL_CALLS = [
             },
             "strict": True
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_internet",
+            "description": "Search the internet for information on a topic. Only use this tool for simple questions that no need to deep dive into.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The query to search the internet for"
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False
+            },
+            "strict": True
+        }
     }
 ]
 
@@ -359,11 +379,10 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
     )
 
     loops = 0
-
     report = ''
 
     while completion.choices[0].message.tool_calls is not None and len(completion.choices[0].message.tool_calls) > 0:
-        loops += 1
+        loops += len(completion.choices[0].message.tool_calls)
 
         for call in completion.choices[0].message.tool_calls:
             _id, _name = call.id, call.function.name
@@ -389,3 +408,37 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                     f.write(report)
 
                 return
+            
+            elif _name == 'search_internet':
+                yield to_chunk_data(wrap_thought(f"Searching for {_args['query']}"))
+
+                try:
+                    res = search_tavily(_args['query']) 
+                except Exception as e:
+                    res = f"Error in search_internet: {str(e)}"
+
+                messages.append(
+                    {
+                        "role": "tool",
+                        "content": str(res),
+                        "tool_call_id": _id
+                    }
+                )
+
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            tools=TOOL_CALLS if loops < 5 else openai._types.NOT_GIVEN,
+            tool_choice="auto" if loops < 5 else openai._types.NOT_GIVEN,
+        )
+        
+        if completion.choices[0].message.content:
+            yield to_chunk_data(
+                wrap_chunk(
+                    response_uuid,
+                    completion.choices[0].message.content
+                )
+            )
+   
+        messages.append(refine_assistant_message(completion.choices[0].message.model_dump()))
+        

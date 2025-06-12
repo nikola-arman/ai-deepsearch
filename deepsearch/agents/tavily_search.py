@@ -99,3 +99,16 @@ def tavily_search_agent(state: SearchState) -> SearchState:
         state.tavily_results = []
 
     return state
+
+
+def search_tavily(query: str) -> List[SearchResult]:
+    """Search Tavily for a query."""
+    client = init_tavily_client()
+
+    search_response = client.search(
+        query=query,
+        search_depth="advanced",
+        max_results=10
+    )
+
+    return convert_tavily_results(search_response.get("results", []))
