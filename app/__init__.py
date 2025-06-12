@@ -24,7 +24,7 @@ from deepsearch.agents import (
     fact_checking_agent,
     search_tavily
 )
-from deepsearch.agents.deep_reasoning import init_reasoning_llm
+from deepsearch.agents.deep_reasoning import ReferenceBuilder, init_reasoning_llm
 from app.utils import detect_research_intent, get_conversation_summary, reply_conversation
 
 from json_repair import repair_json
@@ -282,7 +282,15 @@ def run_deep_search_pipeline(
 
         except Exception as e:
             logger.error(f"  Error in final answer generation: {str(e)}", exc_info=True)
-            yield "I ouldn't generate a comprehensive answer due to technical issues. Here's what I found: " + "\n".join([f"- {point}" for point in state.key_points])
+
+            ref_builder = ReferenceBuilder(state)
+            
+            points = []
+            for kp in state.key_points:
+                kp = kp.strip()
+                points.append(ref_builder.embed_references(kp))
+
+            yield "I couldn't generate a comprehensive answer due to technical issues. Here's what I found:\n" + "\n".join(f"- {point}" for point in points)
 
     except Exception as e:
         logger.error(f"  Error in final answer generation: {str(e)}", exc_info=True)
@@ -302,7 +310,7 @@ TOOL_CALLS = [
         "type": "function",
         "function": {
             "name": "research",
-            "description": "Research on a scientific topic deeper and more comprehensive. Only use this tool when the user asks you to deep dive into a topic, or when you have already confirmed with the user.",
+            "description": "Research on a topic deeper and more comprehensive. Only use this tool when the asked question requires real time knowledge to answer, or when the user asks you to deep dive into a topic, or when you have already confirmed with the user.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -317,25 +325,25 @@ TOOL_CALLS = [
             "strict": True
         }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_internet",
-            "description": "Search the internet for information on a topic. Only use this tool for simple questions that no need to deep dive into.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The query to search the internet for"
-                    }
-                },
-                "required": ["query"],
-                "additionalProperties": False
-            },
-            "strict": True
-        }
-    }
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "search_internet",
+    #         "description": "Search the internet for information on a topic. Only use this tool when the asked question can be quickly answered by a single search query, without the need to deep dive.",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "query": {
+    #                     "type": "string",
+    #                     "description": "The query to search the internet for"
+    #                 }
+    #             },
+    #             "required": ["query"],
+    #             "additionalProperties": False
+    #         },
+    #         "strict": True
+    #     }
+    # }
 ]
 
 from .utils import refine_chat_history, refine_assistant_message
@@ -416,6 +424,8 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                     res = search_tavily(_args['query']) 
                 except Exception as e:
                     res = f"Error in search_internet: {str(e)}"
+
+                logger.info(f"tavily search result: {res}")
 
                 messages.append(
                     {
