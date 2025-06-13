@@ -551,23 +551,23 @@ def generate_initial_queries(original_query: str) -> List[str]:
     # Create the chain
     chain = query_generator_prompt | llm
 
-    # Generate the search queries
-    response = chain.invoke({
-        "original_query": original_query,
-        "current_date": current_date
-    })
+    def get_and_parse_queries():
+        # Generate the search queries
+        response = chain.invoke({
+            "original_query": original_query,
+            "current_date": current_date
+        })
 
-    # Extract the content if it's a message object
-    query_text = response.content if hasattr(response, 'content') else response
-    query_text = strip_thinking_content(query_text)
+        # Extract the content if it's a message object
+        query_text = response.content if hasattr(response, 'content') else response
+        query_text = strip_thinking_content(query_text)
 
-    # Clean up the response text
-    query_text = query_text.strip()
-    # Remove any markdown code block markers
-    query_text = re.sub(r'^```json\s*', '', query_text)
-    query_text = re.sub(r'\s*```$', '', query_text)
+        # Clean up the response text
+        query_text = query_text.strip()
+        # Remove any markdown code block markers
+        query_text = re.sub(r'^```json\s*', '', query_text)
+        query_text = re.sub(r'\s*```$', '', query_text)
 
-    try:
         # Parse the JSON response
         queries = json.loads(repair_json(query_text))
 
@@ -576,16 +576,20 @@ def generate_initial_queries(original_query: str) -> List[str]:
             logger.info(f"Generated {len(queries)} initial search queries")
             for i, query in enumerate(queries):
                 logger.info(f"  Initial query {i+1}: {query}")
+            if len(queries) == 0:
+                raise ValueError("Query generator did not return any queries")
             return queries
         else:
-            logger.warning("Query generator did not return a proper list of strings")
-            # Fall back to using the original query
-            return [original_query]
+            raise ValueError(f"Query generator did not return a proper list of strings: {query_text}")
 
-    except json.JSONDecodeError:
-        logger.error(f"Failed to parse query generator JSON output: {query_text[:100]}...")
+    try:
+        queries = retry(get_and_parse_queries, max_retry=3, first_interval=2, interval_multiply=2)()
+        return queries
+    except Exception as e:
         # Fall back to using the original query
+        logger.error(f"Failed to get and parse queries: {e}")
         return [original_query]
+
 
 def format_search_results(state: SearchState) -> str:
     """Format the search results for the prompt."""
@@ -696,18 +700,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     # Format the previous knowledge gaps
     formatted_previous_gaps = "None identified yet." if not state.historical_knowledge_gaps else "\n".join([f"- {gap}" for gap in state.historical_knowledge_gaps])
 
-    def run_llm():
-        print("Analysis prompt:", json.dumps({ 
-            "prompt": reasoning_prompt.invoke({
-                "original_query": state.original_query,
-                "iteration": state.current_iteration,
-                "search_results": formatted_results,
-                "previous_knowledge_gaps": formatted_previous_gaps,
-                "max_iterations": max_iterations,
-                "current_date": current_date
-            }).model_dump()
-        }))
-
+    def analyze_search_results():
         # Generate the analysis and reasoning
         response = chain.invoke({
             "original_query": state.original_query,
@@ -756,7 +749,7 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
             logger.info(f"Reasoning: {analysis['reasoning']}")
     
     try:
-        retry(run_llm(), max_retry=3, first_interval=1, interval_multiply=1)
+        retry(analyze_search_results, max_retry=3, first_interval=2, interval_multiply=2)()
     except Exception as e:
         logger.error(f"Error analyzing search results: {e}")
         state.search_complete = True
@@ -818,17 +811,21 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     )
     key_points_chain = key_points_prompt | key_points_llm
 
-    key_points_response = key_points_chain.invoke({
-        "original_query": state.original_query,
-        "search_details": search_details,
-        "key_points": initial_key_points,
-        "search_context": search_context
-    })
+    def get_key_points():
+        key_points_response = key_points_chain.invoke({
+            "original_query": state.original_query,
+            "search_details": search_details,
+            "key_points": initial_key_points,
+            "search_context": search_context
+        })
 
-    # Extract the content if it's a message object
-    key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
-    key_points = strip_thinking_content(key_points)
+        # Extract the content if it's a message object
+        key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
+        key_points = strip_thinking_content(key_points)
 
+        return key_points
+
+    key_points = retry(get_key_points, max_retry=3, first_interval=2, interval_multiply=2)()
     logger.info("Generated key points for final answer")
     logger.info(f"Key points: {key_points}")
 
@@ -848,16 +845,21 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     )
     direct_answer_chain = direct_answer_prompt | direct_answer_llm
 
-    direct_answer_response = direct_answer_chain.invoke({
-        "original_query": state.original_query,
-        "key_points": initial_key_points,
-        "search_details": search_details,
-        "search_context": search_context
-    })
+    def get_direct_answer():
+        direct_answer_response = direct_answer_chain.invoke({
+            "original_query": state.original_query,
+            "key_points": initial_key_points,
+            "search_details": search_details,
+            "search_context": search_context
+        })
 
-    # Extract the content if it's a message object
-    direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
-    direct_answer = strip_thinking_content(direct_answer)
+        # Extract the content if it's a message object
+        direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
+        direct_answer = strip_thinking_content(direct_answer)
+
+        return direct_answer
+    
+    direct_answer = retry(get_direct_answer, max_retry=3, first_interval=2, interval_multiply=2)()
     logger.info("Generated direct answer")
     
     yield '\n## Direct Answer\n\n'
@@ -871,18 +873,22 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     )
     outline_chain = outline_prompt | outline_llm
 
-    outline_response = outline_chain.invoke({
-        "original_query": state.original_query,
-        "key_points": initial_key_points,
-        "direct_answer": direct_answer,
-        "search_details": search_details,
-        "search_context": search_context
-    })
+    def get_section_outline():
+        outline_response = outline_chain.invoke({
+            "original_query": state.original_query,
+            "key_points": initial_key_points,
+            "direct_answer": direct_answer,
+            "search_details": search_details,
+            "search_context": search_context
+        })
 
-    # Extract the content if it's a message object
-    section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
-    section_outline = strip_thinking_content(section_outline)
+        # Extract the content if it's a message object
+        section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
+        section_outline = strip_thinking_content(section_outline)
+        
+        return section_outline
 
+    section_outline = retry(get_section_outline, max_retry=3, first_interval=2, interval_multiply=2)()
     logger.info("Generated section outline for detailed notes")
     logger.info(f"Section outline: {section_outline}")
 
@@ -944,19 +950,24 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         heading = heading.strip(punctuations)
         logger.info(f"Generating content for section: {heading}")
 
-        section_response = section_chain.invoke({
-            "original_query": state.original_query,
-            "key_points": initial_key_points,
-            "direct_answer": direct_answer,
-            "search_details": search_details,
-            "section_heading": heading,
-            "section_outline": section_outline_text,
-            "search_context": search_context
-        })
+        def get_section_content():
+            section_response = section_chain.invoke({
+                "original_query": state.original_query,
+                "key_points": initial_key_points,
+                "direct_answer": direct_answer,
+                "search_details": search_details,
+                "section_heading": heading,
+                "section_outline": section_outline_text,
+                "search_context": search_context
+            })
 
-        # Extract the content if it's a message object
-        section_content = section_response.content if hasattr(section_response, 'content') else section_response
-        section_content = strip_thinking_content(section_content)
+            # Extract the content if it's a message object
+            section_content = section_response.content if hasattr(section_response, 'content') else section_response
+            section_content = strip_thinking_content(section_content)
+
+            return section_content
+
+        section_content = retry(get_section_content, max_retry=3, first_interval=2, interval_multiply=2)()
 
         # Process the content to remove any headings that match the current heading
         content_lines = section_content.split('\n')

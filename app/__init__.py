@@ -367,7 +367,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
 
     model_id = os.getenv('LLM_MODEL_ID', 'local-model')
     
-    completion = client.chat.completions.create(
+    completion = retry(client.chat.completions.create, max_retry=3, first_interval=2, interval_multiply=2)(
         model=model_id,
         messages=messages,
         tools=TOOL_CALLS,
@@ -435,7 +435,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                     }
                 )
 
-        completion = client.chat.completions.create(
+        completion = retry(client.chat.completions.create, max_retry=3, first_interval=2, interval_multiply=2)(
             model=model_id,
             messages=messages,
             tools=TOOL_CALLS if loops < 5 else openai._types.NOT_GIVEN,
