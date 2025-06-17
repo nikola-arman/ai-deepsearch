@@ -55,14 +55,14 @@ async def get_attachments(content: list[dict[str, str]]) -> list[str]:
         if item.get('type', 'undefined') == 'file':
             file = item.get('file')
             data = file.get('file_data')
-            filename = file.get('filename')
+            filename = file.get('filename', f'file_{len(attachments)}.jpg')
 
             if data and filename:
                 attachments.append((data, filename))
 
         elif item.get('type', 'undefined') == 'image_url':
             image_url = item.get('image_url')
-            name = image_url.get('name')
+            name = image_url.get('name', f'image_{len(attachments)}.jpg')
             url = image_url.get('url')
 
             if url and name:
