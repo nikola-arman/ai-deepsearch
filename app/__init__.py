@@ -204,7 +204,7 @@ def run_deep_search_pipeline(
             if state.combined_results:
                 # If we have combined results from this iteration, merge with previous
                 seen_urls = {
-                    result.url 
+                    result.url
                     for result in state.combined_results
                 }
 
@@ -238,15 +238,15 @@ def run_deep_search_pipeline(
 
                 if len(unique_results) < 5:
                     need = 5 - len(unique_results)
-                    
+
                     for result in state.combined_results:
                         if result.score is None:
                             key = result.url + "\n" + result.content
 
                             if key not in unique_results:
                                 unique_results[key] = result
-                                need -= 1 
-                                
+                                need -= 1
+
                         if not need:
                             break
 
@@ -284,7 +284,7 @@ def run_deep_search_pipeline(
             logger.error(f"  Error in final answer generation: {str(e)}", exc_info=True)
 
             ref_builder = ReferenceBuilder(state)
-            
+
             points = []
             for kp in state.key_points:
                 kp = kp.strip()
@@ -310,7 +310,8 @@ TOOL_CALLS = [
         "type": "function",
         "function": {
             "name": "research",
-            "description": "Research on a topic deeper and more comprehensive. Only use this tool when the asked question requires real time knowledge to answer, or when the user asks you to deep dive into a topic, or when you have already confirmed with the user.",
+            # "description": "Research on a topic deeper and more comprehensive. Only use this tool when the asked question requires real time knowledge to answer, or when the user asks you to deep dive into a topic, or when you have already confirmed with the user.",
+            "description": "Research on a topic deeper and more comprehensively. Unless the user prompt is a greeting, goodbye, or a question about yourself (like who are you, what can you do, etc), always use this tool to research on topic.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -366,7 +367,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
     )
 
     model_id = os.getenv('LLM_MODEL_ID', 'local-model')
-    
+
     completion = retry(client.chat.completions.create, max_retry=3, first_interval=2, interval_multiply=2)(
         model=model_id,
         messages=messages,
@@ -407,7 +408,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                         chunk_str = chunk.decode('utf-8')
                     else:
                         chunk_str = str(chunk)
-                        
+
                     if "<action>" not in chunk_str:
                         report += chunk_str
                     yield chunk
@@ -416,12 +417,12 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                     f.write(report)
 
                 return
-            
+
             elif _name == 'search_internet':
                 yield to_chunk_data(wrap_thought(f"Searching for {_args['query']}"))
 
                 try:
-                    res = search_tavily(_args['query']) 
+                    res = search_tavily(_args['query'])
                 except Exception as e:
                     res = f"Error in search_internet: {str(e)}"
 
@@ -441,7 +442,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
             tools=TOOL_CALLS if loops < 5 else openai._types.NOT_GIVEN,
             tool_choice="auto" if loops < 5 else openai._types.NOT_GIVEN,
         )
-        
+
         if completion.choices[0].message.content:
             yield to_chunk_data(
                 wrap_chunk(
@@ -449,6 +450,5 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                     completion.choices[0].message.content
                 )
             )
-   
+
         messages.append(refine_assistant_message(completion.choices[0].message.model_dump()))
-        
