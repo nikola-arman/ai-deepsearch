@@ -436,7 +436,7 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
 
 </details>
 
-![Diagnosis Image]({uri})
+<img src="{uri}" width="360px" alt="Diagnosis result"/><br>
 
 --------------------------------
 '''
