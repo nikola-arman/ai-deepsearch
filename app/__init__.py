@@ -354,6 +354,13 @@ TOOL_CALLS = [
 async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[bytes, None]:
     assert len(messages) > 0, "received empty messages"
 
+    try:
+        with open('messages.json', 'w') as f:
+            json.dump(messages, f, indent=2, ensure_ascii=False)
+
+    except Exception as e:
+        logger.error(f"Error saving messages: {str(e)}", exc_info=True)
+
     attachments = await get_attachments(messages[-1].get('content', ''))
 
     attachment_paths = []
