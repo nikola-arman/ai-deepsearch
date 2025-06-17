@@ -380,6 +380,12 @@ def visualize(result: PredictionResult) -> np.ndarray:
 
     return image
 
+
+import re
+def strip_thinking_content(content: str) -> str:
+    pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+    return pat.sub("", content)
+
 def is_xray_image(img_path: str) -> bool:
 
     img = Image.open(img_path)
@@ -422,7 +428,7 @@ def is_xray_image(img_path: str) -> bool:
         temperature=0.2
     )
     logger.info(f"Response from LLM: {out.choices[0].message.content}")
-    msg_out = out.choices[0].message.content
+    msg_out = strip_thinking_content(out.choices[0].message.content)
     return 'yes' in msg_out.lower()
 
 
@@ -482,7 +488,7 @@ def xray_diagnose_agent(
             temperature=0.2
         )
 
-        return False, None, comment_by_doctor.choices[0].message.content
+        return False, None, strip_thinking_content(comment_by_doctor.choices[0].message.content)
 
     confidence_thres = 0.2 if has_vision_support else 0.5
     iou_thres = 0.45 if has_vision_support else 0.5
@@ -519,4 +525,4 @@ def xray_diagnose_agent(
         temperature=0.2
     )
 
-    return True, vis, comment_by_doctor.choices[0].message.content
+    return True, vis, strip_thinking_content(comment_by_doctor.choices[0].message.content)
