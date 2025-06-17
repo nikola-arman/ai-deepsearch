@@ -44,6 +44,19 @@ async def preserve_upload_file(file_data_uri: str, file_name: str, preserve_atta
         return None
 
 
+def get_file_extension(uri: str) -> str:
+    logger.info(f"received uri: {uri[:100]}")
+    if uri.startswith('data:'):
+        return uri.split(';')[0].split('/')[-1]
+    
+    if uri.startswith('http'):
+        return uri.split('.')[-1]
+    
+    if uri.startswith('file:'):
+        return uri.split('.')[-1]
+    
+    return None
+
 async def get_attachments(content: list[dict[str, str]]) -> list[str]:
     attachments = []
 
@@ -55,15 +68,27 @@ async def get_attachments(content: list[dict[str, str]]) -> list[str]:
         if item.get('type', 'undefined') == 'file':
             file = item.get('file')
             data = file.get('file_data')
-            filename = file.get('filename', f'file_{len(attachments)}.jpg')
+            extension = get_file_extension(data)
+
+            if file.get('filename') is None and extension is None:
+                logger.warning(f"No filename or extension found for file: {file}; Content-type unknown")
+                continue
+
+            filename = file.get('filename', f'file_{len(attachments)}.{extension}')
 
             if data and filename:
                 attachments.append((data, filename))
 
         elif item.get('type', 'undefined') == 'image_url':
-            image_url = item.get('image_url')
-            name = image_url.get('name', f'image_{len(attachments)}.jpg')
+            image_url: dict = item.get('image_url')
             url = image_url.get('url')
+            extension = get_file_extension(url)
+
+            if image_url.get('name') is None and extension is None:
+                logger.warning(f"No name or extension found for image: {image_url}; Content-type unknown")
+                continue
+
+            name = image_url.get('name', f'image_{len(attachments)}.{extension}')
 
             if url and name:
                 attachments.append((url, name))
@@ -103,9 +128,18 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
                 elif item.get('type', 'undefined') == 'file':
                     file_item = item.get('file', {})
                     if 'file_data' in file_item and 'filename' in file_item:
+                        file_data = file_item.get('file_data', '')
+                        file_ext = get_file_extension(file_data)
+
+                        if file_item.get('filename') is None and file_ext is None:
+                            logger.warning(f"No filename or file extension found for file: {file_item}; Content-type unknown")
+                            continue
+
+                        filename = file_item.get('filename', f'file_{len(attachments)}.{file_ext}')
+
                         file_path = await preserve_upload_file(
-                            file_item.get('file_data', ''),
-                            file_item.get('filename', ''),
+                            file_data,
+                            filename,
                             preserve_attachments
                         )
 
@@ -116,9 +150,18 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
                     file_item = item.get('image_url', {})
 
                     if 'url' in file_item:
+                        url = file_item.get('url', '')
+                        extension = get_file_extension(url)
+
+                        if file_item.get('name') is None and extension is None:
+                            logger.warning(f"No name or extension found for image: {file_item}; Content-type unknown")
+                            continue
+
+                        name = file_item.get('name', f'image_{len(attachments)}.{extension}')
+
                         file_path = await preserve_upload_file(
-                            file_item.get('url', ''),
-                            file_item.get('name', f'image_{len(attachments)}.jpg'),
+                            url,
+                            name,
                             preserve_attachments
                         )
 
