@@ -249,12 +249,12 @@ def infer(session: ort.InferenceSession, image_path: str, confidence_thres: floa
 
     return res
 
-def predict(image_path: str) -> PredictionResult:
+def predict(image_path: str, confidence_thres: float = 0.2, iou_thres: float = 0.45) -> PredictionResult:
     model = _load_model()
     another_model = _load_another_model()
 
-    results = infer(model, image_path)
-    another_results = infer(another_model, image_path)
+    results = infer(model, image_path, confidence_thres, iou_thres)
+    another_results = infer(another_model, image_path, confidence_thres, iou_thres)
 
     for i in range(len(another_results.cls)):
         another_results.cls[i] += 7
@@ -494,7 +494,8 @@ def xray_diagnose_agent(
         vis = visualize(result)
     else:
         vis = None
-
+        
+    logger.info(f"Yolo v11l output: {res or 'no lesions found'}")
     client = OpenAI(
         base_url=os.getenv('LLM_BASE_URL'),
         api_key=os.getenv('LLM_API_KEY')
