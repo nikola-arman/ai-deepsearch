@@ -230,10 +230,10 @@ class PredictionResult:
     org_size: tuple[int, int] = field(default_factory=tuple) # height, width
     org_path: str = field(default_factory=str)
 
-def infer(session: ort.InferenceSession, image_path: str) -> PredictionResult:
+def infer(session: ort.InferenceSession, image_path: str, confidence_thres: float = 0.2, iou_thres: float = 0.45) -> PredictionResult:
     image_data, pad, img_height, img_width = preprocess(image_path)
     outputs = session.run(None, {session.get_inputs()[0].name: image_data})
-    outputs = postprocess(outputs, img_height, img_width, pad)
+    outputs = postprocess(outputs, img_height, img_width, pad, confidence_thres, iou_thres)
 
     for i in range(len(outputs)):
         x, y, w, h = outputs[i]['box']
@@ -429,6 +429,7 @@ def is_xray_image(img_path: str) -> bool:
 def xray_diagnose_agent(
     img_path: str,
     orig_user_message: Optional[str] = None,
+    has_vision_support: bool = False,
 ) -> tuple[bool, Optional[np.ndarray], Optional[str]]:
     """Return the diagnosis of the image.
 
@@ -437,7 +438,8 @@ def xray_diagnose_agent(
         - vis: np.ndarray, the image with bounding boxes (can be None)
         - comment_by_doctor: str, the comment by doctor
     """
-    is_xray = is_xray_image(img_path)
+
+    is_xray = is_xray_image(img_path) if has_vision_support else True
 
     if not is_xray:
         client = OpenAI(
@@ -482,7 +484,10 @@ def xray_diagnose_agent(
 
         return False, None, comment_by_doctor.choices[0].message.content
 
-    result = predict(img_path)
+    confidence_thres = 0.2 if has_vision_support else 0.5
+    iou_thres = 0.45 if has_vision_support else 0.5
+
+    result = predict(img_path, confidence_thres=confidence_thres, iou_thres=iou_thres)
     res = quick_diagnose(result)
 
     if res is not None:

@@ -7,8 +7,6 @@ from typing import Annotated, Any, ClassVar, Literal, Optional, Union, Iterable
 from pydantic import (BaseModel, ConfigDict, Field, TypeAdapter,
                       ValidationInfo, field_validator, model_validator)
 from openai.types.chat import ChatCompletionContentPartParam
-from openai.types.chat import (
-    ChatCompletionMessageParam as OpenAIChatCompletionMessageParam)
 from openai.types.chat import (ChatCompletionMessageToolCallParam,)
 from typing_extensions import TypedDict, Required
 import logging 

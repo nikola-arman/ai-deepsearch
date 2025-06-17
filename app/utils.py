@@ -9,20 +9,17 @@ from typing import Any
 from PIL import Image
 from io import BytesIO
 import numpy as np
-
+import re
 
 logger = logging.getLogger(__name__)
 
+def strip_toolcall_noti(content: str) -> str:
+    cleaned = re.sub(r"<action\b[^>]*>.*?</action>", "", content, flags=re.DOTALL | re.IGNORECASE)
+    return cleaned.lstrip(" \t")
 
-def heif_to_jpeg(file_data_uri: str) -> str:
-    file_data_base64 = file_data_uri.split(',')[-1]
-    file_data = base64.b64decode(file_data_base64)
-    img = Image.open(BytesIO(file_data))
-    img = img.convert('RGB')
-    buffer = BytesIO()
-    img.save(buffer, format='JPEG')
-    return buffer.getvalue()
-
+def strip_thinking_content(content: str) -> str:
+    pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+    return pat.sub("", content).lstrip(" \t")
 
 async def preserve_upload_file(file_data_uri: str, file_name: str, preserve_attachments: bool = False) -> str:
     os.makedirs(os.path.join(os.getcwd(), 'uploads'), exist_ok=True)
@@ -74,8 +71,11 @@ async def get_attachments(content: list[dict[str, str]]) -> list[str]:
     return attachments
 
 
-async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str, preserve_attachments: bool = False) -> list[dict[str, str]]:
+async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str = '', preserve_attachments: bool = False) -> list[dict[str, str]]:
     refined_messages = []
+
+    current_time_utc_str = datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    system_prompt += f'\nNote: Current time is {current_time_utc_str} UTC (only use this information when being asked or for searching purposes)'
 
     has_system_prompt = False
 
@@ -132,11 +132,16 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
 
             refined_messages.append({
                 "role": "user",
-                "content": text_input
+                "content": strip_toolcall_noti(strip_thinking_content(text_input))
             })
 
         else:
-            refined_messages.append(message)
+            _message = {
+                "role": message.get('role', 'assistant'),
+                "content": strip_toolcall_noti(strip_thinking_content(message.get('content', '')))
+            }
+
+            refined_messages.append(_message)
 
     if not has_system_prompt and system_prompt != "":
         refined_messages.insert(0, {
@@ -147,7 +152,7 @@ async def refine_chat_history(messages: list[dict[str, str]], system_prompt: str
     if isinstance(refined_messages[-1], str):
         refined_messages[-1] = {
             "role": "user",
-            "content": refined_messages[-1] + '\n/no_think'
+            "content": refined_messages[-1]
         }
 
     return refined_messages
@@ -182,7 +187,8 @@ async def wrap_chunk(uuid: str, raw: str, role: str = 'assistant') -> ChatComple
 
 
 async def wrap_thinking_chunk(uuid: str, raw: str) -> ChatCompletionStreamResponse:
-    content = f"<think>{raw}</think>"
+    content = f"<action>{raw}</action>\n"
+
     return ChatCompletionStreamResponse(
         id=uuid,
         object='chat.completion.chunk',
@@ -192,42 +198,6 @@ async def wrap_thinking_chunk(uuid: str, raw: str) -> ChatCompletionStreamRespon
             dict(
                 index=0,
                 delta=dict(content=content)
-            )
-        ]
-    )
-
-
-
-async def wrap_toolcall_request(uuid: str, fn_name: str, args: dict[str, Any]) -> ChatCompletionStreamResponse:
-    args_str = json.dumps(args, indent=2)
-
-    template = f'''
-Executing <b>{fn_name}</b>
-
-<details>
-<summary>
-Arguments:
-</summary>
-
-```json
-{args_str}
-```
-
-</details>
-'''
-
-    return ChatCompletionStreamResponse(
-        id=uuid,
-        object='chat.completion.chunk',
-        created=int(time.time()),
-        model='unspecified',
-        choices=[
-            dict(
-                index=0,
-                delta=dict(
-                    content=template,
-                    role='tool'
-                ),
             )
         ]
     )

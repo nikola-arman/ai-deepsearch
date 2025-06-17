@@ -22,6 +22,10 @@ def get_pmid(url: str) -> str:
     """Extract the PMID from a PubMed URL."""
     return url.strip("/").split("/")[-1]
 
+def strip_thinking_content(content: str) -> str:
+    pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+    return pat.sub("", content)
+
 # Define the prompt template for analysis and reasoning
 REASONING_TEMPLATE = """You are an expert research analyst and reasoning agent. Your task is to analyze search results,
 identify relevant information, and determine if further searches are needed.
@@ -110,8 +114,6 @@ The outline should follow this structure:
 - [Subpoint 2]
 ...
 ```
-
-/no_think
 """
 
 # Define the template for the writer agent that will expand the outline into full content
@@ -137,8 +139,6 @@ For each section:
 
 Your expanded answer should be thorough, informative, and directly address the original query,
 while carefully following the outline structure.
-
-/no_think
 """
 
 # Define the prompt template for generating key points
@@ -165,8 +165,6 @@ Format your response as a markdown list of bullet points ONLY:
 ...
 
 IMPORTANT: Do not include any introduction, explanation, or conclusion outside of the bullet points.
-
-/no_think
 """
 
 # Define the prompt template for direct answer generation
@@ -196,8 +194,6 @@ Create a well-rounded, complete direct answer to the original query. The answer 
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, or section markers.
-
-/no_think
 """
 
 # Define the template for detailed notes generation
@@ -227,8 +223,6 @@ Format your response as a numbered list of section headings in markdown format, 
 
 DO NOT include any content under these headings - just provide the section headings.
 Each section will be expanded in a separate step. Do not include an introduction or conclusion.
-
-/no_think
 """
 
 # Define the template for generating content for a single section
@@ -270,8 +264,6 @@ Start directly with the content. If you need subsections, use ### level headings
 
 Focus ONLY on this section without repeating information from other sections.
 Provide in-depth, authoritative content with specific facts, figures, and examples where possible.
-
-/no_think
 """
 
 # Define the template for initial query generation
@@ -293,8 +285,6 @@ Format your response as a JSON array of 5 strings representing the search querie
 ["query1", "query2", "query3", "query4", "query5"]
 
 CRITICAL: Your entire response MUST be a valid, parseable JSON array and nothing else. Do not include any text before or after the JSON array. Do not include any explanation, markdown formatting, or code blocks around the JSON. The response must start with '[' and end with ']' and contain only valid JSON.
-
-/no_think
 """
 
 def init_reasoning_llm(temperature: float = 0.3):
@@ -342,6 +332,7 @@ def generate_initial_queries(original_query: str) -> List[str]:
 
     # Extract the content if it's a message object
     query_text = response.content if hasattr(response, 'content') else response
+    query_text = strip_thinking_content(query_text)
 
     # Clean up the response text
     query_text = query_text.strip()
@@ -534,16 +525,6 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
         [f"- {gap}" for gap in state.historical_knowledge_gaps]
     )
 
-    with open("deep_reasoning_prompt.txt", "w") as f:
-        f.write(reasoning_prompt.invoke({
-            "original_query": state.original_query,
-            "iteration": state.current_iteration,
-            "search_results": formatted_results,
-            "previous_knowledge_gaps": formatted_previous_gaps,
-            "max_iterations": max_iterations,
-            "current_date": current_date
-        }).to_string())
-
     # Generate the analysis and reasoning
     response = chain.invoke({
         "original_query": state.original_query,
@@ -555,13 +536,8 @@ def deep_reasoning_agent(state: SearchState, max_iterations: int = 5) -> SearchS
     })
 
     # Extract the content if it's a message object
-    if hasattr(response, 'content'):
-        analysis_text = response.content
-    else:
-        analysis_text = response
-
-    with open("analysis_text.txt", "w") as f:
-        f.write(analysis_text)
+    analysis_text = response.content if hasattr(response, 'content') else response
+    analysis_text = strip_thinking_content(analysis_text)
 
     # Clean up the response text to improve JSON parsing chances
     analysis_text = analysis_text.strip()
@@ -842,6 +818,8 @@ def generate_final_answer_stream(
 
         # Extract the content if it's a message object
         key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
+        key_points = strip_thinking_content(key_points)
+
         logger.info("Generated key points for final answer")
         if detailed:
             yield '## Key Points\n\n'
@@ -871,26 +849,10 @@ def generate_final_answer_stream(
         "search_details": search_details
     })
 
-    if log_stages:
-        with open("direct_answer_prompt.txt", "w") as f:
-            f.write(direct_answer_prompt.invoke({
-                "original_query": state.original_query,
-                "key_points": initial_key_points,
-                "search_details": search_details
-            }).to_string())
-
     # Extract the content if it's a message object
-    direct_answer = (
-        direct_answer_response.content
-        if hasattr(direct_answer_response, 'content')
-        else direct_answer_response
-    )
-
-    # answer = direct_answer + f"\n\nHere is the information for your concern. Do you want me to deep dive into it?"
-    # yield ref_builder.embed_references(answer)
+    direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
+    direct_answer = strip_thinking_content(direct_answer)
     yield ref_builder.embed_references(direct_answer)
-
-    # print('\n\nHallucinated PMIDs:', ref_builder.hallucinated_pmids)
 
     if not detailed:
         return
@@ -915,6 +877,7 @@ def generate_final_answer_stream(
 
     # Extract the content if it's a message object
     section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
+    section_outline = strip_thinking_content(section_outline)
     logger.info("Generated section outline for detailed notes")
 
     # Parse the section headings from the outline
@@ -951,6 +914,7 @@ def generate_final_answer_stream(
 
         # Extract the content if it's a message object
         section_content = section_response.content if hasattr(section_response, 'content') else section_response
+        section_content = strip_thinking_content(section_content)
 
         # Process the content to remove any headings that match the current heading
         # This prevents duplication of the heading we're about to add
@@ -980,11 +944,11 @@ def generate_final_answer_stream(
         yield ref_builder.embed_references(cleaned_content)
 
     logger.info("Generated all section content for detailed notes")
-    # print('\n\nHallucinated PMIDs:', ref_builder.hallucinated_pmids)s
-
     yield '\n'
+
     references = ref_builder.build()
     if not references:
         return
+
     yield '## References\n\n'
     yield references

@@ -11,18 +11,14 @@ from deepsearch.models import SearchState
 from deepsearch.agents import (
     faiss_indexing_agent,
     bm25_search_agent,
-    llama_reasoning_agent,
     deep_reasoning_agent,
     pubmed_search_agent,
-    tavily_search,
     xray_lesion_detector
 )
 from app.utils import (
     refine_assistant_message,
-    wrap_toolcall_request,
     wrap_chunk,
     to_chunk_data,
-    wrap_toolcall_response,
     image_to_base64_uri,
     wrap_thinking_chunk,
     random_str
@@ -54,7 +50,6 @@ def sync2async(sync_func: Callable):
 # Convert synchronous functions to asynchronous
 async_faiss_indexing_agent = sync2async(faiss_indexing_agent)
 async_bm25_search_agent = sync2async(bm25_search_agent)
-async_llama_reasoning_agent = sync2async(llama_reasoning_agent)
 async_deep_reasoning_agent = sync2async(deep_reasoning_agent)
 async_pubmed_search_agent = sync2async(pubmed_search_agent)
 
@@ -86,7 +81,6 @@ async def run_deep_search_pipeline(
         # Initialize state
         state = SearchState(original_query=query)
 
-        # Instead of using query_expansion_agent, let the deep_reasoning_agent handle initial query generation
         # This avoids potential conflicts and allows for better reasoning about query generation
         logger.info("Step 1: Initial reasoning to analyze query and generate search queries...")
         try:
@@ -99,13 +93,6 @@ async def run_deep_search_pipeline(
             # If reasoning fails, use just the original query
             state.generated_queries = [state.original_query]
             state.current_iteration = 1  # Ensure we don't skip the first iteration
-
-        yield await to_chunk_data(
-            await wrap_thinking_chunk(
-                response_uuid,
-                f"💡 Prepared {len(state.generated_queries)} search queries",
-            ),
-        )
 
         # Iterative search loop
         while not state.search_complete and state.current_iteration < max_iterations:
@@ -215,49 +202,12 @@ async def run_deep_search_pipeline(
 
             # Step 5: Deep Reasoning - analyze results and decide whether to continue
             logger.info("Analyzing search results and determining next steps...")
-            yield await to_chunk_data(
-                await wrap_thinking_chunk(
-                    response_uuid,
-                    (
-                        f"🧠 Analyzing {len(state.combined_results)} search results and determining "
-                        "whether to continue searching..."
-                    ),
-                ),
-            )
 
             try:
                 state = await async_deep_reasoning_agent(state, max_iterations)
                 logger.info(f"  Search complete: {state.search_complete}")
 
                 if not state.search_complete:
-                    yield await to_chunk_data(
-                        await wrap_thinking_chunk(
-                            response_uuid,
-                            "🧐 Knowledge gaps identified",
-                        ),
-                    )
-
-                    # for kg in state.knowledge_gaps:
-                    #     yield await to_chunk_data(
-                    #         await wrap_thinking_chunk(
-                    #             response_uuid,
-                    #             f'- {kg}\n'
-                    #         )
-                    #     )
-
-                    # yield await to_chunk_data(
-                    #     await wrap_thinking_chunk(
-                    #         response_uuid,
-                    #         '\n'
-                    #     )
-                    # )
-
-                    yield await to_chunk_data(
-                        await wrap_thinking_chunk(
-                            response_uuid,
-                            f"✨ New {len(state.generated_queries)} queries generated",
-                        ),
-                    )
 
                     logger.info(f"  Knowledge gaps identified: {len(state.knowledge_gaps)}")
                     logger.info(f"  New queries generated: {len(state.generated_queries)}")
@@ -306,9 +256,12 @@ async def run_deep_search_pipeline(
 
             except Exception as e:
                 logger.error(f"Error generating final answer: {str(e)}", exc_info=True)
+                
+                from deepsearch.agents.deep_reasoning import ReferenceBuilder
+                builder = ReferenceBuilder(state)
 
                 state.final_answer = "I reached the maximum number of search iterations but couldn't generate a comprehensive answer. Here's what I found: " + "\n".join(
-                    [f"- {point}" for point in state.key_points]
+                    [f"- {builder.embed_references(point)}" for point in state.key_points]
                 )
 
                 yield await to_chunk_data(
@@ -327,14 +280,6 @@ async def run_deep_search_pipeline(
 
                 state.confidence_score = 0.5
         elif not state.final_answer:
-            icon = "✅" if state.search_complete else "❌"
-            yield await to_chunk_data(
-                await wrap_thinking_chunk(
-                    response_uuid,
-                    f"{icon} Search complete: {state.search_complete}",
-                ),
-            )
-
             from deepsearch.agents.deep_reasoning import generate_final_answer_stream
             for chunk in generate_final_answer_stream(
                 state,
@@ -348,13 +293,6 @@ async def run_deep_search_pipeline(
                     )
                 )
         else:
-            icon = "✅" if state.search_complete else "❌"
-            yield await to_chunk_data(
-                await wrap_thinking_chunk(
-                    response_uuid,
-                    f"{icon} Search complete: {state.search_complete}",
-                ),
-            )
 
             yield await to_chunk_data(
                 await wrap_chunk(
@@ -364,14 +302,6 @@ async def run_deep_search_pipeline(
             )
 
     except Exception:
-        icon = "✅" if state.search_complete else "❌"
-        yield await to_chunk_data(
-            await wrap_thinking_chunk(
-                response_uuid,
-                f"{icon} Search complete: {state.search_complete}",
-            ),
-        )
-
         yield await to_chunk_data(
             await wrap_chunk(
                 response_uuid,
@@ -420,28 +350,6 @@ TOOL_CALLS = [
         }
     }
 ]
-
-async def quick_search(query: str) -> str:
-    result = tavily_search(query)
-
-    if not result:
-        return "No results found"
-
-    return "\n".join([
-        f'{i + 1}. {e.title}\nURL: {e.url}\nContent: {e.content}\n'
-        for i, e in enumerate(result)
-        ])
-
-async def execute_openai_compatible_toolcall(name: str, args: dict[str, str]) -> str:
-    try:
-        if name == 'search':
-            return await quick_search(args['query'])
-
-        return f"Tool {name} not found"
-    except Exception as e:
-        logger.error(f"Error executing tool call {name} (args: {args}): {str(e)}", exc_info=True)
-        return f"An error occurred while executing the tool call: {str(e)}"
-
 
 async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[bytes, None]:
     assert len(messages) > 0, "received empty messages"
@@ -514,13 +422,12 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
 
             if vis is not None:
                 template = '''
-
-<img src="{uri}" width=360px alt><br>
-
 <details>
     <summary>Diagnosis</summary>
     {comment}
 </details>
+
+<img src="{uri}" width=360px alt><br>
 
 --------------------------------
 '''
@@ -626,33 +533,6 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
                 ):
                     yield chunk
                 return
-
-            yield await to_chunk_data(
-                await wrap_toolcall_request(
-                    response_uuid,
-                    _name,
-                    _args
-                )
-            )
-
-            result = await execute_openai_compatible_toolcall(_name, _args)
-
-            yield await to_chunk_data(
-                await wrap_toolcall_response(
-                    response_uuid,
-                    _name,
-                    _args,
-                    result
-                )
-            )
-
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": _id,
-                    "content": result
-                }
-            )
 
         completion = await client.chat.completions.create(
             model=model_id,
