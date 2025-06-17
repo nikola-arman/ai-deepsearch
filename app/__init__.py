@@ -430,11 +430,13 @@ async def prompt(messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[byt
             if vis is not None:
                 template = '''
 <details>
-    <summary>Diagnosis</summary>
-    {comment}
+  <summary>Diagnosis</summary>
+
+  {comment}
+
 </details>
 
-<img src="{uri}" width=360px alt><br>
+![Diagnosis Image]({uri})
 
 --------------------------------
 '''
