@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, model_validator
 import hashlib
+from deepsearch.schemas import twitter
 
 def sanitize_content(content) -> str:
     """Convert any content to a string appropriately."""
@@ -52,6 +53,12 @@ class SearchResult(BaseModel):
     def validate_id(self):
         self.id = int(hashlib.md5(self.url.encode()).hexdigest(), 16) & 0xFFFFFF
         return self
+
+
+class TwitterData(BaseModel):
+    user_info: twitter.TwitterUserInfo
+    recent_tweets: Optional[twitter.TweetPage] = []
+
 
 class SearchState(BaseModel):
     """State for the search process."""

@@ -1,7 +1,7 @@
 from typing import Generator, List, Dict, Any
 import logging
-from deepsearch.models import SearchState, SearchResult
-from deepsearch.utils import to_chunk_data, wrap_thought
+from deepsearch.schemas.agents import SearchState, SearchResult
+from deepsearch.utils.streaming import wrap_thought, to_chunk_data
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
 from langchain.prompts import PromptTemplate
 from json_repair import repair_json

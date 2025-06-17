@@ -23,6 +23,9 @@ class ResearchIntent(BaseModel):
     is_research_request: bool
     research_query: str | None
 
+class TwitterUsernames(BaseModel):
+    twitter_usernames: list[str]
+
 
 def get_conversation_summary_prompt(conversation: list[dict[str, str]]) -> str:
     conversation_str = "\n".join([f"{message['role']}: {message['content']}" for message in conversation])
@@ -100,6 +103,24 @@ Output:
 """
 
 
+DETECT_TWITTER_USERNAMES_PROMPT = """
+You are an expert at detecting Twitter usernames from a search query.
+
+Given the search query, determine what are the Twitter usernames mentioned in the query? (empty list if no usernames)
+
+Return your response in this JSON format:
+{{
+    "twitter_usernames": <list of usernames>
+}}
+
+Return only the JSON object without any other text or comments.
+
+Input:
+- Search query: {query}
+
+Output:
+"""
+
 def get_detect_research_intent_prompt(conversation_summary: str, user_last_message: str) -> str:
     return DETECT_RESEARCH_INTENT_PROMPT.format(conversation_summary=conversation_summary, user_last_message=user_last_message)
 
@@ -125,6 +146,29 @@ def detect_research_intent(conversation_summary: str, user_last_message: str) ->
 
     return ResearchIntent.model_validate(data)
 
+def get_detect_twitter_usernames_prompt(query: str) -> str:
+    return DETECT_TWITTER_USERNAMES_PROMPT.format(query=query)
+
+def detect_twitter_usernames(query: str) -> TwitterUsernames:            
+    prompt = get_detect_twitter_usernames_prompt(query=query)
+
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {
+            "role": "user",
+            "content": prompt,
+        },
+    ]
+
+    llm = init_reasoning_llm()
+
+    response = llm.invoke(messages)
+
+    print(f"Detect research intent response: {response.content}")
+
+    data = curly_brackets_repair_json(strip_thinking_content(response.content))
+
+    return TwitterUsernames.model_validate(data)
 
 def get_conversation_reply_prompt(conversation_summary: str, user_last_message: str) -> str:
     return f"""

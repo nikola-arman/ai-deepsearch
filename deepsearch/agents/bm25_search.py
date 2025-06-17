@@ -2,7 +2,7 @@ from typing import Generator, Tuple, List
 from rank_bm25 import BM25Okapi
 import re
 import logging
-from deepsearch.models import SearchState, SearchResult
+from deepsearch.schemas.agents import SearchState, SearchResult
 
 # Set up logging
 logger = logging.getLogger("deepsearch.bm25")

@@ -5,6 +5,8 @@ import eai_http_middleware # do not remove this
 import os
 
 from deepsearch.magic import retry
+from deepsearch.schemas import commons, twitter
+from deepsearch.utils.streaming import wrap_thought, to_chunk_data
 
 os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
@@ -12,7 +14,7 @@ os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 os.environ["EXA_API_KEY"] = "no-need"
 
 from typing import Annotated, Dict, Any, Generator, List
-from deepsearch.models import SearchState
+from deepsearch.schemas.agents import SearchState
 from deepsearch.agents import (
     tavily_search_agent,
     faiss_indexing_agent,
@@ -22,10 +24,13 @@ from deepsearch.agents import (
     brave_search_agent,
     information_extraction_agent,
     fact_checking_agent,
-    search_tavily
+    search_tavily,
+    get_twitter_data_by_username,
+    twitter_context_to_search_result,
+    twitter_search
 )
 from deepsearch.agents.deep_reasoning import ReferenceBuilder, init_reasoning_llm
-from app.utils import detect_research_intent, get_conversation_summary, reply_conversation
+from app.utils import detect_research_intent, detect_twitter_usernames, get_conversation_summary, reply_conversation
 
 from json_repair import repair_json
 import json
@@ -35,7 +40,7 @@ from langchain_core.tools import tool
 logger = logging.getLogger(__name__)
 
 from langchain.prompts import PromptTemplate
-from deepsearch.utils import to_chunk_data, wrap_step_start, wrap_step_finish, wrap_thought, wrap_chunk
+from deepsearch.utils.streaming import wrap_chunk
 import openai
 
 
@@ -43,7 +48,7 @@ class Retriever(Enum):
     TAVILY = "tavily"
     BRAVE = "brave"
     EXA = "exa"
-
+    TWITTER = "twitter"
 
 def write_state_to_file(state: SearchState):
     os.makedirs("output", exist_ok=True)
@@ -62,6 +67,8 @@ def get_retriever_from_env() -> List[Retriever]:
             retrievers.append(Retriever.BRAVE)
         elif retriever == Retriever.EXA.value:
             retrievers.append(Retriever.EXA)
+        elif retriever == Retriever.TWITTER.value:
+            retrievers.append(Retriever.TWITTER)
         else:
             raise ValueError(f"Invalid retriever: {retriever}")
     return retrievers
@@ -96,6 +103,17 @@ def run_deep_search_pipeline(
     try:
         # Initialize state
         state = SearchState(original_query=query)
+
+        usernames_obj = detect_twitter_usernames(query=query)
+        # Limit to at most 3 usernames to save API quota
+        twitter_usernames = usernames_obj.twitter_usernames[:3]
+
+        twitter_context = {}
+        for username in twitter_usernames:
+            twitter_data = get_twitter_data_by_username(username)
+            twitter_context[username] = twitter_data
+
+        state.combined_results = twitter_context_to_search_result(twitter_context)
 
         # Instead of using query_expansion_agent, let the deep_reasoning_agent handle initial query generation
         logger.info("Step 1: Initial reasoning to analyze query and generate search queries...")
@@ -158,11 +176,22 @@ def run_deep_search_pipeline(
                     except Exception as e:
                         logger.error(f"    Error in Brave search: {str(e)}", exc_info=True)
 
+                # Step 3.5: Twitter search for this query
+                twitter_results = []
+                if Retriever.TWITTER in retrievers:
+                    logger.info("Performing Twitter search...")
+                    try:
+                        twitter_results = twitter_search(query)
+                        logger.info(f"    Found {len(twitter_results)} Twitter results")
+                    except Exception as e:
+                        logger.error(f"    Error in Twitter search: {str(e)}", exc_info=True)
+
                 # Combine search results
                 temp_state.search_results = (
                     temp_state.tavily_results
                     + temp_state.brave_results
                     + temp_state.exa_results
+                    + twitter_results
                 )
                 logger.info(f"Combined {len(temp_state.search_results)} total search results")
 

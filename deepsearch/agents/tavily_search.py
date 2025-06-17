@@ -4,7 +4,7 @@ import logging
 from dotenv import load_dotenv
 from tavily import TavilyClient
 
-from deepsearch.models import SearchState, SearchResult
+from deepsearch.schemas.agents import SearchState, SearchResult
 
 # Set up logging
 logger = logging.getLogger("deepsearch.tavily")

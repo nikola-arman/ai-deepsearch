@@ -2,8 +2,9 @@ import json
 from typing import Generator, List, Dict, Any, Set
 import logging
 from deepsearch.agents.faiss_indexing import init_embedding_model
-from deepsearch.models import SearchState, SearchResult
-from deepsearch.utils import get_url_domain, to_chunk_data, wrap_thought
+from deepsearch.schemas.agents import SearchState, SearchResult
+from deepsearch.utils.streaming import wrap_thought, to_chunk_data
+from deepsearch.utils.misc import get_url_domain
 from deepsearch.agents.deep_reasoning import init_reasoning_llm
 from langchain.prompts import PromptTemplate
 from collections import defaultdict

@@ -3,7 +3,7 @@ from typing import Generator, List
 import os
 import logging
 import requests
-from deepsearch.models import SearchState, SearchResult
+from deepsearch.schemas.agents import SearchState, SearchResult
 
 # Set up logging
 logger = logging.getLogger("deepsearch.brave")

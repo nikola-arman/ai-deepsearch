@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
-from deepsearch.models import SearchState
+from deepsearch.schemas.agents import SearchState
 
 # Load environment variables
 load_dotenv()

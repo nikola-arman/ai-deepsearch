@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 import re
 
-from deepsearch.models import SearchState, SearchResult
+from deepsearch.schemas.agents import SearchState, SearchResult
 
 # Set up logging
 logger = logging.getLogger("deepsearch.faiss")

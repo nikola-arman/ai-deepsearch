@@ -15,8 +15,8 @@ import re
 import urllib
 
 from deepsearch.magic import retry
-from deepsearch.models import SearchState, SearchResult
-from deepsearch.utils import escape_dollar_signs
+from deepsearch.schemas.agents import SearchState, SearchResult
+from deepsearch.utils.misc import escape_dollar_signs
 
 
 def strip_thinking_content(content: str) -> str:

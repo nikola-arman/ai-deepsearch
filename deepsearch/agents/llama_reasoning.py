@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
-from deepsearch.models import SearchState
-from deepsearch.utils import escape_dollar_signs
+from deepsearch.schemas.agents import SearchState
+from deepsearch.utils.misc import escape_dollar_signs
 
 # Set up logging
 logger = logging.getLogger("deepsearch.reasoning")
