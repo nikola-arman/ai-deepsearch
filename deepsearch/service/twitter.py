@@ -10,7 +10,7 @@ from pydantic import ValidationError
 import logging
 import re
 import random
-from deepsearch.service.redis import cache_for
+from deepsearch.cache.wrapper import sqlite_cache, get_cached_value, set_cache_value
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,44 @@ TWITTER_USERNAME_TO_ID = "twitter_username_to_id"
 TIMEOUT_CFG = httpx.Timeout(60.0, connect=10.0) 
 
 
-@cache_for(interval_seconds=60 * 60 * 2)
+def tweet_key_builder(tweet_id: Union[str, int], **kwargs) -> str:
+    return f"tweet:{tweet_id}"
+
+
+def twitter_profile_key_builder(**kwargs) -> str:
+    if 'user_id' in kwargs and kwargs['user_id']:
+        user_id = kwargs['user_id']
+        return f"twitter-profile:{user_id}"
+
+    elif 'username' in kwargs and kwargs['username']:
+        username = kwargs['username']
+        user_id = get_cached_value(TWITTER_USERNAME_TO_ID, username)
+        return f"twitter-profile:{user_id or username}"
+
+    else:
+        raise ValueError("Either user_id or username must be provided")
+
+
+def twitter_tweet_key_builder_w_page(**kwargs) -> str:
+    pagination_token = kwargs.get('pagination_token', '') 
+
+    if 'user_id' in kwargs and kwargs['user_id']:
+        user_id = kwargs['user_id']
+        return f"twitter-profile:{user_id}-{pagination_token}"
+
+    elif 'username' in kwargs and kwargs['username']:
+        username = kwargs['username']
+        user_id = get_cached_value(TWITTER_USERNAME_TO_ID, username)
+        return f"twitter-profile:{user_id or username}-{pagination_token}"
+
+
+@sqlite_cache(
+    table_name="twitter",
+    ttl_seconds=3600 * 6,
+    key_prefix="tweet_info",
+    key_builder=tweet_key_builder,
+    object_builder=lambda obj_dict: commons.ResponseMessage[twitter.Tweet].model_validate(obj_dict)
+)
 def get_tweet_info(
     tweet_id: Union[str, int],
     twitter_api_base_url: str = TWITTER_API_URL,
@@ -73,7 +110,6 @@ def get_tweet_info(
             )
 
 
-@cache_for(interval_seconds=60 * 60 * 2)
 def get_top_followers(
     user_id: Union[str, int],
     twitter_api_base_url: str = TWITTER_API_URL,
@@ -119,7 +155,6 @@ def get_top_followers(
             )
             
 
-@cache_for(interval_seconds=60 * 60 * 2)
 def get_top_following(
     user_id: Union[str, int],
     twitter_api_base_url: str = TWITTER_API_URL,
@@ -165,7 +200,13 @@ def get_top_following(
             )
 
 
-@cache_for(interval_seconds=60 * 60 * 2)
+@sqlite_cache(
+    table_name="twitter",
+    ttl_seconds=3600 * 2,
+    key_prefix="user_info",
+    key_builder=twitter_profile_key_builder,
+    object_builder=lambda obj_dict: commons.ResponseMessage[twitter.TwitterUserInfo].model_validate(obj_dict)
+)
 def get_twitter_user_info_by_id(
     user_id: Union[str, int],
     get_followers: bool = True,
@@ -206,6 +247,7 @@ def get_twitter_user_info_by_id(
         
         try:
             obj = twitter.TwitterUserInfo.model_validate(res_json['result'])
+            set_cache_value(TWITTER_USERNAME_TO_ID, obj.username, obj.id)
 
             if get_followers:
                 followers_resp = get_top_followers(obj.id)
@@ -223,7 +265,13 @@ def get_twitter_user_info_by_id(
             )
 
 
-@cache_for(interval_seconds=60 * 60 * 2)
+@sqlite_cache(
+    table_name="twitter",
+    ttl_seconds=3600 * 2,
+    key_prefix="user_info",
+    key_builder=twitter_profile_key_builder,
+    object_builder=lambda obj_dict: commons.ResponseMessage[twitter.TwitterUserInfo].model_validate(obj_dict)
+)
 def get_twitter_user_info_by_username(
     username: str, 
     get_followers: bool = True,
@@ -283,7 +331,13 @@ def get_twitter_user_info_by_username(
             )
 
 
-@cache_for(interval_seconds=60 * 60 * 2)
+@sqlite_cache(
+    table_name="twitter",
+    ttl_seconds=3600 * 2,
+    key_prefix="tweets",
+    key_builder=twitter_tweet_key_builder_w_page,
+    object_builder=lambda obj_dict: commons.ResponseMessage[twitter.TweetPage].model_validate(obj_dict)
+)
 def list_tweets_of_user(
     user_id: Union[str, int],
     pagination_token: str = "",
@@ -340,7 +394,6 @@ is_valid_user = lambda user: (
 from queue import Queue
 
 
-@cache_for(interval_seconds=60 * 60 * 2)
 def build_twitter_social_graph(
     user_id: str, 
     max_depth: int = 1,
@@ -414,7 +467,6 @@ def build_twitter_social_graph(
 from ..utils.misc import dsu
 
 
-@cache_for(interval_seconds=60 * 60 * 2)
 def get_tweet_threads_by_id(
     user_id: str,
     max_calls: int = 5,
@@ -479,7 +531,12 @@ def get_tweet_threads_by_id(
     return response_model(result=threads)
 
 
-@cache_for(interval_seconds=60 * 60 * 2)
+@sqlite_cache(
+    table_name="twitter",
+    ttl_seconds=3600 * 2,
+    key_prefix="search_twitter_news",
+    object_builder=lambda obj_dict: commons.ResponseMessage[twitter.TwitterSearchResult].model_validate(obj_dict)
+)
 def search_twitter_news(
     query: str,
     impression_count_limit=100,
@@ -571,7 +628,12 @@ def search_twitter_news(
     return response_model(result=filtered_search_result)
 
 
-@cache_for(interval_seconds=60 * 60 * 2)
+@sqlite_cache(
+    table_name="twitter",
+    ttl_seconds=3600 * 2,
+    key_prefix="mentioned_tweets",
+    object_builder=lambda obj_dict: commons.ResponseMessage[twitter.TweetPage].model_validate(obj_dict)
+)
 def get_mentioned_tweets(
     twitter_username: str,
     limit_results=50,

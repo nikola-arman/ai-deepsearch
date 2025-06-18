@@ -13,6 +13,4 @@ env PROXY_SCOPE="*api.tavily.com*,*api.search.brave.com*,*api.exa.ai*,*imagine-b
 env RETRIEVER="brave,tavily,exa,twitter"
 env TWITTER_API_URL="https://imagine-backend.bvm.network/api/internal/twitter/"
 env FORWARD_ALL_MESSAGES=1
-
-# Start Redis in background and then execute the CMD from the other Dockerfile
-entrypoint ["/bin/bash", "-c", "redis-server --daemonize yes && sleep 2 && exec \"$@\"", "--"]
+env CACHE_DB_FOLDER="/storage"

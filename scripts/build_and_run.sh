@@ -13,6 +13,7 @@ docker run --rm -it \
     -e EMBEDDING_API_KEY="$EMBEDDING_API_KEY" \
     -e TWITTER_API_URL="$TWITTER_API_URL" \
     -e TWITTER_API_KEY="$TWITTER_API_KEY" \
+    -e CACHE_DB_FOLDER="/workspace" \
     -e DEBUG_MODE="true" \
     -e LOCAL_TEST=1 \
     -e ETERNALAI_MCP_PROXY_URL=http://localmodel:4001/prompt \

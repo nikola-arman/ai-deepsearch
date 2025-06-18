@@ -11,19 +11,19 @@ logger = logging.getLogger(__name__)
 
 def get_twitter_data_by_username(username: str) -> agents.TwitterData:
     def _get_user_info() -> twitter.TwitterUserInfo:
-        user_info_response = get_twitter_user_info_by_username(username, get_followers=False, get_following=False)
+        user_info_response = get_twitter_user_info_by_username(username=username, get_followers=False, get_following=False)
         if user_info_response.status == commons.APIStatus.OK:
             return user_info_response.result
         raise Exception(f"Error getting user info for {username}: {user_info_response.error}")
     
     def _get_recent_tweets() -> twitter.TweetPage:
-        recent_tweets_response = list_tweets_of_user(user_id)
+        recent_tweets_response = list_tweets_of_user(user_id=user_info.id)
         if recent_tweets_response.status == commons.APIStatus.OK:
             return recent_tweets_response.result
         raise Exception(f"Error getting recent tweets for {username}: {recent_tweets_response.error}")
     
     def _get_mentioned_tweets() -> twitter.TweetPage:
-        mentioned_tweets_response = get_mentioned_tweets(username, limit_results=10)
+        mentioned_tweets_response = get_mentioned_tweets(twitter_username=username, limit_results=10)
         if mentioned_tweets_response.status == commons.APIStatus.OK:
             return mentioned_tweets_response.result
         raise Exception(f"Error getting mentioned tweets for {username}: {mentioned_tweets_response.error}")
@@ -36,7 +36,6 @@ def get_twitter_data_by_username(username: str) -> agents.TwitterData:
         logger.error(f"Error getting twitter data for {username}: {str(e)}", exc_info=True)
         raise Exception(f"Error getting twitter data for {username}: {str(e)}")
     
-    user_id = user_info.id
     try:
         recent_tweets: twitter.TweetPage = retry(_get_recent_tweets, max_retry=3, first_interval=2, interval_multiply=2)()
         twitter_data["recent_tweets"] = recent_tweets
@@ -93,7 +92,7 @@ def twitter_context_to_search_result(twitter_context: Dict[str, agents.TwitterDa
 
 def twitter_search(query: str) -> list[SearchResult]:
     twitter_search_response = search_twitter_news(
-        query,
+        query=query,
         impression_count_limit=1000,
         limit_api_results=10,
     )

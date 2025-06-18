@@ -11,7 +11,4 @@ EMBEDDING_API_KEY=os.getenv('EMBEDDING_API_KEY', 'no-need')
 TWITTER_API_URL=os.getenv('TWITTER_API_URL', 'https://imagine-backend.bvm.network/api/internal/twitter/')
 TWITTER_API_KEY=os.getenv('TWITTER_API_KEY', 'no-need')
 
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = os.getenv('REDIS_PORT', 6379)
-REDIS_DB = os.getenv('REDIS_DB', 0)
-REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
+CACHE_DB_FOLDER = os.getenv('CACHE_DB_FOLDER', '/storage')
