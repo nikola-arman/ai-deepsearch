@@ -10,15 +10,18 @@ from pydantic import ValidationError
 import logging
 import re
 import random
+from deepsearch.service.redis import cache_for
 
 logger = logging.getLogger(__name__)
 
-TWITTER_API_URL = os.getenv('TWITTER_API_URL', 'not-needed').rstrip('/')
-TWITTER_API_KEY = os.getenv('TWITTER_API_KEY', 'not-needed')
+TWITTER_API_URL = os.getenv('TWITTER_API_URL', 'no-need').rstrip('/')
+TWITTER_API_KEY = os.getenv('TWITTER_API_KEY', 'no-need')
 TWITTER_USERNAME_TO_ID = "twitter_username_to_id"
 # key builders
 TIMEOUT_CFG = httpx.Timeout(60.0, connect=10.0) 
 
+
+@cache_for(interval_seconds=60 * 60 * 2)
 def get_tweet_info(
     tweet_id: Union[str, int],
     twitter_api_base_url: str = TWITTER_API_URL,
@@ -69,6 +72,8 @@ def get_tweet_info(
                 error=str(e)
             )
 
+
+@cache_for(interval_seconds=60 * 60 * 2)
 def get_top_followers(
     user_id: Union[str, int],
     twitter_api_base_url: str = TWITTER_API_URL,
@@ -114,6 +119,7 @@ def get_top_followers(
             )
             
 
+@cache_for(interval_seconds=60 * 60 * 2)
 def get_top_following(
     user_id: Union[str, int],
     twitter_api_base_url: str = TWITTER_API_URL,
@@ -158,6 +164,8 @@ def get_top_following(
                 error=str(e)
             )
 
+
+@cache_for(interval_seconds=60 * 60 * 2)
 def get_twitter_user_info_by_id(
     user_id: Union[str, int],
     get_followers: bool = True,
@@ -214,6 +222,8 @@ def get_twitter_user_info_by_id(
                 error=str(e)
             )
 
+
+@cache_for(interval_seconds=60 * 60 * 2)
 def get_twitter_user_info_by_username(
     username: str, 
     get_followers: bool = True,
@@ -272,6 +282,8 @@ def get_twitter_user_info_by_username(
                 error=str(e)
             )
 
+
+@cache_for(interval_seconds=60 * 60 * 2)
 def list_tweets_of_user(
     user_id: Union[str, int],
     pagination_token: str = "",
@@ -318,6 +330,7 @@ def list_tweets_of_user(
                 error=str(e)
             )
 
+
 is_valid_user = lambda user: (
     isinstance(user, twitter.TwitterUserInfo) 
     and user.id 
@@ -326,6 +339,8 @@ is_valid_user = lambda user: (
 
 from queue import Queue
 
+
+@cache_for(interval_seconds=60 * 60 * 2)
 def build_twitter_social_graph(
     user_id: str, 
     max_depth: int = 1,
@@ -398,6 +413,8 @@ def build_twitter_social_graph(
 
 from ..utils.misc import dsu
 
+
+@cache_for(interval_seconds=60 * 60 * 2)
 def get_tweet_threads_by_id(
     user_id: str,
     max_calls: int = 5,
@@ -462,6 +479,7 @@ def get_tweet_threads_by_id(
     return response_model(result=threads)
 
 
+@cache_for(interval_seconds=60 * 60 * 2)
 def search_twitter_news(
     query: str,
     impression_count_limit=100,
@@ -494,6 +512,9 @@ def search_twitter_news(
         try:
             resp = client.get(url, params=params)
         except Exception as e:
+            logger.error(
+                f"[search_twitter_news] Error occurred when calling api: {e}"
+            )
             return response_model(
                 status=commons.APIStatus.ERROR, 
                 error=str(e)
@@ -548,6 +569,72 @@ def search_twitter_news(
         filtered_search_result.LookUps[id] = item
 
     return response_model(result=filtered_search_result)
+
+
+@cache_for(interval_seconds=60 * 60 * 2)
+def get_mentioned_tweets(
+    twitter_username: str,
+    limit_results=50,
+    replied=0,
+    get_all=False,
+) -> commons.ResponseMessage[twitter.TweetPage]:
+    response_model = commons.ResponseMessage[twitter.TweetPage]
+    
+    if get_all:
+        url = f"{TWITTER_API_URL}/user/by/username/{twitter_username}/mentions/all"
+        params = {"max_results": 100}
+    else:
+        url = f"{TWITTER_API_URL}/user/by/username/{twitter_username}/mentions"
+        params = {"replied": replied}
+
+    with httpx.Client(
+        headers={"api-key": TWITTER_API_KEY},
+        timeout=TIMEOUT_CFG,
+    ) as client:
+        try:
+            resp = client.get(url, params=params)
+        except Exception as e:
+            logger.error(
+                f"[get_mentioned_tweets] Error occurred when calling api: {e}"
+            )
+            return response_model(
+                status=commons.APIStatus.ERROR, 
+                error=str(e)
+            )
+
+        if resp.status_code != 200:
+            logger.error(
+                f"[get_mentioned_tweets] Error occurred when calling api: {resp.status_code}, url: {resp.url}"
+            )
+            return response_model(
+                status=commons.APIStatus.ERROR, 
+                error=f"Error occurred when calling api: {resp.status_code}, url: {resp.url}"
+            )
+
+        resp_json = resp.json()
+        if resp_json.get("error"):
+            logger.error(
+                f"[get_mentioned_tweets] Error occurred when calling API: {resp_json['error']['message']}, url: {resp.url}"
+            )
+            return response_model(
+                status=commons.APIStatus.ERROR, 
+                error=f"Error occurred when calling API: {resp_json['error']['message']}, url: {resp.url}"
+            )
+
+        try:
+            tweet_page = twitter.TweetPage.model_validate(resp_json["result"])
+        except ValidationError as e:
+            logger.error(
+                f"[get_mentioned_tweets] Error occurred when validating response: {e}"
+            )
+            return response_model(
+                status=commons.APIStatus.ERROR, 
+                error=str(e)
+            )
+
+        filtered_tweet_page = twitter.TweetPage(data=tweet_page.data[:limit_results], meta=tweet_page.meta)
+
+        return response_model(result=filtered_tweet_page)
 
 
 def _optimize_twitter_query(

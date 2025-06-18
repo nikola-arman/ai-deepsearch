@@ -31,7 +31,7 @@ load_dotenv()
 
 # Get the OpenAI-compatible API base URL and API key
 openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")
-openai_api_key = os.environ.get("LLM_API_KEY", "not-needed")
+openai_api_key = os.environ.get("LLM_API_KEY", "no-need")
 
 # Define the prompt template for analysis and reasoning
 REASONING_TEMPLATE = """You are an expert research analyst and reasoning agent. Your task is to analyze search results,
@@ -518,7 +518,7 @@ def init_reasoning_llm(temperature: float = 0.3):
     llm = ChatOpenAI(
         model=os.getenv("LLM_MODEL_ID", "no-need"),
         openai_api_key=openai_api_key,
-        openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
+        openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "no-need" else None,
         temperature=temperature,
         max_tokens=1024,
         streaming=True,

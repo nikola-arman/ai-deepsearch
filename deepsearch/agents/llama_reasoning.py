@@ -16,7 +16,7 @@ load_dotenv()
 
 # Get the OpenAI-compatible API base URL and API key
 openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")
-openai_api_key = os.environ.get("LLM_API_KEY", "not-needed")
+openai_api_key = os.environ.get("LLM_API_KEY", "no-need")
 
 # Define the prompt template for reasoning
 REASONING_TEMPLATE = """You are a helpful AI assistant tasked with answering questions based on search results.
@@ -56,7 +56,7 @@ def init_reasoning_llm():
     llm = ChatOpenAI(
         model=os.getenv("LLM_MODEL_ID", "no-need"),
         openai_api_key=openai_api_key,
-        openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
+        openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "no-need" else None,
         temperature=0.3,
         max_tokens=1024,
     )

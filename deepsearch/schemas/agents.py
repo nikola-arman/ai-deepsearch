@@ -58,6 +58,7 @@ class SearchResult(BaseModel):
 class TwitterData(BaseModel):
     user_info: twitter.TwitterUserInfo
     recent_tweets: Optional[twitter.TweetPage] = []
+    mentioned_tweets: Optional[twitter.TweetPage] = []
 
 
 class SearchState(BaseModel):

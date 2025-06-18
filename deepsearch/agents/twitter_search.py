@@ -2,7 +2,7 @@ from typing import Dict
 from deepsearch.magic import retry
 from deepsearch.schemas.agents import SearchResult
 from deepsearch.schemas import twitter, commons, agents
-from deepsearch.service.twitter import get_twitter_user_info_by_username, list_tweets_of_user, search_twitter_news
+from deepsearch.service.twitter import get_twitter_user_info_by_username, list_tweets_of_user, search_twitter_news, get_mentioned_tweets
 import logging
 
 from deepsearch.utils.misc import truncate_text
@@ -10,21 +10,27 @@ logger = logging.getLogger(__name__)
 
 
 def get_twitter_data_by_username(username: str) -> agents.TwitterData:
-    def get_user_info() -> twitter.TwitterUserInfo:
+    def _get_user_info() -> twitter.TwitterUserInfo:
         user_info_response = get_twitter_user_info_by_username(username, get_followers=False, get_following=False)
         if user_info_response.status == commons.APIStatus.OK:
             return user_info_response.result
         raise Exception(f"Error getting user info for {username}: {user_info_response.error}")
     
-    def get_recent_tweets() -> twitter.TweetPage:
+    def _get_recent_tweets() -> twitter.TweetPage:
         recent_tweets_response = list_tweets_of_user(user_id)
         if recent_tweets_response.status == commons.APIStatus.OK:
             return recent_tweets_response.result
         raise Exception(f"Error getting recent tweets for {username}: {recent_tweets_response.error}")
+    
+    def _get_mentioned_tweets() -> twitter.TweetPage:
+        mentioned_tweets_response = get_mentioned_tweets(username, limit_results=10)
+        if mentioned_tweets_response.status == commons.APIStatus.OK:
+            return mentioned_tweets_response.result
+        raise Exception(f"Error getting mentioned tweets for {username}: {mentioned_tweets_response.error}")
         
     twitter_data = {}
     try:
-        user_info: twitter.TwitterUserInfo = retry(get_user_info, max_retry=3, first_interval=2, interval_multiply=2)()
+        user_info: twitter.TwitterUserInfo = retry(_get_user_info, max_retry=3, first_interval=2, interval_multiply=2)()
         twitter_data["user_info"] = user_info
     except Exception as e:
         logger.error(f"Error getting twitter data for {username}: {str(e)}", exc_info=True)
@@ -32,10 +38,16 @@ def get_twitter_data_by_username(username: str) -> agents.TwitterData:
     
     user_id = user_info.id
     try:
-        recent_tweets: twitter.TweetPage = retry(get_recent_tweets, max_retry=3, first_interval=2, interval_multiply=2)()
+        recent_tweets: twitter.TweetPage = retry(_get_recent_tweets, max_retry=3, first_interval=2, interval_multiply=2)()
         twitter_data["recent_tweets"] = recent_tweets
     except Exception as e:
         logger.warning(f"Error getting recent tweets for {username}: {str(e)}", exc_info=True)
+    
+    try:
+        mentioned_tweets: twitter.TweetPage = retry(_get_mentioned_tweets, max_retry=3, first_interval=2, interval_multiply=2)()
+        twitter_data["mentioned_tweets"] = mentioned_tweets
+    except Exception as e:
+        logger.warning(f"Error getting mentioned tweets for {username}: {str(e)}", exc_info=True)
     
     return agents.TwitterData.model_validate(twitter_data)
 
@@ -61,6 +73,14 @@ def twitter_context_to_search_result(twitter_context: Dict[str, agents.TwitterDa
         ))
 
         for tweet in twitter_data.recent_tweets.data:
+            search_results.append(SearchResult(
+                title=f"{user_info.name} on X: \"{truncate_text(tweet.text)}\"",
+                url=f"https://x.com/{user_info.username}/status/{tweet.id}",
+                content=tweet.text,
+                score=1.0,
+            ))
+
+        for tweet in twitter_data.mentioned_tweets.data:
             search_results.append(SearchResult(
                 title=f"{user_info.name} on X: \"{truncate_text(tweet.text)}\"",
                 url=f"https://x.com/{user_info.username}/status/{tweet.id}",

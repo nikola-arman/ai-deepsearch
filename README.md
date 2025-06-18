@@ -93,7 +93,7 @@ In your `.env` file, ensure you have:
 
 ```
 OPENAI_API_BASE=http://localhost:8080/v1
-OPENAI_API_KEY=not-needed
+OPENAI_API_KEY=no-need
 LLM_MODEL_ID=gpt-3.5-turbo  # This is just a placeholder, llama.cpp will use the loaded model
 ```
 

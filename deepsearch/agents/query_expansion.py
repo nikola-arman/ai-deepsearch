@@ -17,7 +17,7 @@ logger = logging.getLogger("deepsearch.query_expansion")
 
 # Get the OpenAI-compatible API base URL and API key
 openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")
-openai_api_key = os.environ.get("LLM_API_KEY", "not-needed")
+openai_api_key = os.environ.get("LLM_API_KEY", "no-need")
 
 # Define the prompt template for query expansion
 QUERY_EXPANSION_TEMPLATE = """You are a query expansion expert. Your task is to understand the user's information needs and generate diverse search queries that will help find comprehensive answers.
@@ -80,7 +80,7 @@ def init_query_expansion_llm(temperature: float = 0.7):
     llm = ChatOpenAI(
         model=os.getenv("LLM_MODEL_ID", "no-need"),
         openai_api_key=openai_api_key,
-        openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "not-needed" else None,
+        openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "no-need" else None,
         temperature=temperature,  # Higher temperature for query diversity
         max_tokens=1024
     )

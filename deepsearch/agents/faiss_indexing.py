@@ -17,7 +17,7 @@ load_dotenv()
 
 # Get the OpenAI-compatible API base URL and API key
 openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")
-openai_api_key = os.environ.get("LLM_API_KEY", "not-needed")
+openai_api_key = os.environ.get("LLM_API_KEY", "no-need")
 
 
 def batching(data: Generator, batch_size = 1):
