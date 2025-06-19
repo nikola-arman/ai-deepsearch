@@ -2,7 +2,7 @@ from typing import Dict
 from deepsearch.magic import retry
 from deepsearch.schemas.agents import SearchResult
 from deepsearch.schemas import twitter, commons, agents
-from deepsearch.service.twitter import get_twitter_user_info_by_username, list_tweets_of_user, search_twitter_news, get_mentioned_tweets
+from deepsearch.service.twitter import get_twitter_user_info_by_id, get_twitter_user_info_by_username, list_tweets_of_user, search_twitter_news, get_mentioned_tweets
 import logging
 
 from deepsearch.utils.misc import truncate_text
@@ -71,21 +71,29 @@ def twitter_context_to_search_result(twitter_context: Dict[str, agents.TwitterDa
             score=1.0,
         ))
 
-        for tweet in twitter_data.recent_tweets.data:
-            search_results.append(SearchResult(
-                title=f"{user_info.name} on X: \"{truncate_text(tweet.text)}\"",
-                url=f"https://x.com/{user_info.username}/status/{tweet.id}",
-                content=tweet.text,
-                score=1.0,
-            ))
+        if twitter_data.recent_tweets:
+            for tweet in twitter_data.recent_tweets.data:
+                search_results.append(SearchResult(
+                    title=f"{user_info.name} on X: \"{truncate_text(tweet.text)}\"",
+                    url=f"https://x.com/{user_info.username}/status/{tweet.id}",
+                    content=tweet.text,
+                    score=1.0,
+                ))
 
-        for tweet in twitter_data.mentioned_tweets.data:
-            search_results.append(SearchResult(
-                title=f"{user_info.name} on X: \"{truncate_text(tweet.text)}\"",
-                url=f"https://x.com/{user_info.username}/status/{tweet.id}",
-                content=tweet.text,
-                score=1.0,
-            ))
+        if twitter_data.mentioned_tweets:
+            for tweet in twitter_data.mentioned_tweets.data:
+                user_info_response = get_twitter_user_info_by_id(user_id=tweet.author_id, get_followers=False, get_following=False)
+                if user_info_response.status != commons.APIStatus.OK:
+                    continue
+                
+                author_info = user_info_response.result
+                
+                search_results.append(SearchResult(
+                    title=f"{author_info.name} on X: \"{truncate_text(tweet.text)}\"",
+                    url=f"https://x.com/{author_info.username}/status/{tweet.id}",
+                    content=tweet.text,
+                    score=1.0,
+                ))
 
     return search_results
 

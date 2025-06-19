@@ -637,6 +637,7 @@ def search_twitter_news(
 def get_mentioned_tweets(
     twitter_username: str,
     limit_results=50,
+    min_author_followers=1000,
     replied=0,
     get_all=False,
 ) -> commons.ResponseMessage[twitter.TweetPage]:
@@ -693,8 +694,21 @@ def get_mentioned_tweets(
                 status=commons.APIStatus.ERROR, 
                 error=str(e)
             )
+        
+        filtered_tweets = []
+        for tweet in tweet_page.data:
+            user_info_response = get_twitter_user_info_by_id(user_id=tweet.author_id, get_followers=False, get_following=False)
+            if user_info_response.status != commons.APIStatus.OK:
+                continue
+            
+            author_info = user_info_response.result
+            if author_info.public_metrics.followers_count >= min_author_followers:
+                filtered_tweets.append(tweet)
 
-        filtered_tweet_page = twitter.TweetPage(data=tweet_page.data[:limit_results], meta=tweet_page.meta)
+        filtered_tweet_page = twitter.TweetPage(
+            data=filtered_tweets[:limit_results],
+            meta=tweet_page.meta
+        )
 
         return response_model(result=filtered_tweet_page)
 
