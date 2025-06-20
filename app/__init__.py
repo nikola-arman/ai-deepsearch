@@ -110,8 +110,12 @@ def run_deep_search_pipeline(
 
         twitter_context = {}
         for username in twitter_usernames:
-            twitter_data = get_twitter_data_by_username(username)
-            twitter_context[username] = twitter_data
+            try:
+                twitter_data = get_twitter_data_by_username(username)
+                twitter_context[username] = twitter_data
+            except Exception as e:
+                logger.error(f"  Error in getting twitter data for {username}: {str(e)}", exc_info=True)
+                continue
 
         state.combined_results = twitter_context_to_search_result(twitter_context)
 

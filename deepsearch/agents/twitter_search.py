@@ -33,8 +33,8 @@ def get_twitter_data_by_username(username: str) -> agents.TwitterData:
         user_info: twitter.TwitterUserInfo = retry(_get_user_info, max_retry=3, first_interval=2, interval_multiply=2)()
         twitter_data["user_info"] = user_info
     except Exception as e:
-        logger.error(f"Error getting twitter data for {username}: {str(e)}", exc_info=True)
-        raise Exception(f"Error getting twitter data for {username}: {str(e)}")
+        logger.error(f"Error getting user info for {username}: {str(e)}", exc_info=True)
+        raise Exception(f"Error getting user info for {username}: {str(e)}")
     
     try:
         recent_tweets: twitter.TweetPage = retry(_get_recent_tweets, max_retry=3, first_interval=2, interval_multiply=2)()
