@@ -29,8 +29,7 @@ from deepsearch.agents import (
     twitter_context_to_search_result,
     twitter_search
 )
-from deepsearch.agents.deep_reasoning import ReferenceBuilder, init_reasoning_llm
-from app.utils import detect_research_intent, detect_twitter_usernames, get_conversation_summary, reply_conversation
+from deepsearch.agents.deep_reasoning import ReferenceBuilder, generate_final_answer
 
 from json_repair import repair_json
 import json
@@ -104,20 +103,20 @@ def run_deep_search_pipeline(
         # Initialize state
         state = SearchState(original_query=query)
 
-        usernames_obj = detect_twitter_usernames(query=query)
-        # Limit to at most 3 usernames to save API quota
-        twitter_usernames = usernames_obj.twitter_usernames[:3]
+        # usernames_obj = detect_twitter_usernames(query=query)
+        # # Limit to at most 1 usernames to save API quota
+        # twitter_usernames = usernames_obj.twitter_usernames[:1]
 
-        twitter_context = {}
-        for username in twitter_usernames:
-            try:
-                twitter_data = get_twitter_data_by_username(username)
-                twitter_context[username] = twitter_data
-            except Exception as e:
-                logger.error(f"  Error in getting twitter data for {username}: {str(e)}", exc_info=True)
-                continue
+        # twitter_context = {}
+        # for username in twitter_usernames:
+        #     try:
+        #         twitter_data = get_twitter_data_by_username(username)
+        #         twitter_context[username] = twitter_data
+        #     except Exception as e:
+        #         logger.error(f"  Error in getting twitter data for {username}: {str(e)}", exc_info=True)
+        #         continue
 
-        state.combined_results = twitter_context_to_search_result(twitter_context)
+        # state.combined_results = twitter_context_to_search_result(twitter_context)
 
         # Instead of using query_expansion_agent, let the deep_reasoning_agent handle initial query generation
         logger.info("Step 1: Initial reasoning to analyze query and generate search queries...")
@@ -182,13 +181,13 @@ def run_deep_search_pipeline(
 
                 # Step 3.5: Twitter search for this query
                 twitter_results = []
-                if Retriever.TWITTER in retrievers:
-                    logger.info("Performing Twitter search...")
-                    try:
-                        twitter_results = twitter_search(query)
-                        logger.info(f"    Found {len(twitter_results)} Twitter results")
-                    except Exception as e:
-                        logger.error(f"    Error in Twitter search: {str(e)}", exc_info=True)
+                # if Retriever.TWITTER in retrievers:
+                #     logger.info("Performing Twitter search...")
+                #     try:
+                #         twitter_results = twitter_search(query)
+                #         logger.info(f"    Found {len(twitter_results)} Twitter results")
+                #     except Exception as e:
+                #         logger.error(f"    Error in Twitter search: {str(e)}", exc_info=True)
 
                 # Combine search results
                 temp_state.search_results = (
@@ -307,11 +306,7 @@ def run_deep_search_pipeline(
                 yield state.final_answer
                 return
 
-            from deepsearch.agents.deep_reasoning import generate_final_answer
-            from .utils import strip_thinking_content
-
-            for msg in generate_final_answer(state):
-                yield strip_thinking_content(msg)
+            yield from generate_final_answer(state)
 
         except Exception as e:
             logger.error(f"  Error in final answer generation: {str(e)}", exc_info=True)
@@ -445,6 +440,8 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                     if "<action>" not in chunk_str:
                         report += chunk_str
                     yield chunk
+
+                logger.info(f"report: {report}")
 
                 with open('report.txt', 'w') as f:
                     f.write(report)

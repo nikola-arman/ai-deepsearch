@@ -17,6 +17,7 @@ import urllib
 from deepsearch.magic import retry
 from deepsearch.schemas.agents import SearchState, SearchResult
 from deepsearch.utils.misc import escape_dollar_signs
+from deepsearch.utils.streaming import handle_llm_stream, handle_stream, handle_stream_strip_heading, handle_stream_strip_thinking
 
 
 def strip_thinking_content(content: str) -> str:
@@ -397,6 +398,7 @@ CRITICAL:
 - The response must start with '[' and end with ']' and contain only valid JSON.
 """
 
+CITATION_PATTERN = r'\cite{*}'
 
 class ReferenceBuilder:
     def __init__(self, state: SearchState):
@@ -805,65 +807,49 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     logger.info(f"Initial key points after removing hallucinations: {initial_key_points}")
 
     key_points_llm = init_reasoning_llm(temperature=0.2)
-    key_points_prompt = PromptTemplate(
-        input_variables=["original_query", "search_details", "key_points", "search_context"],
-        template=KEY_POINTS_TEMPLATE
+    key_points_prompt = KEY_POINTS_TEMPLATE.format(
+        original_query=state.original_query,
+        search_details=search_details,
+        key_points=initial_key_points,
+        search_context=search_context
     )
-    key_points_chain = key_points_prompt | key_points_llm
 
     def get_key_points():
-        key_points_response = key_points_chain.invoke({
-            "original_query": state.original_query,
-            "search_details": search_details,
-            "key_points": initial_key_points,
-            "search_context": search_context
-        })
-
-        # Extract the content if it's a message object
-        key_points = key_points_response.content if hasattr(key_points_response, 'content') else key_points_response
-        key_points = strip_thinking_content(key_points)
-
+        content_stream = handle_llm_stream(key_points_llm.stream(key_points_prompt))
+        thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+        key_points = ''
+        for chunk in handle_stream(thinking_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
+            yield chunk
+            key_points += chunk
         return key_points
 
-    key_points = retry(get_key_points, max_retry=3, first_interval=2, interval_multiply=2)()
+    yield '## Key Points\n\n'
+    key_points = yield from retry(get_key_points, max_retry=3, first_interval=2, interval_multiply=2)()
+
     logger.info("Generated key points for final answer")
     logger.info(f"Key points: {key_points}")
-
-    yield '## Key Points\n\n'
-    
-    for kp in key_points.split('\n'):
-        kp = kp.strip()
-
-        if kp:
-            yield ref_builder.embed_references(kp) + '\n'
-
     
     direct_answer_llm = init_reasoning_llm(temperature=0.3)
-    direct_answer_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "search_details", "search_context"],
-        template=DIRECT_ANSWER_TEMPLATE
+    direct_answer_prompt = DIRECT_ANSWER_TEMPLATE.format(
+        original_query=state.original_query,
+        key_points=initial_key_points,
+        search_details=search_details,
+        search_context=search_context
     )
-    direct_answer_chain = direct_answer_prompt | direct_answer_llm
 
     def get_direct_answer():
-        direct_answer_response = direct_answer_chain.invoke({
-            "original_query": state.original_query,
-            "key_points": initial_key_points,
-            "search_details": search_details,
-            "search_context": search_context
-        })
-
-        # Extract the content if it's a message object
-        direct_answer = direct_answer_response.content if hasattr(direct_answer_response, 'content') else direct_answer_response
-        direct_answer = strip_thinking_content(direct_answer)
-
+        content_stream = handle_llm_stream(direct_answer_llm.stream(direct_answer_prompt))
+        thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+        direct_answer = ''
+        for chunk in handle_stream(thinking_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
+            yield chunk
+            direct_answer += chunk
         return direct_answer
-    
-    direct_answer = retry(get_direct_answer, max_retry=3, first_interval=2, interval_multiply=2)()
+
+    yield '\n\n## Direct Answer\n\n'
+    direct_answer = yield from retry(get_direct_answer, max_retry=3, first_interval=2, interval_multiply=2)()
+
     logger.info("Generated direct answer")
-    
-    yield '\n## Direct Answer\n\n'
-    yield ref_builder.embed_references(direct_answer) + '\n'
 
     # Stage 3: Generate comprehensive outline for detailed notes
     outline_llm = init_reasoning_llm(temperature=0.3)
@@ -929,11 +915,6 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
     # Stage 4: Generate detailed content for each section
     section_llm = init_reasoning_llm(temperature=0.4)
-    section_prompt = PromptTemplate(
-        input_variables=["original_query", "key_points", "direct_answer", "search_details", "section_heading", "section_outline", "search_context"],
-        template=SECTION_CONTENT_TEMPLATE
-    )
-    section_chain = section_prompt | section_llm
 
     # Generate content for each section
     for idx, section in enumerate(sections):
@@ -948,53 +929,59 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         punctuations = string.punctuation + " \n\t"
 
         heading = heading.strip(punctuations)
+        heading = ref_builder.embed_references(heading)
         logger.info(f"Generating content for section: {heading}")
 
+        section_prompt = SECTION_CONTENT_TEMPLATE.format(
+            original_query=state.original_query,
+            key_points=initial_key_points,
+            direct_answer=direct_answer,
+            search_details=search_details,
+            section_heading=heading,
+            section_outline=section_outline_text,
+            search_context=search_context
+        )
+
+        yield f'\n\n## {heading}\n\n'
+        
         def get_section_content():
-            section_response = section_chain.invoke({
-                "original_query": state.original_query,
-                "key_points": initial_key_points,
-                "direct_answer": direct_answer,
-                "search_details": search_details,
-                "section_heading": heading,
-                "section_outline": section_outline_text,
-                "search_context": search_context
-            })
-
-            # Extract the content if it's a message object
-            section_content = section_response.content if hasattr(section_response, 'content') else section_response
-            section_content = strip_thinking_content(section_content)
-
+            content_stream = handle_llm_stream(section_llm.stream(section_prompt))
+            thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+            heading_stripped_stream = handle_stream_strip_heading(thinking_stripped_stream)
+            section_content = ''
+            for chunk in handle_stream(heading_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
+                yield chunk
+                section_content += chunk
             return section_content
 
-        section_content = retry(get_section_content, max_retry=3, first_interval=2, interval_multiply=2)()
+        section_content = yield from retry(get_section_content, max_retry=3, first_interval=2, interval_multiply=2)()
+        logger.info(f"Section content: {section_content}")
 
         # Process the content to remove any headings that match the current heading
-        content_lines = section_content.split('\n')
-        cleaned_lines = []
-        skip_next_line = False
+        # content_lines = section_content.split('\n')
+        # cleaned_lines = []
+        # skip_next_line = False
 
-        for line in content_lines:
-            # Skip lines that contain the section heading with ## prefix
-            if f"## {heading}" in line or f"##  {heading}" in line or heading in line and line.startswith('##'):
-                skip_next_line = True
-                continue
+        # for line in content_lines:
+        #     # Skip lines that contain the section heading with ## prefix
+        #     if f"## {heading}" in line or f"##  {heading}" in line or heading in line and line.startswith('##'):
+        #         skip_next_line = True
+        #         continue
 
-            # Skip empty line after a heading to maintain proper spacing
-            if skip_next_line and not line.strip():
-                skip_next_line = False
-                continue
+        #     # Skip empty line after a heading to maintain proper spacing
+        #     if skip_next_line and not line.strip():
+        #         skip_next_line = False
+        #         continue
 
-            # Keep all other lines
-            cleaned_lines.append(line)
-            skip_next_line = False
+        #     # Keep all other lines
+        #     cleaned_lines.append(line)
+        #     skip_next_line = False
 
-        cleaned_content = '\n'.join(cleaned_lines)
+        # cleaned_content = '\n'.join(cleaned_lines)
 
-        heading = ref_builder.embed_references(heading)
-        yield f'\n## {heading}\n\n'
-        logger.info(f"Cleaned content: {cleaned_content}")
-        yield ref_builder.embed_references(cleaned_content)
+        # heading = ref_builder.embed_references(heading)
+        # logger.info(f"Cleaned content: {cleaned_content}")
+        # yield ref_builder.embed_references(cleaned_content)
 
     logger.info("Generated all section content for detailed notes")
 
@@ -1005,5 +992,5 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     if not references:
         return
 
-    yield '\n## References\n\n'
+    yield '\n\n## References\n\n'
     yield references

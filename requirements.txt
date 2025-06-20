@@ -11,3 +11,4 @@ regex==2024.11.6
 requests==2.32.3
 tavily-python==0.5.4
 aiosqlite==0.21.0
+regex==2024.11.6

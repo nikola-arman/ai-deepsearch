@@ -1,6 +1,10 @@
 
-from typing import Optional
+import re
+from typing import AsyncGenerator, Callable, Generator, Optional
 import uuid
+
+import regex
+from langchain_core.messages import AIMessageChunk
 from deepsearch.schemas.openai import ChatCompletionStreamResponse
 import time
 
@@ -107,3 +111,88 @@ def wrap_chunk(uuid: str, raw: str, role: str = 'assistant') -> ChatCompletionSt
             )
         ]
     )
+
+
+def handle_stream(stream: Generator[str, None, None], pattern: str, callback: Callable) -> Generator[str, None, None]:
+    pattern_length = len(pattern)
+    buffer = ''
+
+    i, j = 0, 0 # i --> buffer, j --> pattern
+    last_yield = 0
+    for chunk in stream:
+        buffer += chunk
+
+        while i < len(buffer):
+            if pattern[j] == '*' or pattern[j] == buffer[i]:
+                if j == 0:
+                    yield buffer[last_yield:i]
+                    last_yield = i
+
+                if pattern[j] != '*' or buffer[i] == pattern[j + 1]:
+                    j += 1
+
+                i += 1
+
+            if j == pattern_length - 1:
+                yield callback(buffer[last_yield:i])
+                last_yield = i
+                j = 0
+
+            elif i < len(buffer) and pattern[j] != buffer[i] and pattern[j] != '*':
+                if j != 0:
+                    j = 0
+                else:
+                    i += 1
+
+        if j == 0 and i > 0:
+            yield buffer[last_yield:]
+            last_yield = len(buffer)
+            
+    if last_yield < len(buffer):
+        yield buffer[last_yield:]
+
+
+def handle_stream_strip(stream: Generator[str, None, None], strip_pattern: regex.Pattern) -> Generator[str, None, None]:
+    buffer = ''
+    
+    for chunk in stream:
+        buffer += chunk
+
+        partial_match = strip_pattern.search(buffer, partial=True)
+        if not partial_match or (partial_match.span()[0] == partial_match.span()[1]):
+            yield buffer
+            buffer = ''
+            continue
+        
+        if partial_match.partial:
+            yield buffer[:partial_match.span()[0]]
+            buffer = buffer[partial_match.span()[0]:]
+            continue
+        
+        buffer = strip_pattern.sub('', buffer)
+        yield buffer
+        
+        buffer = ''
+
+    if buffer:
+        yield buffer
+
+
+def handle_llm_stream(stream: Generator[AIMessageChunk, None, None]) -> Generator[str, None, None]:
+    for chunk in stream:
+        yield chunk.content
+
+
+def handle_stream_strip_begin_eoln(stream: Generator[str, None, None]) -> Generator[str, None, None]:
+    pattern = regex.compile(r'^\n+', regex.DOTALL | regex.IGNORECASE)
+    yield from handle_stream_strip(stream, pattern)
+
+
+def handle_stream_strip_thinking(stream: Generator[str, None, None]) -> Generator[str, None, None]:
+    pattern = regex.compile(r'<think>.*?</think>\n*', regex.DOTALL | regex.IGNORECASE)
+    yield from handle_stream_strip_begin_eoln(handle_stream_strip(stream, pattern))
+
+
+def handle_stream_strip_heading(stream: Generator[str, None, None]) -> Generator[str, None, None]:
+    pattern = regex.compile(r'.*?##.*?\n', regex.DOTALL | regex.IGNORECASE)
+    yield from handle_stream_strip(stream, pattern)
