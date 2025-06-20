@@ -23,7 +23,7 @@ def get_twitter_data_by_username(username: str) -> agents.TwitterData:
         raise Exception(f"Error getting recent tweets for {username}: {recent_tweets_response.error}")
     
     def _get_mentioned_tweets() -> twitter.TweetPage:
-        mentioned_tweets_response = get_mentioned_tweets(twitter_username=username, limit_results=10)
+        mentioned_tweets_response = get_mentioned_tweets(twitter_username=username, limit_results=10, min_author_followers=1000)
         if mentioned_tweets_response.status == commons.APIStatus.OK:
             return mentioned_tweets_response.result
         raise Exception(f"Error getting mentioned tweets for {username}: {mentioned_tweets_response.error}")
@@ -42,6 +42,9 @@ def get_twitter_data_by_username(username: str) -> agents.TwitterData:
     except Exception as e:
         logger.warning(f"Error getting recent tweets for {username}: {str(e)}", exc_info=True)
     
+    logger.info(f"Getting mentioned tweets for {username}")
+    logger.info(twitter_data.model_dump_json(indent=2))
+
     try:
         mentioned_tweets: twitter.TweetPage = retry(_get_mentioned_tweets, max_retry=3, first_interval=2, interval_multiply=2)()
         twitter_data["mentioned_tweets"] = mentioned_tweets
