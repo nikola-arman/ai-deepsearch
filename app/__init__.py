@@ -396,24 +396,43 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
 
     model_id = os.getenv('LLM_MODEL_ID', 'local-model')
 
+    is_streaming = True
+
     completion = retry(client.chat.completions.create, max_retry=3, first_interval=2, interval_multiply=2)(
         model=model_id,
         messages=messages,
         tools=TOOL_CALLS,
         tool_choice="auto",
+        stream=is_streaming,
     )
 
-    if completion.choices[0].message.content:
-        yield to_chunk_data(
-            wrap_chunk(
-                response_uuid,
-                completion.choices[0].message.content
-            )
+    if is_streaming:
+        content = ''
+        for chunk in completion:
+            if chunk.choices[0].delta.content:
+                yield to_chunk_data(
+                    wrap_chunk(
+                        response_uuid,
+                        chunk.choices[0].delta.content
+                    )
+                )
+                content += chunk.choices[0].delta.content
+        
+        messages.append({
+            "role": "assistant",
+            "content": content,
+        })
+    else:
+        if completion.choices[0].message.content:
+            yield to_chunk_data(
+                wrap_chunk(
+                    response_uuid,
+                    completion.choices[0].message.content
+                )
+            )        
+        messages.append(
+            refine_assistant_message(completion.choices[0].message.model_dump())
         )
-
-    messages.append(
-        refine_assistant_message(completion.choices[0].message.model_dump())
-    )
 
     loops = 0
     report = ''
@@ -471,14 +490,32 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
             messages=messages,
             tools=TOOL_CALLS if loops < 5 else openai._types.NOT_GIVEN,
             tool_choice="auto" if loops < 5 else openai._types.NOT_GIVEN,
+            stream=is_streaming,
         )
 
-        if completion.choices[0].message.content:
-            yield to_chunk_data(
-                wrap_chunk(
-                    response_uuid,
-                    completion.choices[0].message.content
+        if is_streaming:
+            content = ''
+            for chunk in completion:
+                if chunk.choices[0].delta.content:
+                    yield to_chunk_data(
+                        wrap_chunk(
+                            response_uuid,
+                            chunk.choices[0].delta.content
+                        )
+                    )
+                    content += chunk.choices[0].delta.content
+            
+            messages.append({
+                "role": "assistant",
+                "content": content,
+            })
+        else:
+            if completion.choices[0].message.content:
+                yield to_chunk_data(
+                    wrap_chunk(
+                        response_uuid,
+                        completion.choices[0].message.content
+                    )
                 )
-            )
 
-        messages.append(refine_assistant_message(completion.choices[0].message.model_dump()))
+            messages.append(refine_assistant_message(completion.choices[0].message.model_dump()))
