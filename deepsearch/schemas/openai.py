@@ -1073,7 +1073,7 @@ class DeltaMessage(OpenAIBaseModel):
     role: Optional[str] = None
     content: Optional[str] = None
     reasoning_content: Optional[str] = None
-    tool_calls: list[DeltaToolCall] = Field(default_factory=list)
+    tool_calls: Optional[list[DeltaToolCall]] = Field(default_factory=list)
 
 
 class ChatCompletionResponseStreamChoice(OpenAIBaseModel):

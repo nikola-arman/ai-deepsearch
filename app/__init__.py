@@ -6,6 +6,8 @@ import os
 
 from deepsearch.magic import retry
 from deepsearch.schemas import commons, twitter
+from deepsearch.schemas.openai import ErrorResponse
+from deepsearch.utils.oai_streaming import ChatCompletionResponseBuilder, create_streaming_response
 from deepsearch.utils.streaming import wrap_thought, to_chunk_data
 
 os.environ['TAVILY_API_KEY'] = 'no-need'
@@ -389,50 +391,52 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
     messages = refine_chat_history(messages, system_prompt=system_prompt)
     response_uuid = str(uuid.uuid4())
 
+    base_url = os.getenv('LLM_BASE_URL')
+    api_key = os.getenv('LLM_API_KEY')
+
     client = openai.Client(
-        base_url=os.getenv('LLM_BASE_URL'),
-        api_key=os.getenv('LLM_API_KEY')
+        base_url=base_url,
+        api_key=api_key
     )
 
     model_id = os.getenv('LLM_MODEL_ID', 'local-model')
 
-    is_streaming = True
+    NO_STREAMING = False
 
-    completion = retry(client.chat.completions.create, max_retry=3, first_interval=2, interval_multiply=2)(
-        model=model_id,
-        messages=messages,
-        tools=TOOL_CALLS,
-        tool_choice="auto",
-        stream=is_streaming,
-    )
-
-    if is_streaming:
-        content = ''
-        for chunk in completion:
-            if chunk.choices[0].delta.content:
-                yield to_chunk_data(
-                    wrap_chunk(
-                        response_uuid,
-                        chunk.choices[0].delta.content
-                    )
-                )
-                content += chunk.choices[0].delta.content
-        
-        messages.append({
-            "role": "assistant",
-            "content": content,
-        })
-    else:
-        if completion.choices[0].message.content:
-            yield to_chunk_data(
-                wrap_chunk(
-                    response_uuid,
-                    completion.choices[0].message.content
-                )
-            )        
-        messages.append(
-            refine_assistant_message(completion.choices[0].message.model_dump())
+    if NO_STREAMING:
+        completion = retry(client.chat.completions.create, max_retry=3, first_interval=2, interval_multiply=2)(
+            model=model_id,
+            messages=messages,
+            tools=TOOL_CALLS,
+            tool_choice="auto",
+            stream=False,
         )
+    else:
+        builder = ChatCompletionResponseBuilder()
+
+        completion_it = create_streaming_response(
+            base_url=base_url,
+            api_key=api_key,
+            messages=messages,
+            model=model_id,
+            tools=TOOL_CALLS,
+        )
+        
+        for chunk in completion_it:
+            if isinstance(chunk, ErrorResponse):
+                raise openai.BadRequestError(chunk.message, response=None, body=None)
+
+            builder.add_chunk(chunk)
+
+            if chunk.choices[0].delta.content:
+                chunk.id = response_uuid
+                yield to_chunk_data(chunk)
+
+        completion = builder.build()
+
+    messages.append(
+        refine_assistant_message(completion.choices[0].message.model_dump())
+    )
 
     loops = 0
     report = ''
@@ -485,37 +489,37 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                     }
                 )
 
-        completion = retry(client.chat.completions.create, max_retry=3, first_interval=2, interval_multiply=2)(
-            model=model_id,
-            messages=messages,
-            tools=TOOL_CALLS if loops < 5 else openai._types.NOT_GIVEN,
-            tool_choice="auto" if loops < 5 else openai._types.NOT_GIVEN,
-            stream=is_streaming,
-        )
-
-        if is_streaming:
-            content = ''
-            for chunk in completion:
-                if chunk.choices[0].delta.content:
-                    yield to_chunk_data(
-                        wrap_chunk(
-                            response_uuid,
-                            chunk.choices[0].delta.content
-                        )
-                    )
-                    content += chunk.choices[0].delta.content
-            
-            messages.append({
-                "role": "assistant",
-                "content": content,
-            })
+        if NO_STREAMING:
+            completion = retry(client.chat.completions.create, max_retry=3, first_interval=2, interval_multiply=2)(
+                model=model_id,
+                messages=messages,
+                tools=TOOL_CALLS,
+                tool_choice="auto",
+                stream=False,
+            )
         else:
-            if completion.choices[0].message.content:
-                yield to_chunk_data(
-                    wrap_chunk(
-                        response_uuid,
-                        completion.choices[0].message.content
-                    )
-                )
+            builder = ChatCompletionResponseBuilder()
 
-            messages.append(refine_assistant_message(completion.choices[0].message.model_dump()))
+            completion_it = create_streaming_response(
+                base_url=base_url,
+                api_key=api_key,
+                messages=messages,
+                model=model_id,
+                tools=TOOL_CALLS,
+            )
+            
+            for chunk in completion_it:
+                if isinstance(chunk, ErrorResponse):
+                    raise openai.BadRequestError(chunk.message, response=None, body=None)
+
+                builder.add_chunk(chunk)
+
+                if chunk.choices[0].delta.content:
+                    chunk.id = response_uuid
+                    yield to_chunk_data(chunk)
+
+            completion = builder.build()
+        
+        messages.append(
+            refine_assistant_message(completion.choices[0].message.model_dump())
+        )
