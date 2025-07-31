@@ -398,6 +398,81 @@ CRITICAL:
 - The response must start with '[' and end with ']' and contain only valid JSON.
 """
 
+FINAL_REPORT_TEMPLATE = """You are an expert content writer. Your task is to write a very long and comprehensive report.
+
+ORIGINAL QUERY: {original_query}
+
+SEARCH CONTEXT:
+{search_context}
+
+KEY POINTS:
+{key_points}
+
+DIRECT ANSWER:
+{direct_answer}
+
+SEARCH DETAILS:
+{search_details}
+
+REPORT OUTLINE:
+{report_outline}
+
+INSTRUCTIONS:
+Create rich, detailed content for the report following the provided outline exactly. Your content should:
+1. Cover each section and sub-point in the outline in the specified order
+2. Include all technical details, examples, and comparisons mentioned in the outline
+3. Use the sources referenced in the outline to support your points
+5. Use proper markdown formatting for subsections and formatting
+6. Where relevant, include:
+   - Tables for comparing options or features
+   - Bulleted lists for steps or features
+   - Numbered lists for sequential processes
+   - Mathematical formulas if applicable
+7. Use **bold** for important terms and concepts
+8. Use *italics* for emphasis when appropriate
+9. Use ## for section headings
+10. Properly add new lines after each heading
+11. Do not at horizontal divider between sections
+
+IMPORTANT RULES:
+1. ONLY include information that is directly supported by the search context
+2. DO NOT make up or infer information not present in the search results
+3. If information is missing or unclear, note it as a limitation rather than making assumptions
+4. Always include in-text citations using the syntax \\cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the SEARCH DETAILS, DIRECT ANSWER and KEY POINTS.
+5. Use direct quotes from search results when appropriate
+6. Maintain academic rigor and avoid speculation
+7. If the search context is insufficient to cover a point, clearly state this limitation
+8. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
+9. Do not include the references section at the end of your answer.
+
+Provide in-depth, authoritative content with specific facts, figures, and examples where possible,
+while strictly adhering to the information available in the search context and following the outline exactly.
+
+Do not list all references at the end of your answer, just put citations in-line.
+"""
+
+# SURVEY_NOTE_TEMPLATE = """You are an expert content writer. You are given a user query in <query></query> and to help you answer the query, you are also given the search context in <search_context></search_context>. The search context is the search results you will use to answer the user's query.
+
+# <query>{original_query}</query>
+# <search_context>{search_context}</search_context>
+
+# Now, answer the user's query using the search context.
+# - The search context may contain some irrelevant information that can be ignored.
+# - Current time is {current_time}. Ignore anything that contradicts this.
+# - Do not repeat the user's query.
+# - Do not mention that user's question may have a typo unless it's very clear. Trust the original user's question as the source of truth.
+# - Present your response nicely and cohesively using markdown. You can rearrange the ordering of information to make the response better.
+# - Start with a direct answer section (do not mention "direct answer" in the title or anywhere), and then present a survey section with a whole response in the style of a **very long** survey note (do not mention "survey" in the title) containing all the little details. Divide the two parts with one single horizontal divider, and do not use horizontal divider **anywhere else**.
+# - The direct answer section should directly address the user's query with hedging based on uncertainty or complexity. Written for a layman, the answer should be clear and simple to follow.
+# - The direct answer section should start with very short key points, then follow with a few short sections, before we start the survey section. Use appropriate bolding and headers when necessary. Include supporting URLs whenever possible. The key points must have appropriate level of assertiveness based on level of uncertainty you have and highlight any controversy around the topic. Only use absolute statements if the question is **absolutely not sensitive/controversial** topic and you are **absolutely sure**. Otherwise, use language that acknowledges complexity, such as 'research suggests,' 'it seems likely that,' or 'the evidence leans toward,' to keep things approachable and open-ended, especially on sensitive or debated topics. Key points should be diplomatic and empathetic to all sides.
+# - Use headings and tables if they improve organization. If tables appear in the search context, include them. Aim to include at least one table (or multiple tables) in the report section unless explicitly instructed otherwise.
+# - The survey section should try to mimic professional articles and include a strict superset of the content in the direct answer section.
+# - The answer should be a standalone document that answers the user's question without repeating the user's question.
+# - The answer should be complete and self-contained, as the user will not have access to the search context.
+# - Always include in-text citations using the syntax \\cite{{$ID}} for each fact or claim, for all key_points, reasoning and knowledge_gaps. Where the $ID is mentioned in the search context.
+# - Do not list any references at the end of your answer. Do not include a reference section at the end of your answer. Just put citations in-line.
+# """
+
 CITATION_PATTERN = r'\cite{*}'
 
 class ReferenceBuilder:
@@ -828,7 +903,31 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
     logger.info("Generated key points for final answer")
     logger.info(f"Key points: {key_points}")
-    
+
+    # current_time_utc_str = datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    # survey_note_llm = init_reasoning_llm(temperature=0.3)
+    # survey_note_prompt = SURVEY_NOTE_TEMPLATE.format(
+    #     original_query=state.original_query,
+    #     search_context=search_context,
+    #     current_time=current_time_utc_str
+    # )
+
+    # def get_survey_note():
+    #     content_stream = handle_llm_stream(survey_note_llm.stream(survey_note_prompt))
+    #     thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+    #     survey_note = ''
+    #     for chunk in handle_stream(thinking_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
+    #         yield chunk
+    #         survey_note += chunk
+    #     return survey_note
+
+    # yield '\n\n## Survey Note\n\n'
+    # survey_note = yield from retry(get_survey_note, max_retry=3, first_interval=2, interval_multiply=2)()
+
+    # logger.info("Generated survey note")
+    # logger.info(f"Survey note: {survey_note}")
+
     direct_answer_llm = init_reasoning_llm(temperature=0.3)
     direct_answer_prompt = DIRECT_ANSWER_TEMPLATE.format(
         original_query=state.original_query,
@@ -913,49 +1012,75 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     logger.info(f"Sections outline: {json.dumps(sections, indent=2)}")
     logger.info(f"Identified {len(sections)} sections to expand")
 
-    # Stage 4: Generate detailed content for each section
-    section_llm = init_reasoning_llm(temperature=0.4)
+    # Stage 4: Generate a comprehensive report
+    report_llm = init_reasoning_llm(temperature=0.4)
+    report_prompt = FINAL_REPORT_TEMPLATE.format(
+        original_query=state.original_query,
+        search_details=search_details,
+        key_points=initial_key_points,
+        direct_answer=direct_answer,
+        report_outline=section_outline,
+        search_context=search_context
+    )
 
-    # Generate content for each section
-    for idx, section in enumerate(sections):
-        heading = section['heading']
-        subpoints = section['subpoints']
+    def get_report():
+        content_stream = handle_llm_stream(report_llm.stream(report_prompt))
+        thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+        report = ''
+        for chunk in handle_stream(thinking_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
+            yield chunk
+            report += chunk
+        return report
+    
+    yield '\n\n---\n\n'
+    report = yield from retry(get_report, max_retry=3, first_interval=2, interval_multiply=2)()
 
-        section_outline_text = f"## {heading}\n"
-        for subpoint in subpoints:
-            section_outline_text += f"- {subpoint}\n"
+    logger.info("Generated report")
+    logger.info(f"Report: {report}")
 
-        import string
-        punctuations = string.punctuation + " \n\t"
+    # # Stage 4: Generate detailed content for each section
+    # section_llm = init_reasoning_llm(temperature=0.4)
 
-        heading = heading.strip(punctuations)
-        heading = ref_builder.embed_references(heading)
-        logger.info(f"Generating content for section: {heading}")
+    # # Generate content for each section
+    # for idx, section in enumerate(sections):
+    #     heading = section['heading']
+    #     subpoints = section['subpoints']
 
-        section_prompt = SECTION_CONTENT_TEMPLATE.format(
-            original_query=state.original_query,
-            key_points=initial_key_points,
-            direct_answer=direct_answer,
-            search_details=search_details,
-            section_heading=heading,
-            section_outline=section_outline_text,
-            search_context=search_context
-        )
+    #     section_outline_text = f"## {heading}\n"
+    #     for subpoint in subpoints:
+    #         section_outline_text += f"- {subpoint}\n"
 
-        yield f'\n\n## {heading}\n\n'
+    #     import string
+    #     punctuations = string.punctuation + " \n\t"
+
+    #     heading = heading.strip(punctuations)
+    #     heading = ref_builder.embed_references(heading)
+    #     logger.info(f"Generating content for section: {heading}")
+
+    #     section_prompt = SECTION_CONTENT_TEMPLATE.format(
+    #         original_query=state.original_query,
+    #         key_points=initial_key_points,
+    #         direct_answer=direct_answer,
+    #         search_details=search_details,
+    #         section_heading=heading,
+    #         section_outline=section_outline_text,
+    #         search_context=search_context
+    #     )
+
+    #     yield f'\n\n## {heading}\n\n'
         
-        def get_section_content():
-            content_stream = handle_llm_stream(section_llm.stream(section_prompt))
-            thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
-            heading_stripped_stream = handle_stream_strip_heading(thinking_stripped_stream)
-            section_content = ''
-            for chunk in handle_stream(heading_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
-                yield chunk
-                section_content += chunk
-            return section_content
+    #     def get_section_content():
+    #         content_stream = handle_llm_stream(section_llm.stream(section_prompt))
+    #         thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+    #         heading_stripped_stream = handle_stream_strip_heading(thinking_stripped_stream)
+    #         section_content = ''
+    #         for chunk in handle_stream(heading_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
+    #             yield chunk
+    #             section_content += chunk
+    #         return section_content
 
-        section_content = yield from retry(get_section_content, max_retry=3, first_interval=2, interval_multiply=2)()
-        logger.info(f"Section content: {section_content}")
+    #     section_content = yield from retry(get_section_content, max_retry=3, first_interval=2, interval_multiply=2)()
+    #     logger.info(f"Section content: {section_content}")
 
         # Process the content to remove any headings that match the current heading
         # content_lines = section_content.split('\n')
@@ -983,7 +1108,7 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         # logger.info(f"Cleaned content: {cleaned_content}")
         # yield ref_builder.embed_references(cleaned_content)
 
-    logger.info("Generated all section content for detailed notes")
+    # logger.info("Generated all section content for detailed notes")
 
     references = ref_builder.build()
     

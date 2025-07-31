@@ -3,6 +3,7 @@ import uuid
 import eai_http_middleware # do not remove this
 
 import os
+import time
 
 from deepsearch.magic import retry
 from deepsearch.schemas import commons, twitter
@@ -16,12 +17,12 @@ os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 os.environ["EXA_API_KEY"] = "no-need"
 
 from typing import Annotated, Dict, Any, Generator, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from deepsearch.schemas.agents import SearchState
 from deepsearch.agents import (
     tavily_search_agent,
     faiss_indexing_agent,
     bm25_search_agent,
-    llama_reasoning_agent,
     deep_reasoning_agent,
     brave_search_agent,
     information_extraction_agent,
@@ -156,6 +157,7 @@ def run_deep_search_pipeline(
                 )
 
                 retrievers = get_retriever_from_env()
+                
                 if Retriever.TAVILY in retrievers:
                     logger.info(f"    Performing Tavily web search...")
 
@@ -181,6 +183,41 @@ def run_deep_search_pipeline(
                     except Exception as e:
                         logger.error(f"    Error in Brave search: {str(e)}", exc_info=True)
 
+                # Step 1: Run Tavily and Brave searches in parallel
+                # logger.info(f"    Performing web searches in parallel...")
+                # with ThreadPoolExecutor(max_workers=2) as executor:
+                #     futures = {}
+                    
+                #     # Submit Tavily search if enabled
+                #     if Retriever.TAVILY in retrievers:
+                #         tavily_future = executor.submit(tavily_search_agent, temp_state)
+                #         futures['tavily'] = tavily_future
+
+                #     time.sleep(1)
+                    
+                #     # Submit Brave search if enabled
+                #     if Retriever.BRAVE in retrievers:
+                #         brave_future = executor.submit(brave_search_agent, temp_state, True)  # use_ai_snippets=True
+                #         futures['brave'] = brave_future
+                    
+                #     # Collect results as they complete
+                #     for search_type, future in futures.items():
+                #         try:
+                #             if search_type == 'tavily':
+                #                 tavily_temp_state = future.result()
+                #                 for result in tavily_temp_state.tavily_results:
+                #                     result.query = query
+                #                 temp_state.tavily_results = tavily_temp_state.tavily_results
+                #                 logger.info(f"    Found {len(temp_state.tavily_results)} Tavily results")
+                #             elif search_type == 'brave':
+                #                 brave_temp_state = future.result()
+                #                 for result in brave_temp_state.brave_results:
+                #                     result.query = query
+                #                 temp_state.brave_results = brave_temp_state.brave_results
+                #                 logger.info(f"    Found {len(temp_state.brave_results)} Brave results")
+                #         except Exception as e:
+                #             logger.error(f"    Error in {search_type} search: {str(e)}", exc_info=True)
+
                 # Step 3.5: Twitter search for this query
                 twitter_results = []
                 # if Retriever.TWITTER in retrievers:
@@ -200,29 +237,36 @@ def run_deep_search_pipeline(
                 )
                 logger.info(f"Combined {len(temp_state.search_results)} total search results")
 
-                # Step 5: FAISS Indexing (semantic search) for this query
-                logger.info(f"    Performing semantic search...")
-                try:
-                    temp_state = faiss_indexing_agent(temp_state)
-
-                    for result in temp_state.faiss_results:
-                        result.query = query
-
-                    logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
-                except Exception as e:
-                    logger.error(f"    Error in semantic search: {str(e)}", exc_info=True)
-
-                # Step 6: BM25 Search (keyword search) for this query
-                logger.info(f"    Performing keyword search...")
-                try:
-                    temp_state = bm25_search_agent(temp_state)
-
-                    for result in temp_state.bm25_results:
-                        result.query = query
-
-                    logger.info(f"    Found {len(temp_state.bm25_results)} keyword results")
-                except Exception as e:
-                    logger.error(f"    Error in keyword search: {str(e)}", exc_info=True)
+                # Step 2: Run FAISS and BM25 searches in parallel
+                logger.info(f"    Performing semantic and keyword searches in parallel...")
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    futures = {}
+                    
+                    # Submit FAISS search
+                    faiss_future = executor.submit(faiss_indexing_agent, temp_state)
+                    futures['faiss'] = faiss_future
+                    
+                    # Submit BM25 search
+                    bm25_future = executor.submit(bm25_search_agent, temp_state)
+                    futures['bm25'] = bm25_future
+                    
+                    # Collect results as they complete
+                    for search_type, future in futures.items():
+                        try:
+                            if search_type == 'faiss':
+                                faiss_temp_state = future.result()
+                                for result in faiss_temp_state.faiss_results:
+                                    result.query = query
+                                temp_state.faiss_results = faiss_temp_state.faiss_results
+                                logger.info(f"    Found {len(temp_state.faiss_results)} semantic results")
+                            elif search_type == 'bm25':
+                                bm25_temp_state = future.result()
+                                for result in bm25_temp_state.bm25_results:
+                                    result.query = query
+                                temp_state.bm25_results = bm25_temp_state.bm25_results
+                                logger.info(f"    Found {len(temp_state.bm25_results)} keyword results")
+                        except Exception as e:
+                            logger.error(f"    Error in {search_type} search: {str(e)}", exc_info=True)
 
                 # Collect results from this query
                 state.tavily_results.extend(temp_state.tavily_results)

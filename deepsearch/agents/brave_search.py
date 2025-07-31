@@ -84,6 +84,9 @@ def brave_search_agent(state: SearchState, max_results: int = 10, use_ai_snippet
     Returns:
         Updated state with Brave search results
     """
+
+    logger.info(f"Brave search agent called with query: {state.original_query}, max_results: {max_results}, use_ai_snippets: {use_ai_snippets}")
+
     # Initialize results as empty list
     state.brave_results = []
 
