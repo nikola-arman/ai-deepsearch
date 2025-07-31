@@ -190,7 +190,7 @@ def handle_stream_strip_begin_eoln(stream: Generator[str, None, None]) -> Genera
 
 def handle_stream_strip_thinking(stream: Generator[str, None, None]) -> Generator[str, None, None]:
     pattern = regex.compile(r'<think>.*?</think>\n*', regex.DOTALL | regex.IGNORECASE)
-    yield from handle_stream_strip_begin_eoln(handle_stream_strip(stream, pattern))
+    yield from handle_stream_strip(stream, pattern)
 
 
 def handle_stream_strip_heading(stream: Generator[str, None, None]) -> Generator[str, None, None]:

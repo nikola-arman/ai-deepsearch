@@ -157,7 +157,7 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
             return None, None, None, None
 
         # Log the number of valid texts
-        logger.debug(f"Generating embeddings for {len(texts)} chunks")
+        logger.info(f"Generating embeddings for {len(texts)} chunks")
 
         # Process texts in batches to isolate errors
         batch_size = 32
@@ -165,7 +165,7 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
         final_texts = []
         final_indices = []
         final_chunk_map = {}
-    
+
         for batch_idx, batch_texts in enumerate(batching(texts, batch_size)):
             try:
                 # Additional type validation for the batch
@@ -176,6 +176,8 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
                 
                 # Get embeddings for the batch
                 batch_embeddings = embeddings.embed_documents(batch_texts)
+
+                logger.info(f"len(batch_texts): {len(batch_texts)}, len(batch_embeddings): {len(batch_embeddings)}")
                 
                 # Add each embedding and its associated data
                 for i, (text, embedding) in enumerate(zip(batch_texts, batch_embeddings)):

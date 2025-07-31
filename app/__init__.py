@@ -158,65 +158,65 @@ def run_deep_search_pipeline(
 
                 retrievers = get_retriever_from_env()
                 
-                if Retriever.TAVILY in retrievers:
-                    logger.info(f"    Performing Tavily web search...")
+                # if Retriever.TAVILY in retrievers:
+                #     logger.info(f"    Performing Tavily web search...")
 
-                    try:
-                        temp_state = tavily_search_agent(temp_state)
+                #     try:
+                #         temp_state = tavily_search_agent(temp_state)
 
-                        for result in temp_state.tavily_results:
-                            result.query = query
+                #         for result in temp_state.tavily_results:
+                #             result.query = query
 
-                        logger.info(f"    Found {len(temp_state.tavily_results)} web results")
-                    except Exception as e:
-                        logger.error(f"    Error in Tavily search: {str(e)}", exc_info=True)
+                #         logger.info(f"    Found {len(temp_state.tavily_results)} web results")
+                #     except Exception as e:
+                #         logger.error(f"    Error in Tavily search: {str(e)}", exc_info=True)
 
-                # Step 3: Brave Search for this query
-                if Retriever.BRAVE in retrievers:
-                    logger.info("Performing Brave web search...")
-                    try:
-                        temp_state = brave_search_agent(temp_state, use_ai_snippets=True)
-                        # Tag results with the query that produced them
-                        for result in temp_state.brave_results:
-                            result.query = query
-                        logger.info(f"Found {len(temp_state.brave_results)} web results")
-                    except Exception as e:
-                        logger.error(f"    Error in Brave search: {str(e)}", exc_info=True)
+                # # Step 3: Brave Search for this query
+                # if Retriever.BRAVE in retrievers:
+                #     logger.info("Performing Brave web search...")
+                #     try:
+                #         temp_state = brave_search_agent(temp_state, use_ai_snippets=True)
+                #         # Tag results with the query that produced them
+                #         for result in temp_state.brave_results:
+                #             result.query = query
+                #         logger.info(f"Found {len(temp_state.brave_results)} web results")
+                #     except Exception as e:
+                #         logger.error(f"    Error in Brave search: {str(e)}", exc_info=True)
 
                 # Step 1: Run Tavily and Brave searches in parallel
-                # logger.info(f"    Performing web searches in parallel...")
-                # with ThreadPoolExecutor(max_workers=2) as executor:
-                #     futures = {}
+                logger.info(f"    Performing web searches in parallel...")
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    futures = {}
                     
-                #     # Submit Tavily search if enabled
-                #     if Retriever.TAVILY in retrievers:
-                #         tavily_future = executor.submit(tavily_search_agent, temp_state)
-                #         futures['tavily'] = tavily_future
+                    # Submit Tavily search if enabled
+                    if Retriever.TAVILY in retrievers:
+                        tavily_future = executor.submit(tavily_search_agent, temp_state)
+                        futures['tavily'] = tavily_future
 
-                #     time.sleep(1)
+                    # time.sleep(1)
                     
-                #     # Submit Brave search if enabled
-                #     if Retriever.BRAVE in retrievers:
-                #         brave_future = executor.submit(brave_search_agent, temp_state, True)  # use_ai_snippets=True
-                #         futures['brave'] = brave_future
+                    # Submit Brave search if enabled
+                    if Retriever.BRAVE in retrievers:
+                        brave_future = executor.submit(brave_search_agent, temp_state, 10, True)  # use_ai_snippets=True
+                        futures['brave'] = brave_future
                     
-                #     # Collect results as they complete
-                #     for search_type, future in futures.items():
-                #         try:
-                #             if search_type == 'tavily':
-                #                 tavily_temp_state = future.result()
-                #                 for result in tavily_temp_state.tavily_results:
-                #                     result.query = query
-                #                 temp_state.tavily_results = tavily_temp_state.tavily_results
-                #                 logger.info(f"    Found {len(temp_state.tavily_results)} Tavily results")
-                #             elif search_type == 'brave':
-                #                 brave_temp_state = future.result()
-                #                 for result in brave_temp_state.brave_results:
-                #                     result.query = query
-                #                 temp_state.brave_results = brave_temp_state.brave_results
-                #                 logger.info(f"    Found {len(temp_state.brave_results)} Brave results")
-                #         except Exception as e:
-                #             logger.error(f"    Error in {search_type} search: {str(e)}", exc_info=True)
+                    # Collect results as they complete
+                    for search_type, future in futures.items():
+                        try:
+                            if search_type == 'tavily':
+                                tavily_temp_state = future.result()
+                                for result in tavily_temp_state.tavily_results:
+                                    result.query = query
+                                temp_state.tavily_results = tavily_temp_state.tavily_results
+                                logger.info(f"    Found {len(temp_state.tavily_results)} Tavily results")
+                            elif search_type == 'brave':
+                                brave_temp_state = future.result()
+                                for result in brave_temp_state.brave_results:
+                                    result.query = query
+                                temp_state.brave_results = brave_temp_state.brave_results
+                                logger.info(f"    Found {len(temp_state.brave_results)} Brave results")
+                        except Exception as e:
+                            logger.error(f"    Error in {search_type} search: {str(e)}", exc_info=True)
 
                 # Step 3.5: Twitter search for this query
                 twitter_results = []

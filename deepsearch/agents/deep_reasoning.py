@@ -431,8 +431,7 @@ Create rich, detailed content for the report following the provided outline exac
 7. Use **bold** for important terms and concepts
 8. Use *italics* for emphasis when appropriate
 9. Use ## for section headings
-10. Properly add new lines after each heading
-11. Do not at horizontal divider between sections
+10. Do not add any horizontal divider
 
 IMPORTANT RULES:
 1. ONLY include information that is directly supported by the search context
