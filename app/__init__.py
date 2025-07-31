@@ -25,8 +25,6 @@ from deepsearch.agents import (
     bm25_search_agent,
     deep_reasoning_agent,
     brave_search_agent,
-    information_extraction_agent,
-    fact_checking_agent,
     search_tavily,
     get_twitter_data_by_username,
     twitter_context_to_search_result,
