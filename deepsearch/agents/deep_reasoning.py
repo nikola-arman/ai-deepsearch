@@ -14,10 +14,11 @@ import re
 
 import urllib
 
+from app.oai_models import random_uuid
 from deepsearch.magic import retry
 from deepsearch.schemas.agents import SearchState, SearchResult
 from deepsearch.utils.misc import escape_dollar_signs
-from deepsearch.utils.streaming import handle_llm_stream, handle_stream, handle_stream_strip_heading, handle_stream_strip_thinking
+from deepsearch.utils.streaming import handle_llm_stream, handle_stream, handle_stream_strip_heading, handle_stream_strip_thinking, wrap_chunk
 
 
 def strip_thinking_content(content: str) -> str:
@@ -893,11 +894,11 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
         key_points = ''
         for chunk in handle_stream(thinking_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
-            yield chunk
+            yield wrap_chunk(random_uuid(), chunk)
             key_points += chunk
         return key_points
 
-    yield '## Key Points\n\n'
+    yield wrap_chunk(random_uuid(), '## Key Points\n\n')
     key_points = yield from retry(get_key_points, max_retry=3, first_interval=2, interval_multiply=2)()
 
     logger.info("Generated key points for final answer")
@@ -940,11 +941,11 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
         direct_answer = ''
         for chunk in handle_stream(thinking_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
-            yield chunk
+            yield wrap_chunk(random_uuid(), chunk)
             direct_answer += chunk
         return direct_answer
 
-    yield '\n\n## Direct Answer\n\n'
+    yield wrap_chunk(random_uuid(), '\n\n## Direct Answer\n\n')
     direct_answer = yield from retry(get_direct_answer, max_retry=3, first_interval=2, interval_multiply=2)()
 
     logger.info("Generated direct answer")
@@ -1027,11 +1028,11 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
         report = ''
         for chunk in handle_stream(thinking_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
-            yield chunk
+            yield wrap_chunk(random_uuid(), chunk)
             report += chunk
         return report
     
-    yield '\n\n---\n\n'
+    yield wrap_chunk(random_uuid(), '\n\n---\n\n')
     report = yield from retry(get_report, max_retry=3, first_interval=2, interval_multiply=2)()
 
     logger.info("Generated report")
@@ -1116,5 +1117,5 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     if not references:
         return
 
-    yield '\n\n## References\n\n'
-    yield references
+    yield wrap_chunk(random_uuid(), '\n\n## References\n\n')
+    yield wrap_chunk(random_uuid(), references)

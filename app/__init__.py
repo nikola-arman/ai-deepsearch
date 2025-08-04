@@ -1,3 +1,4 @@
+import asyncio
 from enum import Enum
 import uuid
 import eai_http_middleware # do not remove this
@@ -5,6 +6,7 @@ import eai_http_middleware # do not remove this
 import os
 import time
 
+from app.oai_models import ChatCompletionStreamResponse, random_uuid
 from deepsearch.magic import retry
 from deepsearch.schemas import commons, twitter
 from deepsearch.schemas.openai import ErrorResponse
@@ -147,7 +149,7 @@ def run_deep_search_pipeline(
             # Process each query in this iteration
             for i, query in enumerate(state.generated_queries):
                 logger.info(f"  Processing query {i+1}/{len(state.generated_queries)}: {query}")
-                yield to_chunk_data(wrap_thought(f"Searching for: {query}"))
+                yield wrap_thought(f"Searching for: {query}")
 
                 # Create a temporary state for this query
                 temp_state = SearchState(
@@ -156,31 +158,6 @@ def run_deep_search_pipeline(
 
                 retrievers = get_retriever_from_env()
                 
-                # if Retriever.TAVILY in retrievers:
-                #     logger.info(f"    Performing Tavily web search...")
-
-                #     try:
-                #         temp_state = tavily_search_agent(temp_state)
-
-                #         for result in temp_state.tavily_results:
-                #             result.query = query
-
-                #         logger.info(f"    Found {len(temp_state.tavily_results)} web results")
-                #     except Exception as e:
-                #         logger.error(f"    Error in Tavily search: {str(e)}", exc_info=True)
-
-                # # Step 3: Brave Search for this query
-                # if Retriever.BRAVE in retrievers:
-                #     logger.info("Performing Brave web search...")
-                #     try:
-                #         temp_state = brave_search_agent(temp_state, use_ai_snippets=True)
-                #         # Tag results with the query that produced them
-                #         for result in temp_state.brave_results:
-                #             result.query = query
-                #         logger.info(f"Found {len(temp_state.brave_results)} web results")
-                #     except Exception as e:
-                #         logger.error(f"    Error in Brave search: {str(e)}", exc_info=True)
-
                 # Step 1: Run Tavily and Brave searches in parallel
                 logger.info(f"    Performing web searches in parallel...")
                 with ThreadPoolExecutor(max_workers=2) as executor:
@@ -301,9 +278,8 @@ def run_deep_search_pipeline(
                 unique_results = {}
 
                 for result in state.combined_results:
-
-                    if isinstance(result.score, float) and result.score < 0.3:
-                        continue
+                    # if isinstance(result.score, float) and result.score < 0.3:
+                    #     continue
 
                     # Keep the highest scoring result for each URL
                     key = result.url + "\n" + result.content
@@ -316,12 +292,11 @@ def run_deep_search_pipeline(
                     need = 5 - len(unique_results)
 
                     for result in state.combined_results:
-                        if result.score is None:
-                            key = result.url + "\n" + result.content
+                        key = result.url + "\n" + result.content
 
-                            if key not in unique_results:
-                                unique_results[key] = result
-                                need -= 1
+                        if key not in unique_results:
+                            unique_results[key] = result
+                            need -= 1
 
                         if not need:
                             break
@@ -341,13 +316,13 @@ def run_deep_search_pipeline(
                     logger.info(f"  New queries generated: {len(state.generated_queries)}")
             except Exception as e:
                 logger.error(f"  Error in deep reasoning: {str(e)}", exc_info=True)
-                yield "I'm sorry, but I couldn't properly analyze the search results due to a technical issue. Please try again with a different query."
+                yield wrap_chunk(random_uuid(), "I'm sorry, but I couldn't properly analyze the search results due to a technical issue. Please try again with a different query.")
                 return
 
         logger.info("Generating final answer...")
         try:
             if state.final_answer:
-                yield state.final_answer
+                yield wrap_chunk(random_uuid(), state.final_answer)
                 return
 
             yield from generate_final_answer(state)
@@ -362,11 +337,11 @@ def run_deep_search_pipeline(
                 kp = kp.strip()
                 points.append(ref_builder.embed_references(kp))
 
-            yield "I couldn't generate a comprehensive answer due to technical issues. Here's what I found:\n" + "\n".join(f"- {point}" for point in points)
+            yield wrap_chunk(random_uuid(), "I couldn't generate a comprehensive answer due to technical issues. Here's what I found:\n" + "\n".join(f"- {point}" for point in points))
 
     except Exception as e:
         logger.error(f"  Error in final answer generation: {str(e)}", exc_info=True)
-        yield "An unexpected error occurred while processing your query. Please try again later."
+        yield wrap_chunk(random_uuid(), "An unexpected error occurred while processing your query. Please try again later.")
 
 class GeneratorValue:
     def __init__(self, gen):
@@ -472,7 +447,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
 
             if chunk.choices[0].delta.content:
                 chunk.id = response_uuid
-                yield to_chunk_data(chunk)
+                yield chunk
 
         completion = builder.build()
 
@@ -491,7 +466,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
             _args = json.loads(call.function.arguments)
 
             if _name == 'research':
-                yield to_chunk_data(wrap_thought(f'Start researching on {_args["topic"]}'))
+                yield wrap_thought(f'Start researching on {_args["topic"]}')
 
                 for chunk in run_deep_search_pipeline(
                     _args['topic'],
@@ -499,6 +474,8 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                 ):
                     if isinstance(chunk, bytes):
                         chunk_str = chunk.decode('utf-8')
+                    elif isinstance(chunk, ChatCompletionStreamResponse):
+                        chunk_str = chunk.choices[0].delta.content
                     else:
                         chunk_str = str(chunk)
 
@@ -514,7 +491,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                 return
 
             elif _name == 'search_internet':
-                yield to_chunk_data(wrap_thought(f"Searching for {_args['query']}"))
+                yield wrap_thought(f"Searching for {_args['query']}")
 
                 try:
                     res = search_tavily(_args['query'])
@@ -558,7 +535,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
 
                 if chunk.choices[0].delta.content:
                     chunk.id = response_uuid
-                    yield to_chunk_data(chunk)
+                    yield chunk
 
             completion = builder.build()
         

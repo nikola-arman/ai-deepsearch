@@ -80,7 +80,7 @@ def sanitize_text_for_embedding(text):
         return str(text)
 
 
-def chunk_text(text: str, max_length: int = 2400) -> List[str]:
+def chunk_text(text: str, max_length: int = 1024) -> List[str]:
     """Split text into chunks of approximately max_length tokens.
 
     Args:
@@ -160,7 +160,7 @@ def create_faiss_index(embeddings, search_results: List[SearchResult]) -> Tuple[
         logger.info(f"Generating embeddings for {len(texts)} chunks")
 
         # Process texts in batches to isolate errors
-        batch_size = 32
+        batch_size = 64
         embedded_texts = []
         final_texts = []
         final_indices = []

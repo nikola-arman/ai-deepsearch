@@ -1,3 +1,5 @@
+fastapi[standard]==0.115.12
+uvicorn==0.34.0
 eai_http_middleware @ git+https://github.com/daniel-bvm/http-middleware
 faiss-cpu==1.10.0
 json_repair==0.41.1
@@ -11,4 +13,3 @@ regex==2024.11.6
 requests==2.32.3
 tavily-python==0.5.4
 aiosqlite==0.21.0
-regex==2024.11.6
