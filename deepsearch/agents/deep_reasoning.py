@@ -20,6 +20,7 @@ from deepsearch.schemas.agents import SearchState, SearchResult
 from deepsearch.utils.misc import escape_dollar_signs
 from deepsearch.utils.streaming import handle_llm_stream, handle_stream, handle_stream_strip_heading, handle_stream_strip_thinking, wrap_chunk
 
+from deepsearch.agents.tavily_search import search_tavily
 
 def strip_thinking_content(content: str) -> str:
     pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
@@ -378,6 +379,9 @@ ORIGINAL QUERY: {original_query}
 
 CURRENT DATE: {current_date} (ISO 8601 format: YYYY-MM-DD)
 
+Here are some real-time web snippets from Tavily:
+{search_context}
+
 INSTRUCTIONS:
 Analyze the original query and break it down into 5 distinct, focused search queries that collectively cover all important aspects of the original question. Each query should:
 
@@ -603,6 +607,49 @@ def init_reasoning_llm(temperature: float = 0.3):
     )
     return llm
 
+def enrich_query_with_search(original_query: str) -> str:
+    """
+    Search Tavily with the original query, then let the LLM
+    clarify and enrich the query context.
+    """
+    # Step 1: Tavily search
+    tavily_results = search_tavily(original_query)
+
+    # Lấy content
+    contents = "\n".join(r.content for r in tavily_results if r.content)
+
+    # template= """ The user query might be ambiguous.
+
+    # User query: {query}
+
+    # Here are some web search snippets:
+    # {contents}
+
+    # Your task:
+    # 1. Interpret what the user most likely means.
+    # 2. Write a clear and enriched context (1 or 2 sentences) that disambiguates the query.
+    # 3. The enriched context should be concise, accurate, and based on the snippets above.
+
+    # Example:
+    # - User query: "Elysia hi3"
+    # - Enriched context: "Elysia, a character in the game Honkai Impact 3rd"
+
+    # Now provide the enriched context for the given query.
+    # """
+    
+    # # Step 2: Prompt LLM để "làm rõ"
+    # enrich_prompt = PromptTemplate(
+    #     input_variables=["query", "contents"],
+    #     template=template
+    # )
+
+    # chain = enrich_prompt | llm
+    # enriched = chain.invoke({"query": original_query, "contents": contents})
+
+    return contents
+
+
+
 def generate_initial_queries(original_query: str) -> List[str]:
     """
     Generate multiple focused search queries from the original complex query.
@@ -613,26 +660,36 @@ def generate_initial_queries(original_query: str) -> List[str]:
     Returns:
         A list of 5 focused search queries
     """
+    
     # Initialize the LLM with low temperature for consistent output
     llm = init_reasoning_llm(temperature=0.2)
-
+    
+    # Add tavily search result before feed to llm query_generator
+    # Help provide more context for the query just in case
+    search_context = enrich_query_with_search(original_query)
+    
     # Get current date information in ISO 8601 format (YYYY-MM-DD)
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
 
     # Create the query generator prompt
     query_generator_prompt = PromptTemplate(
-        input_variables=["original_query", "current_date"],
+        input_variables=["original_query", "current_date","search_context"],    
         template=QUERY_GENERATOR_TEMPLATE
     )
 
-    # Create the chain
+    # logger.info(query_generator_prompt.invoke({
+    #         "original_query": original_query,
+    #         "current_date": current_date,
+    #         "search_context": search_context,
+    #     }))    # Create the chain
     chain = query_generator_prompt | llm
 
     def get_and_parse_queries():
         # Generate the search queries
         response = chain.invoke({
             "original_query": original_query,
-            "current_date": current_date
+            "current_date": current_date,
+            "search_context": search_context,
         })
 
         # Extract the content if it's a message object
