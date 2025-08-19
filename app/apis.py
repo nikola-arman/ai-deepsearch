@@ -117,3 +117,16 @@ async def cancel(request: Request):
         event_handler.emit_event_signal(event_id)
 
     return JSONResponse({"status": "ok"})
+
+from deepsearch.agents.deep_reasoning import generate_initial_queries
+
+@api_router.post("/test")
+async def test(request: Request):
+    orig_data: dict[str, Any] = await request.json()
+    query = orig_data.get("query")
+    
+    if query:
+        queries = generate_initial_queries(query)
+        return JSONResponse({"queries": queries})
+
+    return JSONResponse({"queries": []})
