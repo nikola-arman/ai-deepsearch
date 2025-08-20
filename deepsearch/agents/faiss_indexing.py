@@ -286,7 +286,7 @@ def faiss_search(query: str, embeddings, index, embedded_texts: List, valid_indi
         logger.error(f"Error in FAISS search: {str(e)}", exc_info=True)
         return []
 
-def faiss_indexing_agent(state: SearchState) -> SearchState:
+def faiss_indexing_agent(state: SearchState, top_k: int = 5) -> SearchState:
     """
     Builds a FAISS index on-the-fly from search results and performs vector search.
 
@@ -352,7 +352,7 @@ def faiss_indexing_agent(state: SearchState) -> SearchState:
             valid_indices=valid_indices,
             search_results=valid_results,
             chunk_to_original_map=chunk_to_original_map,
-            top_k=5
+            top_k=top_k
         )
 
         # Update the state

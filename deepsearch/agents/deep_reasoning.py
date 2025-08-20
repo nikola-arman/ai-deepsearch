@@ -601,7 +601,6 @@ def init_reasoning_llm(temperature: float = 0.3):
         openai_api_key=openai_api_key,
         openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "no-need" else None,
         temperature=temperature,
-        max_tokens=1024,
         streaming=True,
         seed=123,
     )
@@ -615,7 +614,6 @@ def enrich_query_with_search(original_query: str) -> str:
     # Step 1: Tavily search
     tavily_results = search_tavily(original_query)
 
-    # Lấy content
     contents = "\n".join(r.content for r in tavily_results if r.content)
 
     # template= """ The user query might be ambiguous.
@@ -637,7 +635,7 @@ def enrich_query_with_search(original_query: str) -> str:
     # Now provide the enriched context for the given query.
     # """
     
-    # # Step 2: Prompt LLM để "làm rõ"
+    # # Step 2: Prompt LLM for clarification
     # enrich_prompt = PromptTemplate(
     #     input_variables=["query", "contents"],
     #     template=template

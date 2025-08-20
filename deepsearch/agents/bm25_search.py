@@ -98,7 +98,7 @@ def bm25_search(query: str, bm25, valid_indices: List[int], search_results: List
         logger.error(f"Error in BM25 search: {str(e)}")
         return []
 
-def bm25_search_agent(state: SearchState) -> SearchState:
+def bm25_search_agent(state: SearchState, top_k: int = 5) -> SearchState:
     """
     Uses BM25 for on-the-fly keyword-based retrieval from search results.
 
@@ -147,7 +147,7 @@ def bm25_search_agent(state: SearchState) -> SearchState:
             bm25=bm25,
             valid_indices=valid_indices,
             search_results=valid_results,
-            top_k=5
+            top_k=top_k
         )
 
         # Update the state
@@ -157,32 +157,5 @@ def bm25_search_agent(state: SearchState) -> SearchState:
         # If any error occurs, just skip BM25
         logger.error(f"Error in BM25 search: {str(e)}", exc_info=True)
         state.bm25_results = []
-
-    # Combine all results (will be used by the reasoning agent)
-    all_results = []
-
-    # Add FAISS results with higher priority
-    if state.faiss_results:
-        for result in state.faiss_results:
-            if result not in all_results:
-                all_results.append(result)
-
-    # Add BM25 results
-    if state.bm25_results:
-        for result in state.bm25_results:
-            if result not in all_results:
-                all_results.append(result)
-
-    # Add any remaining search results
-    if state.search_results:
-        for result in state.search_results:
-            if result not in all_results:
-                all_results.append(result)
-
-    # Sort by score if available
-    all_results.sort(key=lambda x: x.score if x.score is not None else 0, reverse=True)
-
-    # Limit to top 10 combined results to avoid overwhelming the reasoning agent
-    state.combined_results = all_results[:10]
 
     return state

@@ -218,11 +218,11 @@ def run_deep_search_pipeline(
                     futures = {}
                     
                     # Submit FAISS search
-                    faiss_future = executor.submit(faiss_indexing_agent, temp_state)
+                    faiss_future = executor.submit(faiss_indexing_agent, temp_state, 10)
                     futures['faiss'] = faiss_future
                     
                     # Submit BM25 search
-                    bm25_future = executor.submit(bm25_search_agent, temp_state)
+                    bm25_future = executor.submit(bm25_search_agent, temp_state, 10)
                     futures['bm25'] = bm25_future
                     
                     # Collect results as they complete
@@ -242,6 +242,43 @@ def run_deep_search_pipeline(
                                 logger.info(f"    Found {len(temp_state.bm25_results)} keyword results")
                         except Exception as e:
                             logger.error(f"    Error in {search_type} search: {str(e)}", exc_info=True)
+                            if search_type == 'faiss':
+                                temp_state.faiss_results = []
+                            elif search_type == 'bm25':
+                                temp_state.bm25_results = []
+
+                if len(temp_state.faiss_results) + len(temp_state.bm25_results) > 10:
+                    temp_state.faiss_results = temp_state.faiss_results[:5]
+                    temp_state.bm25_results = temp_state.bm25_results[:5]
+
+                # Combine all results (will be used by the reasoning agent)
+                all_results = []
+
+                # Add FAISS results with higher priority
+                if temp_state.faiss_results:
+                    for result in temp_state.faiss_results:
+                        if result not in all_results:
+                            all_results.append(result)
+
+                # Add BM25 results
+                if temp_state.bm25_results:
+                    for result in temp_state.bm25_results:
+                        if result not in all_results:
+                            all_results.append(result)
+
+                # Add any remaining search results
+                if temp_state.search_results:
+                    for result in temp_state.search_results:
+                        if result not in all_results:
+                            all_results.append(result)
+
+                # Sort by score if available
+                all_results.sort(key=lambda x: x.score if x.score is not None else 0, reverse=True)
+
+                # Limit to top 10 combined results to avoid overwhelming the reasoning agent
+                temp_state.combined_results = all_results[:10]
+
+                logger.info(f"    Found {len(temp_state.combined_results)} combined results")
 
                 # Collect results from this query
                 state.tavily_results.extend(temp_state.tavily_results)
@@ -251,7 +288,7 @@ def run_deep_search_pipeline(
                 state.bm25_results.extend(temp_state.bm25_results)
 
                 if temp_state.combined_results:
-                    state.combined_results.extend(temp_state.combined_results)
+                    state.combined_results.extend(temp_state.combined_results)                
 
             # Add back previous results to ensure continuity
             if state.combined_results:
@@ -472,18 +509,24 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                     _args['topic'],
                     max_iterations=3,
                 ):
-                    if isinstance(chunk, bytes):
-                        chunk_str = chunk.decode('utf-8')
-                    elif isinstance(chunk, ChatCompletionStreamResponse):
+                    if isinstance(chunk, ChatCompletionStreamResponse):
                         chunk_str = chunk.choices[0].delta.content
+                    elif isinstance(chunk, bytes):
+                        chunk_str = chunk.decode('utf-8')
                     else:
                         chunk_str = str(chunk)
+
+                    # logger.info(f"chunk: {chunk}")
+                    # logger.info(f"type: {type(chunk)}")
+                    # logger.info(f"isinstance(chunk, ChatCompletionStreamResponse): {isinstance(chunk, ChatCompletionStreamResponse)}")
+
+                    # logger.info(f"chunk_str: {chunk_str}")
 
                     if "<action>" not in chunk_str:
                         report += chunk_str
                     yield chunk
 
-                logger.info(f"report: {report}")
+                # logger.info(f"report: {report}")
 
                 with open('report.txt', 'w') as f:
                     f.write(report)
