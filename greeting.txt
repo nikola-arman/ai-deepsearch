@@ -1,0 +1,13 @@
+Hi, I’m your AI search assistant.
+
+I dive deep into any topic using real-time web data.\
+Whether you need answers, comparisons, or full reports, I’m here to help — fast, private, and reliable.
+
+Try asking:
+
+- "What’s new in AI safety research?"
+- "Compare Arbitrum, Optimism, and Base."
+- "Find the best-rated privacy coins in 2024"
+- "Summarize recent trends in climate tech.What topic do you want me to research?"
+
+How can i help?
