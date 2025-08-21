@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 from deepsearch.utils.streaming import to_chunk_data
@@ -54,7 +55,7 @@ async def chat_completions(request: ChatCompletionRequest, original_request: Req
         else None
     )
     req_id = orig_data.get("id", request.request_id) or f"req-{random_uuid()}"
-    logger.info(f"Processing request {request} with ID: {request.request_id}")
+    logger.info(f"Processing request {json.dumps(request.model_dump(), indent=2)}")
     logger.info(f"req_id: {req_id}")
 
     try:
