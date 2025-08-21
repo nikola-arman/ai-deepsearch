@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from main import run_deep_search_pipeline
+# from main import run_deep_search_pipeline
 
 # Set up logging
 logging.basicConfig(

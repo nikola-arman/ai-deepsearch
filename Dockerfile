@@ -18,5 +18,6 @@ env RETRIEVER="brave,tavily,exa,twitter"
 env TWITTER_API_URL="https://imagine-backend.bvm.network/api/internal/twitter/"
 env FORWARD_ALL_MESSAGES=1
 env CACHE_DB_FOLDER="/storage"
+env LLM_MODEL_ID="zai-org/GLM-4.5-Air-FP8"
 
 cmd ["python", "server.py"]
