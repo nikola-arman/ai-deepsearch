@@ -54,6 +54,7 @@ async def chat_completions(request: ChatCompletionRequest, original_request: Req
         else None
     )
     req_id = orig_data.get("id", request.request_id) or f"req-{random_uuid()}"
+    logger.info(f"Processing request {request} with ID: {request.request_id}")
     logger.info(f"req_id: {req_id}")
 
     try:
