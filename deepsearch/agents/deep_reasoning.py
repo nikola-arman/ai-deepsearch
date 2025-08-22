@@ -26,6 +26,10 @@ def strip_thinking_content(content: str) -> str:
     pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
     return pat.sub("", content).lstrip()
 
+def escape_slash(answer: str) -> str:
+    """change math formula to $ symbol."""
+    return answer.replace("\\(", "$").replace("\\)", "$").replace("\\[", "$$").replace("\\]", "$$")
+
 # Set up logging
 logger = logging.getLogger("deepsearch.deep_reasoning")
 
@@ -478,6 +482,8 @@ Do not list all references at the end of your answer, just put citations in-line
 # """
 
 CITATION_PATTERN = r'\cite{*}'
+BLOCK_MATH_PATTERN = r"\[*\]"
+INLINE_MATH_PATTERN = r"\(*\)"
 
 class ReferenceBuilder:
     def __init__(self, state: SearchState):
@@ -947,8 +953,10 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     def get_key_points():
         content_stream = handle_llm_stream(key_points_llm.stream(key_points_prompt))
         thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+        block_math_replaced_stream = handle_stream(thinking_stripped_stream, BLOCK_MATH_PATTERN, escape_slash)
+        inline_math_replaced_stream = handle_stream(block_math_replaced_stream, INLINE_MATH_PATTERN, escape_slash)
         key_points = ''
-        for chunk in handle_stream(thinking_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
+        for chunk in handle_stream(inline_math_replaced_stream, CITATION_PATTERN, ref_builder.embed_references):
             yield wrap_chunk(random_uuid(), chunk)
             key_points += chunk
         return key_points
@@ -994,8 +1002,10 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
     def get_direct_answer():
         content_stream = handle_llm_stream(direct_answer_llm.stream(direct_answer_prompt))
         thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+        block_math_replaced_stream = handle_stream(thinking_stripped_stream, BLOCK_MATH_PATTERN, escape_slash)
+        inline_math_replaced_stream = handle_stream(block_math_replaced_stream, INLINE_MATH_PATTERN, escape_slash)
         direct_answer = ''
-        for chunk in handle_stream(thinking_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
+        for chunk in handle_stream(inline_math_replaced_stream, CITATION_PATTERN, ref_builder.embed_references):
             yield wrap_chunk(random_uuid(), chunk)
             direct_answer += chunk
         return direct_answer
@@ -1077,12 +1087,21 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         report_outline=section_outline,
         search_context=search_context
     )
-
+    
     def get_report():
         content_stream = handle_llm_stream(report_llm.stream(report_prompt))
         thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+        # handle_stream(stream, pattern, callback (str) => str)
+        # - Find all substring maching pattern in stream, replace substring with callback(substring)
+        block_math_replaced_stream = handle_stream(thinking_stripped_stream, BLOCK_MATH_PATTERN, escape_slash)
+        inline_math_replaced_stream = handle_stream(block_math_replaced_stream, INLINE_MATH_PATTERN, escape_slash)
+        # Use handle_stream to replace:
+        # - \[ with $$
+        # - \] with $$
+        # - \( with $
+        # - \) with $
         report = ''
-        for chunk in handle_stream(thinking_stripped_stream, CITATION_PATTERN, ref_builder.embed_references):
+        for chunk in handle_stream(inline_math_replaced_stream, CITATION_PATTERN, ref_builder.embed_references):
             yield wrap_chunk(random_uuid(), chunk)
             report += chunk
         return report
