@@ -18,7 +18,7 @@ from app.oai_models import random_uuid
 from deepsearch.magic import retry
 from deepsearch.schemas.agents import SearchState, SearchResult
 from deepsearch.utils.misc import escape_dollar_signs
-from deepsearch.utils.streaming import handle_llm_stream, handle_stream, handle_stream_strip_heading, handle_stream_strip_thinking, wrap_chunk
+from deepsearch.utils.streaming import handle_llm_stream, handle_stream, handle_stream_replace_citation, handle_stream_replace_math, handle_stream_strip_heading, handle_stream_strip_thinking, wrap_chunk
 
 from deepsearch.agents.tavily_search import search_tavily
 
@@ -27,6 +27,7 @@ def strip_thinking_content(content: str) -> str:
     return pat.sub("", content).lstrip()
 
 def escape_slash(answer: str) -> str:
+    logger.info(f"[escape_slash]: {answer}")
     """change math formula to $ symbol."""
     return answer.replace("\\(", "$").replace("\\)", "$").replace("\\[", "$$").replace("\\]", "$$")
 
@@ -206,7 +207,7 @@ IMPORTANT RULES:
 8. If the search results are contradictory, acknowledge the uncertainty and provide a balanced view.
 9. If the search results are not relevant to the query, state that you cannot provide an answer based on the search results.
 10. If the search results are too vague or unclear, state that you cannot provide a definitive answer.
-
+11. Always use $ to denote inline math.
 
 Format your response as a markdown list of bullet points ONLY:
 - Key point 1 \\cite{{$ID1}}, \\cite{{$ID2}}
@@ -249,6 +250,8 @@ IMPORTANT RULES:
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to answer a point, clearly state this limitation
 8. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
+9. Always use block math for matrices.
+10. Always use $ to denote inline math, and $$ to denote block math.
 
 Your direct answer should be self-contained and provide a complete response to the original query.
 Do not include any headings, bullet points, final references listing, or section markers.
@@ -365,7 +368,9 @@ IMPORTANT RULES:
 7. If the search context is insufficient to cover a point, clearly state this limitation
 8. Focus ONLY on this section without repeating information from other sections
 9. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
-10. Do not include the references section at the end of your answer.
+10. Do not include the sources or references section at the end of your answer.
+11. Always use block math for matrices.
+12. Always use $ to denote inline math, and $$ to denote block math.
 
 IMPORTANT: DO NOT include the main section heading ("{section_heading}") in your response - I will add it separately.
 Start directly with the content. If you need subsections, use ### level headings, not ## level headings.
@@ -451,7 +456,9 @@ IMPORTANT RULES:
 6. Maintain academic rigor and avoid speculation
 7. If the search context is insufficient to cover a point, clearly state this limitation
 8. If there are different results, carefully consider all search results and provide a final answer that reflects the most accurate information.
-9. Do not include the references section at the end of your answer.
+9. Do not include the sources or references section at the end of your answer.
+10. Always use block math for matrices.
+11. Always use $ to denote inline math, and $$ to denote block math.
 
 Provide in-depth, authoritative content with specific facts, figures, and examples where possible,
 while strictly adhering to the information available in the search context and following the outline exactly.
@@ -563,7 +570,7 @@ class ReferenceBuilder:
         citing_pat = re.compile(r'\\cite\{([^\}]*)\}')
         matches = citing_pat.findall(answer)
 
-        logger.info(f"Matches: {matches}")
+        # logger.info(f"Matches: {matches}")
 
         for cite_text in matches:
             numbers_pat = re.compile(r'\d+')
@@ -950,13 +957,20 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         search_context=search_context
     )
 
+    debug_uuid = random_uuid()
+
+    os.makedirs('./prompts', exist_ok=True)
+    with open(f'./prompts/{debug_uuid}_key_points_prompt.txt', 'w') as f:
+        f.write(key_points_prompt)
+
     def get_key_points():
+        logger.info("[get_key_points] stream:")
         content_stream = handle_llm_stream(key_points_llm.stream(key_points_prompt))
+
         thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
-        block_math_replaced_stream = handle_stream(thinking_stripped_stream, BLOCK_MATH_PATTERN, escape_slash)
-        inline_math_replaced_stream = handle_stream(block_math_replaced_stream, INLINE_MATH_PATTERN, escape_slash)
+        math_replaced_stream = handle_stream_replace_math(thinking_stripped_stream)
         key_points = ''
-        for chunk in handle_stream(inline_math_replaced_stream, CITATION_PATTERN, ref_builder.embed_references):
+        for chunk in handle_stream_replace_citation(math_replaced_stream, ref_builder.embed_references):
             yield wrap_chunk(random_uuid(), chunk)
             key_points += chunk
         return key_points
@@ -998,14 +1012,17 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         search_details=search_details,
         search_context=search_context
     )
+    with open(f'./prompts/{debug_uuid}_direct_answer_prompt.txt', 'w') as f:
+        f.write(direct_answer_prompt)
 
     def get_direct_answer():
+        logger.info("[get_direct_answer] stream:")
         content_stream = handle_llm_stream(direct_answer_llm.stream(direct_answer_prompt))
+
         thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
-        block_math_replaced_stream = handle_stream(thinking_stripped_stream, BLOCK_MATH_PATTERN, escape_slash)
-        inline_math_replaced_stream = handle_stream(block_math_replaced_stream, INLINE_MATH_PATTERN, escape_slash)
+        math_replaced_stream = handle_stream_replace_math(thinking_stripped_stream)
         direct_answer = ''
-        for chunk in handle_stream(inline_math_replaced_stream, CITATION_PATTERN, ref_builder.embed_references):
+        for chunk in handle_stream_replace_citation(math_replaced_stream, ref_builder.embed_references):
             yield wrap_chunk(random_uuid(), chunk)
             direct_answer += chunk
         return direct_answer
@@ -1087,21 +1104,18 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
         report_outline=section_outline,
         search_context=search_context
     )
-    
+
+    with open(f'./prompts/{debug_uuid}_report_prompt.txt', 'w') as f:
+        f.write(report_prompt)
+
     def get_report():
+        logger.info("[get_report] stream:")
         content_stream = handle_llm_stream(report_llm.stream(report_prompt))
+
         thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
-        # handle_stream(stream, pattern, callback (str) => str)
-        # - Find all substring maching pattern in stream, replace substring with callback(substring)
-        block_math_replaced_stream = handle_stream(thinking_stripped_stream, BLOCK_MATH_PATTERN, escape_slash)
-        inline_math_replaced_stream = handle_stream(block_math_replaced_stream, INLINE_MATH_PATTERN, escape_slash)
-        # Use handle_stream to replace:
-        # - \[ with $$
-        # - \] with $$
-        # - \( with $
-        # - \) with $
+        math_replaced_stream = handle_stream_replace_math(thinking_stripped_stream)
         report = ''
-        for chunk in handle_stream(inline_math_replaced_stream, CITATION_PATTERN, ref_builder.embed_references):
+        for chunk in handle_stream_replace_citation(math_replaced_stream, ref_builder.embed_references):
             yield wrap_chunk(random_uuid(), chunk)
             report += chunk
         return report

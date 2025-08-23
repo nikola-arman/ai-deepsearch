@@ -1,4 +1,4 @@
-
+import logging
 import re
 from typing import AsyncGenerator, Callable, Generator, Optional
 import uuid
@@ -9,6 +9,8 @@ from deepsearch.schemas.openai import ChatCompletionStreamResponse
 import time
 
 import json
+
+logger = logging.getLogger(__name__)
 
 
 def to_chunk_data(chunk: ChatCompletionStreamResponse) -> bytes:
@@ -178,8 +180,54 @@ def handle_stream_strip(stream: Generator[str, None, None], strip_pattern: regex
         yield buffer
 
 
-def handle_llm_stream(stream: Generator[AIMessageChunk, None, None]) -> Generator[str, None, None]:
+def handle_stream_replace(stream: Generator[str, None, None], search_pattern: regex.Pattern, replace_pattern: str) -> Generator[str, None, None]:
+    buffer = ''
+    last = 0
+    
     for chunk in stream:
+
+        buffer += chunk
+
+        partial_match = search_pattern.search(buffer[last:], partial=True)
+        if not partial_match or (partial_match.span()[0] == partial_match.span()[1]):
+            yield buffer[last:]
+            last = len(buffer)
+            continue
+        
+        if partial_match.partial:
+            yield buffer[last:last+partial_match.span()[0]]
+            last = last + partial_match.span()[0]
+            continue
+        
+        buffer = buffer[:last] + search_pattern.subf(replace_pattern, buffer[last:])
+        yield buffer[last:]
+        last = len(buffer)
+
+    if last < len(buffer):
+        yield buffer[last:]
+
+
+def handle_stream_replace_math(stream: Generator[str, None, None]) -> Generator[str, None, None]:
+    stream = handle_stream_replace(stream, regex.compile(r'\\\([ ]*(.*?)[ ]*\\\)', regex.DOTALL), "${1}$")
+    stream = handle_stream_replace(stream, regex.compile(r'\\\[[\t\n ]*(.*?)[\t\n ]*\\\]', regex.DOTALL), "\n\n$$\n{1}\n$$\n\n")
+    stream = handle_stream_replace(stream, regex.compile(r'\$\$[\t\n ]*(.*?)[\t\n ]*\$\$', regex.DOTALL), "\n\n$$\n{1}\n$$\n\n")
+    stream = handle_stream(stream, r"$$*$$", lambda txt: regex.compile(r"\\\\[\t\n ]*", regex.DOTALL).sub(r"\\\\\n", txt))
+    stream = handle_stream_replace(stream, regex.compile(r'\n=\n', regex.DOTALL), "\n\\=\n")
+    return stream
+
+
+def handle_stream_replace_citation(stream: Generator[str, None, None], replace_pattern: str) -> Generator[str, None, None]:
+    stream = handle_stream(stream, r'\cite{*}', replace_pattern)
+    stream = handle_stream(stream, r'\cite{*]', replace_pattern)
+    stream = handle_stream(stream, r'\cite[*}', replace_pattern)
+    stream = handle_stream(stream, r'\cite[*]', replace_pattern)
+    return stream
+
+
+def handle_llm_stream(stream: Generator[AIMessageChunk, None, None]) -> Generator[str, None, None]:
+    print("[handle_llm_stream] stream:\n")
+    for chunk in stream:
+        print(chunk.content, end='', flush=True)
         yield chunk.content
 
 
