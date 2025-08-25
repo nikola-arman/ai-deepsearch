@@ -1,12 +1,13 @@
-Hi, I’m your AI search assistant.
+Hi, I’m your AI search assistant. I use real-time web data to give you quick, private, and reliable answers, comparisons, or reports.
 
-I dive deep into any topic using real-time web data. Whether you need answers, comparisons, or full reports, I’m here to help — fast, private, and reliable.
+Try to ask me:
 
-Try asking:
+**Research**
+"Research about Eternal AI."
+"Deep dive into the CryptoAgents NFT."
 
-- "What’s new in AI safety research?"
-- "Compare Arbitrum, Optimism, and Base."
-- "Find the best-rated privacy coins in 2024"
-- "Summarize recent trends in technology."
+**Compare**
+"Compare between Bitcoin and Ethereum."
+"What is the best open source LLM model?"
 
 How can I help?
