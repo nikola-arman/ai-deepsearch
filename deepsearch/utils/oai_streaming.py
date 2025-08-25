@@ -178,15 +178,17 @@ def create_streaming_response(
     api_key: str,
     **payload_to_call
 ) -> Generator[ChatCompletionStreamResponse, None, None]:
+    payload = {
+        **payload_to_call,
+        'stream': True
+    }
+    logger.info(f"payload: {json.dumps(payload, indent=2)}")
 
     with httpx.Client() as client:
         with client.stream(
             "POST",
             f"{base_url}/chat/completions",
-            json={
-                **payload_to_call,
-                'stream': True
-            },
+            json=payload,
             headers={
                 'Authorization': f'Bearer {api_key}'
             },
