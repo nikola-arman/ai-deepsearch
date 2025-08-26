@@ -453,13 +453,13 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
         api_key=api_key
     )
 
-    model_id = os.getenv('LLM_MODEL_ID', 'local-model')
+    initial_model_id = "zai-org/GLM-4.5-Air-FP8"
 
     NO_STREAMING = False
 
     if NO_STREAMING:
         completion = retry(client.chat.completions.create, max_retry=3, first_interval=2, interval_multiply=2)(
-            model=model_id,
+            model=initial_model_id,
             messages=messages,
             tools=TOOL_CALLS,
             tool_choice="auto",
@@ -472,7 +472,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
             base_url=base_url,
             api_key=api_key,
             messages=messages,
-            model=model_id,
+            model=initial_model_id,
             tools=TOOL_CALLS,
         )
         
@@ -553,7 +553,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
 
         if NO_STREAMING:
             completion = retry(client.chat.completions.create, max_retry=3, first_interval=2, interval_multiply=2)(
-                model=model_id,
+                model=initial_model_id,
                 messages=messages,
                 tools=TOOL_CALLS,
                 tool_choice="auto",
@@ -566,7 +566,7 @@ def prompt(messages: list[dict[str, str]], **kwargs) -> Generator[bytes, None, N
                 base_url=base_url,
                 api_key=api_key,
                 messages=messages,
-                model=model_id,
+                model=initial_model_id,
                 tools=TOOL_CALLS,
             )
             

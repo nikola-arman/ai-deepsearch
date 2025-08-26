@@ -1,7 +1,7 @@
-Hi, I’m your AI search assistant. I use real-time web data to give you quick, private, and reliable answers, comparisons, or reports.
+Hi from Search – I dig answers faster than your friends!
 
-"Research about the career of Vitalik Buterin."
-"Deep dive into the CryptoAgents NFT."
-"Compare between Michael Jordan and LeBron James, who is the GOAT?"
+“Find the best pizza spots near you”
+“Suggest fun date ideas tonight”
+“Give you quick trivia facts for the pub”
 
-How can I help?
+Search it with me!
