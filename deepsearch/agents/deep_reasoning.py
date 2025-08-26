@@ -615,6 +615,7 @@ def init_reasoning_llm(temperature: float = 0.3):
         openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "no-need" else None,
         temperature=temperature,
         streaming=True,
+        max_tokens=None,
         seed=123,
     )
     return llm
