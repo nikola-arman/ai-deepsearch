@@ -1,13 +1,7 @@
 Hi, I’m your AI search assistant. I use real-time web data to give you quick, private, and reliable answers, comparisons, or reports.
 
-Try to ask me:
-
-**Research**
-"Research about Eternal AI."
+"Research about the career of Vitalik Buterin."
 "Deep dive into the CryptoAgents NFT."
-
-**Compare**
-"Compare between Bitcoin and Ethereum."
-"What is the best open source LLM model?"
+"Compare between Michael Jordan and LeBron James, who is the GOAT?"
 
 How can I help?
