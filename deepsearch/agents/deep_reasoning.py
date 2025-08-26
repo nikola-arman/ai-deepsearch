@@ -567,7 +567,7 @@ class ReferenceBuilder:
     def embed_references(self, _answer: str) -> str:
         answer = deepcopy(_answer)
 
-        citing_pat = re.compile(r'\\cite\{([^\}]*)\}')
+        citing_pat = re.compile(r'\\cite[\{\[]([^\}\]]*)[\}\]]')
         matches = citing_pat.findall(answer)
 
         # logger.info(f"Matches: {matches}")
@@ -595,10 +595,34 @@ class ReferenceBuilder:
                     f'\\cite{{{cite_text}}}',
                     f"\\[{intext_citation}\\]"
                 )
+                answer = answer.replace(
+                    f'\\cite{{{cite_text}]',
+                    f"\\[{intext_citation}\\]"
+                )
+                answer = answer.replace(
+                    f'\\cite[{cite_text}}}',
+                    f"\\[{intext_citation}\\]"
+                )
+                answer = answer.replace(
+                    f'\\cite[{cite_text}]',
+                    f"\\[{intext_citation}\\]"
+                )
 
             else:
                 answer = answer.replace(
                     f'\\cite{{{cite_text}}}',
+                    f""
+                )
+                answer = answer.replace(
+                    f'\\cite{{{cite_text}]',
+                    f""
+                )
+                answer = answer.replace(
+                    f'\\cite[{cite_text}}}',
+                    f""
+                )
+                answer = answer.replace(
+                    f'\\cite[{cite_text}]',
                     f""
                 )
 
