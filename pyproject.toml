@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eai_deepsearch"
+version = "1.0.0"
+description = "A deep search system"
+authors = [
+    { name = "eternalai", email = "dev@eternalai.org" }
+]
+keywords = ["deep search", "search", "ai"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Natural Language :: English",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.9",
+    "License :: OSI Approved :: MIT License",
+]
+requires-python = ">=3.10"
+
+dependencies = [
+    "eai_http_middleware @ git+https://github.com/daniel-bvm/http-middleware",
+    "faiss-cpu==1.10.0",
+    "json_repair==0.41.1",
+    "langchain==0.3.23",
+    "langchain-core==0.3.54",
+    "langchain-openai==0.3.14",
+    "langchain-text-splitters==0.3.8",
+    "numpy==2.2.5",
+    "rank-bm25==0.2.2",
+    "regex==2024.11.6",
+    "requests==2.32.3",
+    "tavily-python==0.5.4",
+    "aiosqlite==0.21.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["deepsearch", "deepsearch.*"]
+exclude = []

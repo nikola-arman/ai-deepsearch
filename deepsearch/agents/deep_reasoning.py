@@ -1,26 +1,28 @@
-from typing import Generator, List, Dict, Any, Tuple, Optional
+from typing import Generator, List, Optional
 import os
 import json
 import logging
-import uuid
 from dotenv import load_dotenv
 from json_repair import repair_json
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
+from langchain_core.messages import BaseMessage
+from langchain_core.runnables import Runnable
 import re
 import datetime  # Add import for datetime module
 from copy import deepcopy
 import re
-
+import uuid
 import urllib
 
-from app.oai_models import random_uuid
 from deepsearch.magic import retry
 from deepsearch.schemas.agents import SearchState, SearchResult
-from deepsearch.utils.misc import escape_dollar_signs
-from deepsearch.utils.streaming import handle_llm_stream, handle_stream, handle_stream_replace_citation, handle_stream_replace_math, handle_stream_strip_heading, handle_stream_strip_thinking, wrap_chunk
+from deepsearch.utils.streaming import handle_llm_stream, handle_stream_replace_citation, handle_stream_replace_math, handle_stream_strip_heading, handle_stream_strip_thinking, wrap_chunk
 
 from deepsearch.agents.tavily_search import search_tavily
+
+def random_uuid():
+    return str(uuid.uuid4())
 
 def strip_thinking_content(content: str) -> str:
     pat = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
@@ -521,9 +523,12 @@ class ReferenceBuilder:
 
         return f"[{escaped_title}]({url})" if url else f"{result.title}"
 
-    def build(self) -> str:
+    def build(self, return_list: bool = False) -> str | list[str]:
         xx = [(index, id) for id, index in self.cited_ids.items()]
         xx.sort(key=lambda x: x[0])
+
+        if return_list:
+            return [(index, self.backtrack(id)) for index, id in xx]
 
         return "\n".join(
             f"{i}. {self.backtrack(id)}"
@@ -1232,3 +1237,189 @@ def generate_final_answer(state: SearchState) -> Generator[bytes, None, None]:
 
     yield wrap_chunk(random_uuid(), '\n\n## References\n\n')
     yield wrap_chunk(random_uuid(), references)
+    
+    
+from pydantic import BaseModel
+
+class StructuredReport(BaseModel):
+    title: str
+    keypoints: list[str] 
+    direct_answer: str
+    report: str
+    references: list[str]
+
+def fast_generate_final_answer(state: SearchState) -> StructuredReport | None:
+    """
+    Generates the final, structured answer in a multi-stage process:
+    1. Generate concise key points
+    2. Create a direct answer based on key points
+    3. Generate a comprehensive outline for detailed notes sections
+    4. Expand each section with dedicated LLM calls, following the outline strictly
+
+    Args:
+        state: The current search state with key points and other information
+
+    Returns:
+        Updated state with the final structured answer
+    """
+    
+    # Format the search details
+    search_details = format_search_details(state)
+    logger.info(f"Search details: {search_details}")
+
+    ref_builder = ReferenceBuilder(state)
+
+    # Format search context from combined results
+    search_context = "Search Context:\n"
+
+    if state.combined_results:
+        for result in state.combined_results:
+            search_context += f"ID: {result.id}\nTitle: {result.title}\nStatements:\n{result.content}\n\n"
+
+    logger.info(f"Search context: {search_context}")
+
+    # Format the key points from the deep reasoning
+    initial_key_points = "\n".join([f"- {point}" for point in state.key_points])
+    logger.info(f"Initial key points: {initial_key_points}")
+
+    initial_key_points = ref_builder.remove_hallucinations(initial_key_points)
+    logger.info(f"Initial key points after removing hallucinations: {initial_key_points}")
+
+    key_points_llm = init_reasoning_llm(temperature=0.2)
+    key_points_prompt = KEY_POINTS_TEMPLATE.format(
+        original_query=state.original_query,
+        search_details=search_details,
+        key_points=initial_key_points,
+        search_context=search_context
+    )
+
+    def get_key_points():
+        logger.info("[get_key_points] stream:")
+        content_stream = handle_llm_stream(key_points_llm.stream(key_points_prompt))
+
+        thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+        math_replaced_stream = handle_stream_replace_math(thinking_stripped_stream)
+        key_points = ''
+
+        for chunk in handle_stream_replace_citation(math_replaced_stream, ref_builder.embed_references):
+            key_points += chunk
+
+        return key_points.split('\n')
+
+    key_points: list[str] = retry(get_key_points, max_retry=3, first_interval=2, interval_multiply=2)()
+
+    direct_answer_llm = init_reasoning_llm(temperature=0.3)
+    direct_answer_prompt = DIRECT_ANSWER_TEMPLATE.format(
+        original_query=state.original_query,
+        key_points=initial_key_points,
+        search_details=search_details,
+        search_context=search_context
+    )
+
+    def get_direct_answer():
+        content_stream = handle_llm_stream(direct_answer_llm.stream(direct_answer_prompt))
+
+        thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+        math_replaced_stream = handle_stream_replace_math(thinking_stripped_stream)
+        direct_answer = ''
+
+        for chunk in handle_stream_replace_citation(math_replaced_stream, ref_builder.embed_references):
+            direct_answer += chunk
+
+        return direct_answer
+
+    direct_answer = retry(get_direct_answer, max_retry=3, first_interval=2, interval_multiply=2)()
+
+    outline_llm = init_reasoning_llm(temperature=0.3)
+    outline_prompt = PromptTemplate(
+        input_variables=["original_query", "key_points", "direct_answer", "search_details", "search_context"],
+        template=DETAILED_NOTES_TEMPLATE
+    )
+    outline_chain: Runnable = outline_prompt | outline_llm
+
+    def get_section_outline():
+        outline_response: BaseMessage = outline_chain.invoke({
+            "original_query": state.original_query,
+            "key_points": initial_key_points,
+            "direct_answer": direct_answer,
+            "search_details": search_details,
+            "search_context": search_context
+        })
+
+        section_outline = outline_response.content if hasattr(outline_response, 'content') else outline_response
+        section_outline = strip_thinking_content(section_outline)
+        
+        return section_outline
+
+    section_outline = retry(get_section_outline, max_retry=3, first_interval=2, interval_multiply=2)()
+    logger.info("Generated section outline for detailed notes")
+    logger.info(f"Section outline: {section_outline}")
+
+    # Parse the section headings and their sub-points from the outline
+    sections = []
+    current_section = None
+    current_subpoints = []
+
+    for line in section_outline.strip().split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+
+        if line.startswith('## '):
+            # Save previous section if exists
+            if current_section is not None:
+                sections.append({
+                    'heading': current_section,
+                    'subpoints': current_subpoints
+                })
+            # Start new section
+            current_section = line[3:].strip()  # Remove '## '
+            current_subpoints = []
+        elif line.startswith('- '):
+            # Add subpoint
+            subpoint = line[2:].strip()  # Remove '- '
+            current_subpoints.append(subpoint)
+
+    # Add the last section
+    if current_section is not None:
+        sections.append({
+            'heading': current_section,
+            'subpoints': current_subpoints
+        })
+
+    logger.info(f"Sections outline: {json.dumps(sections, indent=2)}")
+    logger.info(f"Identified {len(sections)} sections to expand")
+
+    # Stage 4: Generate a comprehensive report
+    report_llm: ChatOpenAI = init_reasoning_llm(temperature=0.4)
+    report_prompt = FINAL_REPORT_TEMPLATE.format(
+        original_query=state.original_query,
+        search_details=search_details,
+        key_points=initial_key_points,
+        direct_answer=direct_answer,
+        report_outline=section_outline,
+        search_context=search_context
+    )
+
+    def get_report():
+        content_stream = handle_llm_stream(report_llm.stream(report_prompt))
+
+        thinking_stripped_stream = handle_stream_strip_thinking(content_stream)
+        math_replaced_stream = handle_stream_replace_math(thinking_stripped_stream)
+        report = ''
+
+        for chunk in handle_stream_replace_citation(math_replaced_stream, ref_builder.embed_references):
+            report += chunk
+
+        return report
+    
+    report = retry(get_report, max_retry=3, first_interval=2, interval_multiply=2)()
+    references = ref_builder.build(return_list=True)
+
+    return StructuredReport(
+        title=state.original_query,
+        keypoints=key_points,
+        direct_answer=direct_answer,
+        report=report,
+        references=[src for index, src in references]
+    )
