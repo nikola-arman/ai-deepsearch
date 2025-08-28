@@ -4,22 +4,20 @@ import uuid
 import eai_http_middleware # do not remove this
 
 import os
-import time
 
 from app.oai_models import ChatCompletionStreamResponse, random_uuid
 from deepsearch.magic import retry
-from deepsearch.schemas import commons, twitter
 from deepsearch.schemas.openai import ErrorResponse
 from deepsearch.utils.oai_streaming import ChatCompletionResponseBuilder, create_streaming_response
-from deepsearch.utils.streaming import wrap_thought, to_chunk_data
+from deepsearch.utils.streaming import wrap_thought
 
 os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
 os.environ['OPENAI_API_KEY'] = os.getenv("LLM_API_KEY", 'no-need')
 os.environ["EXA_API_KEY"] = "no-need"
 
-from typing import Annotated, Dict, Any, Generator, List
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Generator, List
+from concurrent.futures import ThreadPoolExecutor
 from deepsearch.schemas.agents import SearchState
 from deepsearch.agents import (
     tavily_search_agent,
@@ -27,21 +25,15 @@ from deepsearch.agents import (
     bm25_search_agent,
     deep_reasoning_agent,
     brave_search_agent,
-    search_tavily,
-    get_twitter_data_by_username,
-    twitter_context_to_search_result,
-    twitter_search
+    search_tavily
 )
 from deepsearch.agents.deep_reasoning import ReferenceBuilder, generate_final_answer
 
-from json_repair import repair_json
 import json
 import logging
-from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
-from langchain.prompts import PromptTemplate
 from deepsearch.utils.streaming import wrap_chunk
 import openai
 

@@ -225,9 +225,7 @@ def handle_stream_replace_citation(stream: Generator[str, None, None], replace_p
 
 
 def handle_llm_stream(stream: Generator[AIMessageChunk, None, None]) -> Generator[str, None, None]:
-    print("[handle_llm_stream] stream:\n")
     for chunk in stream:
-        print(chunk.content, end='', flush=True)
         yield chunk.content
 
 
