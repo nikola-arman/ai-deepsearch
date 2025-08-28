@@ -601,11 +601,11 @@ class ReferenceBuilder:
                     f"\\[{intext_citation}\\]"
                 )
                 answer = answer.replace(
-                    f'\\cite{{{cite_text}]',
+                    f'\\cite{{{cite_text}}}',
                     f"\\[{intext_citation}\\]"
                 )
                 answer = answer.replace(
-                    f'\\cite[{cite_text}}}',
+                    f'\\cite[{cite_text}]',
                     f"\\[{intext_citation}\\]"
                 )
                 answer = answer.replace(
@@ -619,11 +619,11 @@ class ReferenceBuilder:
                     f""
                 )
                 answer = answer.replace(
-                    f'\\cite{{{cite_text}]',
+                    f'\\cite{{{cite_text}}}',
                     f""
                 )
                 answer = answer.replace(
-                    f'\\cite[{cite_text}}}',
+                    f'\\cite[{cite_text}]',
                     f""
                 )
                 answer = answer.replace(
@@ -641,7 +641,7 @@ def init_reasoning_llm(temperature: float = 0.3):
     llm = ChatOpenAI(
         model=os.getenv("LLM_MODEL_ID", "no-need"),
         openai_api_key=openai_api_key,
-        openai_api_base=openai_api_base if not openai_api_key or openai_api_key == "no-need" else None,
+        openai_api_base=openai_api_base,
         temperature=temperature,
         streaming=True,
         max_tokens=None,
@@ -1285,7 +1285,7 @@ def fast_generate_final_answer(state: SearchState) -> StructuredReport | None:
     initial_key_points = ref_builder.remove_hallucinations(initial_key_points)
     logger.info(f"Initial key points after removing hallucinations: {initial_key_points}")
 
-    key_points_llm = init_reasoning_llm(temperature=0.2)
+    key_points_llm: Runnable = init_reasoning_llm(temperature=0.2)
     key_points_prompt = KEY_POINTS_TEMPLATE.format(
         original_query=state.original_query,
         search_details=search_details,
@@ -1308,7 +1308,7 @@ def fast_generate_final_answer(state: SearchState) -> StructuredReport | None:
 
     key_points: list[str] = retry(get_key_points, max_retry=3, first_interval=2, interval_multiply=2)()
 
-    direct_answer_llm = init_reasoning_llm(temperature=0.3)
+    direct_answer_llm: Runnable = init_reasoning_llm(temperature=0.3)
     direct_answer_prompt = DIRECT_ANSWER_TEMPLATE.format(
         original_query=state.original_query,
         key_points=initial_key_points,
@@ -1391,7 +1391,7 @@ def fast_generate_final_answer(state: SearchState) -> StructuredReport | None:
     logger.info(f"Identified {len(sections)} sections to expand")
 
     # Stage 4: Generate a comprehensive report
-    report_llm: ChatOpenAI = init_reasoning_llm(temperature=0.4)
+    report_llm: Runnable = init_reasoning_llm(temperature=0.4)
     report_prompt = FINAL_REPORT_TEMPLATE.format(
         original_query=state.original_query,
         search_details=search_details,
