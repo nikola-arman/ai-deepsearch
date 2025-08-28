@@ -20,7 +20,7 @@ classifiers = [
 requires-python = ">=3.10"
 
 dependencies = [
-    "eai_http_middleware @ git+https://github.com/daniel-bvm/http-middleware@1.0.0",
+    "eai_http_middleware @ git+https://github.com/daniel-bvm/http-middleware@v1.0.0",
     "faiss-cpu==1.12.0",
     "json_repair==0.49.0",
     "langchain==0.3.27",
