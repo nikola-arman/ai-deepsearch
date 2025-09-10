@@ -699,7 +699,7 @@ def generate_initial_queries(original_query: str) -> List[str]:
         original_query: The original user query, which might be complex or very long
 
     Returns:
-        A list of 5 focused search queries
+        A list of 6 focused search queries with the original query in the first position
     """
     
     # Initialize the LLM with low temperature for consistent output
