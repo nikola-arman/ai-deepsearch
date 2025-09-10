@@ -402,8 +402,8 @@ Analyze the original query and break it down into 5 distinct, focused search que
 6. IMPORTANT: Include the current year or time period in queries when relevant (especially for financial, news, trend, or stock queries) to ensure recency
 7. When referring to time periods, use clear universal formats (e.g., "Q1 2024", "May 2024", "2024", etc.)
 
-Format your response as a JSON array of 5 strings representing the search queries:
-["query1", "query2", "query3", "query4", "query5"]
+Format your response as a JSON array of 6 strings representing the search queries with the original query in the first position:
+["{original_query}", "query1", "query2", "query3", "query4", "query5"]
 
 CRITICAL: 
 - Your entire response MUST be a valid, parseable JSON array and nothing else. 
