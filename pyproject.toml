@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deepsearch"
-version = "1.0.4"
+version = "1.0.5"
 description = "A deep search system"
 authors = [
     { name = "eternalai", email = "dev@eternalai.org" }

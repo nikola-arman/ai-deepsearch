@@ -44,8 +44,8 @@ openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")
 openai_api_key = os.environ.get("LLM_API_KEY", "no-need")
 llm_model_id = os.environ.get("LLM_MODEL_ID", "no-need")
 
-logger.info(f"[deep_reasoning] openai_api_base: {openai_api_base}")
-logger.info(f"[deep_reasoning] openai_api_key: {openai_api_key}")
+logger.info(f"[deep_reasoning] llm_base_url: {openai_api_base}")
+logger.info(f"[deep_reasoning] llm_api_key: {openai_api_key}")
 logger.info(f"[deep_reasoning] llm_model_id: {llm_model_id}")
 
 # Define the prompt template for analysis and reasoning
