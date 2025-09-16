@@ -1,16 +1,12 @@
 from typing import Tuple, List, Dict, Any, Generator
 import os
 import logging
-from dotenv import load_dotenv
 from tavily import TavilyClient
 
 from deepsearch.schemas.agents import SearchState, SearchResult
 
 # Set up logging
 logger = logging.getLogger("deepsearch.tavily")
-
-# Load environment variables
-load_dotenv()
 
 # Get Tavily API key
 tavily_api_key = os.environ.get("TAVILY_API_KEY", "no-need")
