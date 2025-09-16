@@ -13,14 +13,11 @@ logger = logging.getLogger("deepsearch.tavily")
 load_dotenv()
 
 # Get Tavily API key
-tavily_api_key = os.environ.get("TAVILY_API_KEY")
+tavily_api_key = os.environ.get("TAVILY_API_KEY", "no-need")
 
 
 def init_tavily_client():
     """Initialize the Tavily client."""
-    if not tavily_api_key:
-        raise ValueError("TAVILY_API_KEY environment variable is not set")
-
     return TavilyClient(api_key=tavily_api_key)
 
 
