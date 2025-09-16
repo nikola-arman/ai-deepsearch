@@ -3,6 +3,7 @@ import os
 import numpy as np
 import faiss
 import logging
+from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 import re
 
@@ -10,6 +11,9 @@ from deepsearch.schemas.agents import SearchState, SearchResult
 
 # Set up logging
 logger = logging.getLogger("deepsearch.faiss")
+
+# Load environment variables
+load_dotenv()
 
 # Get the OpenAI-compatible API base URL and API key
 openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")

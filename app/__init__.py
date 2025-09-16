@@ -2,7 +2,7 @@ import asyncio
 from enum import Enum
 import uuid
 import eai_http_middleware # do not remove this
-from dotenv import load_dotenv
+
 import os
 
 from app.oai_models import ChatCompletionStreamResponse, random_uuid
@@ -10,8 +10,6 @@ from deepsearch.magic import retry
 from deepsearch.schemas.openai import ErrorResponse
 from deepsearch.utils.oai_streaming import ChatCompletionResponseBuilder, create_streaming_response
 from deepsearch.utils.streaming import wrap_thought
-
-load_dotenv()
 
 os.environ['TAVILY_API_KEY'] = 'no-need'
 os.environ['OPENAI_BASE_URL'] = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))

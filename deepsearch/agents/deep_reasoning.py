@@ -2,6 +2,7 @@ from typing import Generator, List, Optional
 import os
 import json
 import logging
+from dotenv import load_dotenv
 from json_repair import repair_json
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
@@ -34,6 +35,9 @@ def escape_slash(answer: str) -> str:
 
 # Set up logging
 logger = logging.getLogger("deepsearch.deep_reasoning")
+
+# Load environment variables
+load_dotenv()
 
 # Get the OpenAI-compatible API base URL and API key
 openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")
