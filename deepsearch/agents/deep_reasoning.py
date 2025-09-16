@@ -42,6 +42,11 @@ load_dotenv()
 # Get the OpenAI-compatible API base URL and API key
 openai_api_base = os.environ.get("LLM_BASE_URL", "http://localhost:8080/v1")
 openai_api_key = os.environ.get("LLM_API_KEY", "no-need")
+llm_model_id = os.environ.get("LLM_MODEL_ID", "no-need")
+
+logger.info(f"[deep_reasoning] openai_api_base: {openai_api_base}")
+logger.info(f"[deep_reasoning] openai_api_key: {openai_api_key}")
+logger.info(f"[deep_reasoning] llm_model_id: {llm_model_id}")
 
 # Define the prompt template for analysis and reasoning
 REASONING_TEMPLATE = """You are an expert research analyst and reasoning agent. Your task is to analyze search results,
@@ -639,7 +644,7 @@ def init_reasoning_llm(temperature: float = 0.3):
     """Initialize the language model for reasoning using OpenAI-compatible API."""
     # Use OpenAI-compatible server
     llm = ChatOpenAI(
-        model=os.getenv("LLM_MODEL_ID", "no-need"),
+        model=llm_model_id,
         openai_api_key=openai_api_key,
         openai_api_base=openai_api_base,
         temperature=temperature,
