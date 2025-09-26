@@ -1,7 +1,7 @@
 import asyncio
 from enum import Enum
 import uuid
-import eai_http_middleware # do not remove this
+import app.__middleware # do not remove this
 
 import os
 

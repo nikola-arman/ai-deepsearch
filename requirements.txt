@@ -1,6 +1,5 @@
 fastapi[standard]==0.115.12
 uvicorn==0.34.0
-eai_http_middleware @ git+https://github.com/daniel-bvm/http-middleware
 faiss-cpu==1.10.0
 json_repair==0.41.1
 langchain==0.3.23

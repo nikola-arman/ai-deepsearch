@@ -7,6 +7,7 @@ run python -m pip install -r requirements.txt
 
 workdir /workspace
 env APP_ENV=production
+env AGENT_NAME=deepsearch
 
 copy app app
 copy deepsearch deepsearch
@@ -18,6 +19,6 @@ env RETRIEVER="brave,tavily,exa,twitter"
 env TWITTER_API_URL="https://imagine-backend.bvm.network/api/internal/twitter/"
 env FORWARD_ALL_MESSAGES=1
 env CACHE_DB_FOLDER="/storage"
-env LLM_MODEL_ID="zai-org/GLM-4.5-Air-FP8"
+env LLM_MODEL_ID="z-ai/glm-4.5"
 
 cmd ["python", "server.py"]
